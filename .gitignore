@@ -1,0 +1,33 @@
+@'
+# Go
+/bin/
+*.exe
+*.test
+*.out
+*.prof
+coverage.out
+/vendor/
+
+# Env / secrets — never commit these
+.env
+.env.*
+!.env.example
+
+# Node / Next.js (frontend, added later)
+node_modules/
+.next/
+out/
+
+# Build / dist
+dist/
+
+# Local infra
+docker-data/
+*.local
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+'@ | Set-Content -Encoding utf8 .gitignore
