@@ -18,6 +18,14 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
   persistence, auth, ports, observability), planned and built first.
 - **Feature (`PLAN-1xx`)** — user-facing capabilities.
 
+## Plans
+
+| Plan ID  | Spec     | Title                                    | Status |
+| -------- | -------- | ---------------------------------------- | ------ |
+| PLAN-001 | SPEC-001 | [Project Scaffolding & Hexagonal Layering](PLAN-001-project-scaffolding-and-layering.md) | Draft  |
+
+(Plans are authored just-in-time, one per spec, in the build order below.)
+
 ## Standard Phase Order (per the template)
 
 1. Domain Layer → 2. Persistence Layer → 3. Application Layer → 4. API Layer →

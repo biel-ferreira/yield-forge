@@ -68,3 +68,5 @@ documents — not the other way around.
 - Every AI-generated insight in the product must be **explainable** (a core
   product principle — see the PRD). This constraint flows down into every spec.
 - The product **assists** decisions and **never** gives buy/sell financial advice.
+- Update [`../CHANGELOG.md`](../CHANGELOG.md) (the `[Unreleased]` section) in the
+  **same PR** as any notable change — Keep a Changelog format, SemVer headings.

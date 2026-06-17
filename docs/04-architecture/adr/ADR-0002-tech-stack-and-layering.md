@@ -45,6 +45,14 @@ the `Insighter` port, so they hold regardless of the backing implementation.
 The detailed package/directory layout is intentionally deferred to the first
 implementation PLAN (SPEC-001), so it can be validated against real code.
 
+> **Clarification (2026-06-17, via SPEC-001):** the hexagonal *principles* above
+> (ports & adapters, dependency inversion, framework-free core) are kept, but the
+> code is **organised package-by-feature** (`portfolio`, `marketdata`, `insight`)
+> rather than package-by-layer. Each feature package owns its domain types, its
+> `service` (use cases), and its **port interfaces**, with concrete adapters as
+> sibling subpackages (e.g. `internal/portfolio/postgres`). This is idiomatic Go
+> and does not change the dependency rule. See SPEC-001 §3a for the canonical tree.
+
 ## Consequences
 
 - **Positive:** the `Insighter` and `MarketDataProvider` ports localize the two
