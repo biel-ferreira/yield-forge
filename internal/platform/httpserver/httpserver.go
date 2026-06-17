@@ -12,11 +12,11 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/platform/config"
 )
 
-// Run starts an HTTP server with the given handler and blocks until the process
-// receives an interrupt or SIGTERM, then shuts down gracefully within
-// cfg.ShutdownTimeout. It returns the first non-nil error from serving or
-// shutdown (nil on a clean stop).
-func Run(cfg config.Config, handler http.Handler, logger *slog.Logger) error {
+// Run starts an HTTP server with the given handler and blocks until ctx is
+// cancelled or the process receives an interrupt or SIGTERM, then shuts down
+// gracefully within cfg.ShutdownTimeout. It returns the first non-nil error from
+// serving or shutdown (nil on a clean stop).
+func Run(ctx context.Context, cfg config.Config, handler http.Handler, logger *slog.Logger) error {
 	srv := &http.Server{
 		Addr:         cfg.Addr(),
 		Handler:      handler,
@@ -25,8 +25,8 @@ func Run(cfg config.Config, handler http.Handler, logger *slog.Logger) error {
 		IdleTimeout:  cfg.IdleTimeout,
 	}
 
-	// Cancel the context on SIGINT (Ctrl-C) or SIGTERM.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// Shut down on ctx cancellation, SIGINT (Ctrl-C), or SIGTERM.
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	serveErr := make(chan error, 1)

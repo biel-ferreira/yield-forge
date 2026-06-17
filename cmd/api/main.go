@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
@@ -38,7 +39,7 @@ func main() {
 
 	router := transporthttp.NewRouter(logger, buildinfo.Get())
 
-	if err := httpserver.Run(cfg, router, logger); err != nil {
+	if err := httpserver.Run(context.Background(), cfg, router, logger); err != nil {
 		logger.Error("server error", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
