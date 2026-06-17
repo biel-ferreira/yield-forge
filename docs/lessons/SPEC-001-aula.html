@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 01 — SPEC-001: A Fundação | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#4f46e5,#0ea5e9);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 01 · Spec de Fundação</span>
+    <h1>SPEC-001 — A Fundação do YieldForge</h1>
+    <p>Tudo que construímos para ter um backend Go rodando, testado e containerizado — explicado do zero.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: o que está rodando agora</a></li>
+    <li><a href="#sdd">O método: Spec-Driven Development (SDD)</a></li>
+    <li><a href="#arq">A arquitetura: hexagonal + orientada a pacotes</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma (o quê + por quê)</a></li>
+    <li><a href="#go">Conceitos de Go que você aprendeu</a></li>
+    <li><a href="#config">Configuração: dev vs prod (12-factor)</a></li>
+    <li><a href="#tools">Ferramentas: Task e Docker</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: o que está rodando agora</h2>
+
+<p>No fim do SPEC-001, você tem um <strong>servidor HTTP em Go que compila, roda, responde,
+desliga com elegância, roda dentro do Docker e tem testes automatizados</strong> — mas
+<em>sem nenhuma regra de negócio ainda</em>. Isso é de propósito: a fundação primeiro.</p>
+
+<p>Se você roda <code>task run</code> e abre o navegador:</p>
+<pre><code>GET /healthz  →  {"status":"ok"}      (o app está vivo?)
+GET /readyz   →  {"status":"ready"}   (o app está pronto pra receber tráfego?)
+GET /version  →  {"version":"dev", "commit":"none", "built_at":"unknown"}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por quê começar assim?</span>
+  Um "esqueleto que roda no dia 1" te dá um ponto de partida confiável. Cada feature
+  futura (carteira, dashboard, IA) vai se encaixar nessa estrutura já testada, em vez
+  de você descobrir problemas de fundação no meio do caminho.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="sdd">2. O método: Spec-Driven Development (SDD)</h2>
+
+<p>Antes de escrever código, escrevemos <strong>documentos que descrevem o que e por quê</strong>.
+O código nasce para satisfazer esses documentos — não o contrário.</p>
+
+<div class="diagram">IDEIA → PRD → SPEC → PLAN → CÓDIGO → TESTES → DOCS
+         │      │      │       │
+         │      │      │       └─ implementação em fases
+         │      │      └─ COMO construir (plano com fases, riscos, "pronto")
+         │      └─ O QUE construir (comportamento concreto, critérios de aceite)
+         └─ POR QUê / pra quem (visão do produto)</div>
+
+<table>
+  <tr><th>Documento</th><th>Responde</th><th>No nosso projeto</th></tr>
+  <tr><td><strong>PRD</strong></td><td>Visão do produto, escopo, requisitos</td><td><code>docs/01-product/PRD.md</code></td></tr>
+  <tr><td><strong>SPEC</strong></td><td>Comportamento de uma capacidade</td><td><code>docs/02-specs/SPEC-001-...md</code></td></tr>
+  <tr><td><strong>PLAN</strong></td><td>Como construir (fases)</td><td><code>docs/03-plans/PLAN-001-...md</code></td></tr>
+  <tr><td><strong>ADR</strong></td><td>Decisões de arquitetura (e o porquê)</td><td><code>docs/04-architecture/adr/</code></td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A regra de ouro do SDD</span>
+  Uma feature não começa sem um <strong>SPEC</strong>; um SPEC não é construído sem um
+  <strong>PLAN</strong>. E fazemos em <strong>fatias verticais</strong> (um spec por vez,
+  do início ao fim), nunca "todos os specs e depois todo o código".
+</div>
+
+<!-- ============================================================ -->
+<h2 id="arq">3. A arquitetura: hexagonal + orientada a pacotes</h2>
+
+<p>Combinamos duas ideias que respondem perguntas diferentes:</p>
+
+<table>
+  <tr><th>Conceito</th><th>Responde</th><th>Regra</th></tr>
+  <tr><td><strong>Hexagonal (Ports &amp; Adapters)</strong></td><td><em>Para onde</em> as dependências apontam</td><td>O núcleo (regra de negócio) não conhece banco, HTTP nem LLM. Eles ficam atrás de <strong>interfaces (ports)</strong>.</td></tr>
+  <tr><td><strong>Orientada a Pacotes</strong></td><td><em>Como</em> agrupamos os arquivos</td><td>Por <strong>feature</strong> (<code>portfolio</code>, <code>insight</code>), não por camada técnica.</td></tr>
+</table>
+
+<p>Na prática, cada feature é uma "caixinha" que contém tudo dela — entidade, casos de uso,
+o contrato (port) e os adaptadores concretos ao lado:</p>
+
+<div class="diagram">internal/
+  portfolio/
+    portfolio.go     ← entidade + regras de negócio (domínio puro)
+    service.go       ← casos de uso (o "service")
+    repository.go    ← interface Repository (o PORT — definido por quem usa)
+    postgres/        ← adaptador: implementação Postgres do Repository
+  platform/          ← infra transversal: config, logging, httpserver, buildinfo
+  transport/http/    ← adaptador de entrada: router + handlers + DTOs</div>
+
+<h3>O fluxo de uma requisição (e quem é quem)</h3>
+
+<div class="diagram">HTTP  →  Handler (transport/http)  →  Service (feature)  →  Repository (port)  →  Postgres
+         controller + DTO            casos de uso          interface           adaptador
+         conhece HTTP/JSON           conhece domínio        não conhece nada    conhece SQL</div>
+
+<table>
+  <tr><th>Termo clássico</th><th>Onde mora aqui</th><th>Conhece o quê?</th></tr>
+  <tr><td>Controller / Handler</td><td><code>transport/http/*.go</code></td><td>HTTP + JSON</td></tr>
+  <tr><td>DTO (mapeamento)</td><td>junto do handler</td><td>só transporte</td></tr>
+  <tr><td>Service (casos de uso)</td><td><code>&lt;feature&gt;/service.go</code></td><td>domínio + a interface do repositório</td></tr>
+  <tr><td>Entidade de domínio</td><td><code>&lt;feature&gt;/&lt;feature&gt;.go</code></td><td>só regra de negócio</td></tr>
+  <tr><td>Repository (contrato)</td><td><code>&lt;feature&gt;/repository.go</code></td><td>nada — é interface</td></tr>
+  <tr><td>Repository (implementação)</td><td><code>&lt;feature&gt;/postgres/</code></td><td>SQL</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que isso importa pro YieldForge?</span>
+  Trocar o LLM grátis (Gemini/Ollama) por um pago (Claude) vai ser só <strong>escrever um
+  novo adaptador</strong> e mudar uma linha. O <code>service.go</code> da IA nunca muda. Essa
+  é a "promessa" da arquitetura — e ela já está montada desde o esqueleto.
+</div>
+
+<p class="muted">A regra de dependência aponta sempre para o centro: o handler conhece o service;
+o service conhece a <em>interface</em>; o Postgres implementa a interface. O núcleo não importa
+HTTP nem SQL. No SPEC-001 só existem as "caixinhas vazias" (placeholders) — o conteúdo de cada
+feature vem nos specs futuros.</p>
+
+<!-- ============================================================ -->
+<h2 id="fases">4. As 7 fases, uma a uma</h2>
+
+<h3>Fase 1 — Esqueleto do módulo e layout <span class="tag">estrutura</span></h3>
+<p>Criamos o módulo Go (<code>go mod init</code>) e a árvore de pacotes. Cada pacote ganhou um
+<code>doc.go</code> só com a documentação, pra existir e compilar.</p>
+<h4>Conceitos</h4>
+<ul>
+  <li><strong>Módulo Go</strong>: o <code>go.mod</code> define o "nome" do projeto
+    (<code>github.com/biel-ferreira/yield-forge</code>) — é o prefixo de todos os imports.</li>
+  <li><strong>Pasta <code>internal/</code></strong>: o Go <em>proíbe</em> que código de fora do
+    módulo importe o que está em <code>internal/</code>. Isso tranca a arquitetura como privada.</li>
+  <li><strong><code>cmd/api/main.go</code></strong>: o ponto de entrada (a função <code>main</code>).</li>
+</ul>
+
+<h3>Fase 2 — Configuração <span class="tag">12-factor</span></h3>
+<p>Criamos <code>config.Load()</code>, que lê <strong>variáveis de ambiente</strong>, aplica
+valores padrão, valida, e devolve um <code>Config</code> tipado.</p>
+<pre><code>type Config struct {
+    AppEnv          string        // dev | staging | prod
+    Port            int
+    LogLevel        string        // debug | info | warn | error
+    LogFormat       string        // json | text
+    ReadTimeout     time.Duration
+    ShutdownTimeout time.Duration
+    Warnings        []string      // avisos não-fatais
+}</code></pre>
+<h4>A decisão importante: erro fatal vs. aviso</h4>
+<ul>
+  <li><strong>Fatal</strong> (devolve erro, app não sobe): porta não-numérica, duração inválida.</li>
+  <li><strong>Aviso</strong> (usa o padrão e segue): <code>LOG_LEVEL</code> inválido vira <code>info</code>.</li>
+</ul>
+<div class="box why">
+  <span class="lbl">Por que um log inválido não derruba o app?</span>
+  Configuração de log não é crítica — não faz sentido o app inteiro não subir por causa
+  de um valor de log digitado errado. Já um segredo obrigatório faltando (ex.: a URL do
+  banco, que chega no SPEC-002) é fatal. Isso é o princípio <strong>12-factor</strong>:
+  configuração vem do ambiente, e o app falha rápido só no que é essencial.
+</div>
+
+<h3>Fase 3 — Logging estruturado <span class="tag">slog</span></h3>
+<p>Usamos o <code>log/slog</code> (biblioteca padrão do Go) para logs <strong>estruturados</strong>:
+em vez de texto solto, cada log é um conjunto de campos (chave=valor ou JSON).</p>
+<pre><code>logger.Info("http request",
+    slog.String("method", "GET"),
+    slog.Int("status", 200))
+// dev  → time=... level=INFO msg="http request" method=GET status=200
+// prod → {"time":"...","level":"INFO","msg":"http request","method":"GET","status":200}</code></pre>
+<div class="box tip">
+  <span class="lbl">Injeção em vez de global</span>
+  O logger é <strong>passado</strong> para quem precisa (injeção de dependência), não usado como
+  variável global. Isso deixa o código testável e explícito sobre suas dependências.
+</div>
+
+<h3>Fase 4 — Servidor HTTP, endpoints e desligamento gracioso <span class="tag">a fase grande</span></h3>
+<p>Aqui tudo se conectou. Usamos só a <strong>biblioteca padrão</strong> (<code>net/http</code>),
+sem framework web.</p>
+<h4>O roteador (Go 1.22+)</h4>
+<pre><code>mux := http.NewServeMux()
+mux.HandleFunc("GET /healthz", h.healthz)
+mux.HandleFunc("GET /version", h.version)
+mux.HandleFunc("/", h.notFound)   // catch-all → 404 em JSON</code></pre>
+<h4>Middleware (camadas que envolvem cada requisição)</h4>
+<p>Encadeamos: <code>requestID → logRequests → mux</code>. Cada requisição ganha um ID único
+(devolvido no header <code>X-Request-Id</code>) e gera uma linha de log com método, rota,
+status e duração.</p>
+<h4>Desligamento gracioso (graceful shutdown)</h4>
+<pre><code>// espera um sinal de parada (Ctrl-C / SIGTERM) OU o cancelamento do context
+ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+...
+select {
+case err := &lt;-serveErr:   // servidor caiu (ex.: porta ocupada)
+    return err
+case &lt;-ctx.Done():        // recebeu sinal → vamos drenar
+    srv.Shutdown(shutdownCtx) // espera requisições em andamento terminarem
+}</code></pre>
+<div class="box why">
+  <span class="lbl">O que é "gracioso"?</span>
+  Quando você manda o app parar, ele <strong>para de aceitar novas requisições</strong> mas
+  <strong>deixa as que já estão rodando terminarem</strong> (dentro de um prazo). Sem isso,
+  um deploy poderia cortar uma requisição no meio. O <code>context.Context</code> é o
+  mecanismo do Go para propagar "cancelamento/prazo" por todo o fluxo.
+</div>
+
+<h3>Fase 5 — Containerização <span class="tag">Docker</span></h3>
+<p>Um <code>Dockerfile</code> <strong>multi-stage</strong>: um estágio compila o binário, outro
+roda ele numa imagem mínima.</p>
+<pre><code># estágio 1: compila (imagem grande, com o Go)
+FROM golang:1.23-alpine AS build
+...
+RUN go build -o /out/yield-forge ./cmd/api
+
+# estágio 2: roda (imagem minúscula, sem shell, usuário não-root)
+FROM gcr.io/distroless/static:nonroot
+COPY --from=build /out/yield-forge /app/yield-forge
+ENTRYPOINT ["/app/yield-forge"]</code></pre>
+<table>
+  <tr><th>Técnica</th><th>Benefício</th></tr>
+  <tr><td>Multi-stage</td><td>A imagem final não carrega o compilador Go — fica pequena (~10–20 MB).</td></tr>
+  <tr><td>Binário estático (<code>CGO_ENABLED=0</code>)</td><td>Roda sozinho, sem dependências de sistema.</td></tr>
+  <tr><td>Distroless + non-root</td><td>Sem shell e sem gerenciador de pacotes = pouca superfície de ataque. Segurança.</td></tr>
+</table>
+<p>O <code>docker-compose.yml</code> já tem o serviço do <strong>Postgres comentado</strong>,
+pronto pra ser ligado no SPEC-002 sem reestruturar nada.</p>
+
+<h3>Fase 6 — Testes (unitários e de integração) <span class="tag">qualidade</span></h3>
+<p>Usamos só a stdlib: <code>testing</code> + <code>net/http/httptest</code>. Cobertura
+de 85% a 97% no código que importa.</p>
+<table>
+  <tr><th>Tipo</th><th>O que prova</th><th>Exemplo</th></tr>
+  <tr><td><strong>Unitário</strong></td><td>uma peça isolada</td><td><code>config.Load</code> aplica padrões e cai pro <code>info</code> quando o nível é inválido</td></tr>
+  <tr><td><strong>Tabela (table-driven)</strong></td><td>vários casos com pouco código</td><td>vários valores inválidos de config → erro esperado</td></tr>
+  <tr><td><strong>Integração</strong></td><td>peças conectadas, de verdade</td><td>sobe o servidor numa porta real e testa o <strong>graceful shutdown drenando uma requisição em andamento</strong></td></tr>
+</table>
+<div class="box tip">
+  <span class="lbl">O teste pegou um bug de verdade!</span>
+  Um dos testes <strong>travou</strong> no Windows porque eu tinha usado um <code>context</code>
+  que nunca era cancelado. Isso revelou um problema real de portabilidade. Corrigimos
+  (porta + context com timeout). É exatamente para isso que testes servem: provar que
+  funciona, não só "pareceu funcionar".
+</div>
+
+<h3>Fase 7 — Documentação <span class="tag">rastreabilidade</span></h3>
+<p>Atualizamos o <code>CHANGELOG.md</code>, criamos o <code>README.md</code> da raiz, registramos
+a adoção do Task, e marcamos o <strong>SPEC-001 como "Done"</strong> nos índices.</p>
+
+<!-- ============================================================ -->
+<h2 id="go">5. Conceitos de Go que você aprendeu</h2>
+<table>
+  <tr><th>Conceito</th><th>O que é</th></tr>
+  <tr><td><code>go.mod</code> / módulo</td><td>identidade do projeto + prefixo dos imports</td></tr>
+  <tr><td><code>internal/</code></td><td>pasta privada — só o próprio módulo importa</td></tr>
+  <tr><td>Interfaces como "ports"</td><td>"aceite interfaces, retorne structs" — a interface é definida por quem a usa</td></tr>
+  <tr><td><code>log/slog</code></td><td>logs estruturados nativos</td></tr>
+  <tr><td><code>net/http</code> + <code>ServeMux</code></td><td>servidor e roteamento sem framework (com padrões de método desde o Go 1.22)</td></tr>
+  <tr><td>Middleware</td><td>funções que "envelopam" um handler para adicionar comportamento</td></tr>
+  <tr><td><code>context.Context</code></td><td>propaga cancelamento e prazos pelo fluxo</td></tr>
+  <tr><td>Goroutine + <code>channel</code></td><td>concorrência: o servidor roda numa goroutine e avisa erros por um channel</td></tr>
+  <tr><td><code>testing</code> + <code>httptest</code></td><td>testes nativos, incluindo HTTP em memória</td></tr>
+  <tr><td>Injeção de dependência</td><td>passar colaboradores (logger, config) em vez de globais</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="config">6. Configuração: dev vs prod (12-factor)</h2>
+<p>Você perguntou "onde estão as condições de dev/prod?". A resposta foi um conceito-chave:</p>
+<div class="box why">
+  <span class="lbl">O VALOR muda por ambiente. O CÓDIGO não muda.</span>
+  Não espalhamos <code>if env == "dev"</code> pelo código. O "banco de dev vs banco de prod"
+  é só um <code>DATABASE_URL</code> diferente em cada ambiente — o código lê a variável e
+  conecta, sem <code>if</code>. Só usamos <code>cfg.IsDev()</code> para pouquíssimas diferenças
+  de <em>comportamento</em> real (ex.: formato do log: texto em dev, JSON em prod).
+</div>
+<p>Em dev, o <code>.env</code> (ignorado pelo git) preenche as variáveis; variáveis reais do
+sistema sempre têm prioridade. Tudo documentado no <code>.env.example</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="tools">7. Ferramentas: Task e Docker</h2>
+<table>
+  <tr><th>Ferramenta</th><th>Pra quê</th></tr>
+  <tr><td><strong>Task</strong> (<code>Taskfile.yml</code>)</td><td>atalhos: <code>task run</code>, <code>task test</code>, <code>task lint</code>, <code>task docker-up</code>. Multiplataforma (funciona no Windows nativo, ao contrário do <code>make</code>).</td></tr>
+  <tr><td><strong>Docker</strong></td><td>roda o app igual em qualquer máquina; o compose vai orquestrar app + Postgres.</td></tr>
+  <tr><td><strong>Git + CHANGELOG</strong></td><td>histórico do projeto + rastreabilidade legível das mudanças.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="next">8. O que vem a seguir</h2>
+<p>A próxima fatia de fundação é o <strong>SPEC-002 — Persistência &amp; Migrations</strong>:
+conexão com Postgres, ferramenta de migrations, o <code>/readyz</code> passando a checar o banco,
+e o primeiro padrão de repositório. Mesmo loop: <em>SPEC → você revisa → PLAN → implementação
+em fases</em>.</p>
+<div class="box tip">
+  <span class="lbl">O que você levou desta aula</span>
+  Você rodou o ciclo SDD completo de ponta a ponta e tem uma base Go limpa, testada e
+  containerizada — pronta para receber as features. Essa disciplina é o que faz o resto
+  do projeto fluir.
+</div>
+
+<footer>
+  YieldForge · Aula 01 referente ao <strong>SPEC-001</strong> ·
+  Gerada ao concluir o spec, para fins de aprendizado.<br>
+  Documentos relacionados: <code>docs/02-specs/SPEC-001-...md</code> ·
+  <code>docs/03-plans/PLAN-001-...md</code> · <code>README.md</code>
+</footer>
+
+</div>
+</body>
+</html>
