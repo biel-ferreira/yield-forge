@@ -22,7 +22,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 
 | Plan ID  | Spec     | Title                                    | Status |
 | -------- | -------- | ---------------------------------------- | ------ |
-| PLAN-001 | SPEC-001 | [Project Scaffolding & Hexagonal Layering](PLAN-001-project-scaffolding-and-layering.md) | Draft  |
+| PLAN-001 | SPEC-001 | [Project Scaffolding & Hexagonal Layering](PLAN-001-project-scaffolding-and-layering.md) | ✅ Done |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
 

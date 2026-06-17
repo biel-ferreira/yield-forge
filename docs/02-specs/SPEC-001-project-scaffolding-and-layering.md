@@ -9,8 +9,8 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — §12 Constraints, §10 NFR |
 | Related ADRs | [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md), [ADR-0003](../04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md) |
 | Version      | 0.1.0                                                  |
-| Status       | Draft                                                  |
-| Plan         | [PLAN-001](../03-plans/) (to be authored)              |
+| Status       | Done                                                   |
+| Plan         | [PLAN-001](../03-plans/PLAN-001-project-scaffolding-and-layering.md) |
 
 ---
 
@@ -148,6 +148,12 @@ Common tasks are one command each.
 - [ ] `make run`, `make build`, `make test`, `make lint`, `make docker-up` exist
       and work (or print a clear "not yet wired" message where a later spec owns it).
 - [ ] `make` with no target prints help.
+
+> **Adopted in implementation:** a cross-platform `Taskfile.yml` (run via
+> [Task](https://taskfile.dev)) is the primary task runner — it works in native
+> Windows PowerShell/Git Bash without a POSIX shell, which `make` does not. The
+> `Makefile` is retained for Unix/CI; both expose the same targets
+> (`run`/`build`/`test`/`lint`/`docker-up`).
 
 ### FR-008 — Change Traceability (CHANGELOG)
 
