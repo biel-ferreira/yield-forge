@@ -1,0 +1,12 @@
+# Keep the build context small — these are not needed to compile the binary.
+.git/
+bin/
+docs/
+templates/
+deploy/
+*.md
+.env
+.env.*
+.gitignore
+.gitattributes
+Makefile
