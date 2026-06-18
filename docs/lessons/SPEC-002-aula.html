@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 02 — SPEC-002: Persistência e Migrations | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 02 · Spec de Fundação</span>
+    <h1>SPEC-002 — Persistência e Migrations</h1>
+    <p>Como demos ao app um banco PostgreSQL de verdade, um jeito seguro de evoluir o schema, e um <code>/readyz</code> que diz a verdade.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: o que mudou no SPEC-002</a></li>
+    <li><a href="#decisoes">As 4 decisões que tomamos (e o porquê)</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma (o quê + por quê)</a></li>
+    <li><a href="#conceitos">Conceitos novos: pool, driver, migrations, <code>go:embed</code></a></li>
+    <li><a href="#readyz">O <code>Pinger</code>: uma interface que torna o <code>/readyz</code> testável</a></li>
+    <li><a href="#bug">O bug que os testes pegaram (exaustão de pool)</a></li>
+    <li><a href="#tools">Ferramentas: golang-migrate, Compose, DBeaver, portas</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: o que mudou no SPEC-002</h2>
+
+<p>No SPEC-001 tínhamos um esqueleto que rodava, mas <strong>não guardava nada</strong>. O SPEC-002
+é a <strong>segunda pedra da fundação</strong>: o app agora conecta num PostgreSQL de verdade,
+tem um processo repetível pra mudar o schema, e o <code>/readyz</code> reflete o estado real do banco.</p>
+
+<p>Importante: <strong>continuamos sem regra de negócio</strong>. Nenhuma tabela de feature
+(carteira, perfil...) foi criada — isso é de propósito. Cada feature vai trazer suas próprias
+tabelas. O SPEC-002 só prepara o <em>encanamento</em>.</p>
+
+<div class="diagram">ANTES (SPEC-001)                       DEPOIS (SPEC-002)
+  app sobe                               app sobe → conecta no Postgres (ou falha rápido)
+  /readyz → sempre "ready"               /readyz → checa o banco de verdade (200/503)
+  sem banco                              pool de conexões + migrations versionadas
+  docker compose: só a api               docker compose: api + postgres juntos</div>
+
+<p>Os endpoints agora:</p>
+<pre><code>GET /healthz  →  {"status":"ok"}                                  (o processo está vivo?)
+GET /readyz   →  {"status":"ready","checks":{"db":"up"}}          (consigo servir? o banco responde?)
+GET /readyz   →  503 {"status":"not_ready","checks":{"db":"down"}}  (banco caiu → não estou pronto)
+GET /version  →  {"version":"dev", ...}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que separar "vivo" de "pronto"?</span>
+  <code>/healthz</code> (liveness) responde "o processo está de pé". <code>/readyz</code> (readiness)
+  responde "consigo realmente atender". Se o banco cai, o processo continua <em>vivo</em> (200 no healthz),
+  mas <em>não está pronto</em> (503 no readyz). Um orquestrador (Docker, Kubernetes, etc.) usa essa
+  diferença pra parar de mandar tráfego sem matar o processo desnecessariamente.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">2. As 4 decisões que tomamos (e o porquê)</h2>
+
+<p>Todo spec tem bifurcações reais. No SPEC-002 foram quatro. Vale entender o trade-off de cada uma —
+é aqui que mora o aprendizado de engenharia.</p>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>O banco é obrigatório?</td>
+    <td>Sim — sem <code>DATABASE_URL</code> o app <strong>falha rápido</strong></td>
+    <td>Honestidade: a partir daqui o banco é fundação. Nada de "funciona na minha máquina sem banco".</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Driver e ferramenta de migration</td>
+    <td><code>database/sql</code> + driver <strong>pgx</strong>; migrations com <strong>golang-migrate</strong></td>
+    <td>Você aprende a interface padrão e portável da stdlib, usando o melhor driver de Postgres por baixo.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Quando aplicar migrations?</td>
+    <td><strong>Manualmente</strong> (<code>task migrate:up</code>) — nunca automático</td>
+    <td>Mudança de schema é deliberada. Aplicar no boot automaticamente é uma fonte clássica de acidentes em produção.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Banco dos testes de integração</td>
+    <td>Postgres real, atrás de <code>TEST_DATABASE_URL</code>; pula com <code>-short</code></td>
+    <td>Sem dependência nova pesada; roda no CI/dev quando há banco, e pula limpo quando não há.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Uma lição sobre "stdlib first"</span>
+  Estas foram as <strong>primeiras dependências de terceiros</strong> do projeto (pgx e golang-migrate).
+  Aceitamos de propósito: Go não tem driver de Postgres na biblioteca padrão. A regra do ADR-0003 não é
+  "nunca use dependência" — é "comece pela stdlib e só adicione uma dependência com motivo claro".
+</div>
+
+<!-- ============================================================ -->
+<h2 id="fases">3. As 7 fases, uma a uma</h2>
+
+<p>Construímos de baixo pra cima, cada fase compilando e testável sozinha. Você revisou cada uma.</p>
+
+<h3>Fase 1 — Configuração do banco</h3>
+<p>Adicionamos ao <code>Config</code> o <code>DATABASE_URL</code> (segredo, obrigatório) e os parâmetros do
+<em>pool</em> de conexões. Tudo via variável de ambiente (12-factor).</p>
+<pre><code>DatabaseURL       string         // postgres://user:pass@host:5432/db?sslmode=...
+DBMaxOpenConns    int            // máx. de conexões abertas    (padrão 10)
+DBMaxIdleConns    int            // máx. de conexões ociosas    (padrão 5)
+DBConnMaxLifetime time.Duration  // tempo de vida de uma conexão (padrão 30m)
+DBConnMaxIdleTime time.Duration  // tempo ocioso até fechar      (padrão 5m)
+DBConnectTimeout  time.Duration  // limite do connect/ping inicial (padrão 5s)</code></pre>
+<div class="box why">
+  <span class="lbl">Por que uma função <code>RedactedDatabaseURL()</code>?</span>
+  A URL do banco contém a <strong>senha</strong>. Se logarmos a URL crua no startup, a senha vaza pros logs.
+  Criamos um helper que devolve só <code>esquema://host:porta/banco</code> — nunca usuário/senha — e é ele que
+  vai pro log. Tem até um teste garantindo que a senha nunca aparece.
+</div>
+
+<h3>Fase 2 — A conexão (pacote <code>platform/database</code>)</h3>
+<p>Uma função <code>Connect</code> que abre o pool com o driver pgx, aplica os parâmetros e <strong>verifica a
+conexão com um ping</strong> antes de devolver. Se o banco não responde, retorna erro — e o app falha rápido.</p>
+<pre><code>func Connect(ctx, cfg) (*sql.DB, error) {
+    db, _ := sql.Open("pgx", cfg.DatabaseURL)
+    db.SetMaxOpenConns(cfg.DBMaxOpenConns)
+    // ... demais parâmetros do pool ...
+    pingCtx, cancel := context.WithTimeout(ctx, cfg.DBConnectTimeout)
+    defer cancel()
+    if err := db.PingContext(pingCtx); err != nil {
+        db.Close()                 // nunca devolve um pool "meio aberto"
+        return nil, err
+    }
+    return db, nil
+}</code></pre>
+<div class="box why">
+  <span class="lbl">Por que o <code>main</code> virou <code>run() error</code>?</span>
+  O pool precisa ser <strong>fechado quando o servidor desliga</strong>. Usamos <code>defer db.Close()</code> —
+  mas <code>defer</code> não roda se você chamar <code>os.Exit()</code>. Então transformamos <code>main</code> num
+  <code>run()</code> que <em>retorna erro</em>, e o <code>main</code> só converte o erro em código de saída. Assim
+  o <code>defer</code> executa e o pool fecha <strong>depois</strong> que o HTTP drenou as requisições em andamento.
+</div>
+
+<h3>Fase 3 — Migrations (golang-migrate + <code>0001_init</code>)</h3>
+<p>Mudanças de schema viram arquivos SQL versionados, em pares <code>up</code>/<code>down</code>:</p>
+<pre><code>migrations/
+  0001_init.up.sql      → CREATE EXTENSION pgcrypto;  (+ convenções documentadas)
+  0001_init.down.sql    → DROP EXTENSION pgcrypto;
+  embed.go              → //go:embed *.sql  (empacota os SQLs no binário)</code></pre>
+<p>O <code>0001_init</code> <strong>não cria nenhuma tabela</strong>. Ele só liga a extensão <code>pgcrypto</code>
+(que dá <code>gen_random_uuid()</code>) e <strong>documenta as convenções</strong> que toda tabela futura deve seguir:</p>
+<table>
+  <tr><th>Convenção</th><th>Regra</th></tr>
+  <tr><td>Chave primária</td><td><code>id uuid primary key default gen_random_uuid()</code></td></tr>
+  <tr><td>Timestamps</td><td><code>created_at / updated_at timestamptz</code> (sempre UTC)</td></tr>
+  <tr><td>Dono da linha</td><td><code>user_id uuid</code> (a FK chega no SPEC-003, com auth)</td></tr>
+  <tr><td>Dinheiro</td><td><code>numeric</code> ou centavos inteiros — <strong>nunca float</strong></td></tr>
+</table>
+<div class="box warn">
+  <span class="lbl">Dinheiro nunca é float!</span>
+  <code>float</code>/<code>double</code> têm erros de arredondamento (0.1 + 0.2 ≠ 0.3 em binário). Em finanças isso
+  é inaceitável. Por isso fixamos: valores monetários são <code>numeric</code> ou inteiros em centavos. Essa regra
+  vale pra todas as tabelas que vierem.
+</div>
+<p>E um runner <code>cmd/migrate</code> com 4 comandos, expostos via Task:</p>
+<pre><code>task migrate:up                 # aplica tudo que está pendente
+task migrate:status             # mostra a versão atual do schema
+task migrate:down -- 1          # desfaz 1 migration
+task migrate:create -- add_xyz  # cria o par 000N_add_xyz.up/down.sql</code></pre>
+
+<h3>Fase 4 — O <code>/readyz</code> reflete o banco</h3>
+<p>O <code>/readyz</code>, que no SPEC-001 era um "sempre pronto", agora faz um ping de verdade no banco
+(com timeout próprio) e responde 200 ou 503. Detalhe importante: ele depende de uma <strong>interface</strong>,
+não do banco diretamente — veja a <a href="#readyz">seção 5</a>.</p>
+
+<h3>Fase 5 — Compose com Postgres</h3>
+<p>Ligamos o serviço <code>db</code> no <code>docker-compose.yml</code>: imagem <code>postgres:16-alpine</code>, um
+<strong>healthcheck</strong> (<code>pg_isready</code>) e <code>depends_on: service_healthy</code> — então a api só
+sobe <em>depois</em> que o banco está realmente aceitando conexões.</p>
+<div class="box tip">
+  <span class="lbl">Duas portas, dois "endereços" do mesmo banco</span>
+  Dentro da rede do Compose, a api fala com o banco pelo hostname <code>db:5432</code>. No seu PC, você alcança
+  o mesmo banco em <code>localhost:5433</code> (escolhemos 5433 pra não conflitar com um Postgres nativo que você
+  já tinha na 5432). Por isso o <code>DATABASE_URL</code> da api (no compose) e o do <code>.env</code> (host) são
+  diferentes — apontam pro mesmo Postgres por caminhos diferentes.
+</div>
+
+<h3>Fase 6 — Testes</h3>
+<p>Testes de integração contra um Postgres real, com <strong>gating</strong>: pulam no modo <code>-short</code> e
+quando <code>TEST_DATABASE_URL</code> não está setado. O destaque é o teste de <strong>ida e volta</strong> das
+migrations (<code>up → down → up</code>), que prova que todo <code>down</code> realmente desfaz o <code>up</code>.
+Foi essa fase que pegou um bug de verdade — veja a <a href="#bug">seção 6</a>.</p>
+
+<h3>Fase 7 — Documentação</h3>
+<p>Atualizamos o <code>CHANGELOG.md</code>, o <code>README.md</code> (pré-requisitos, como rodar migrations, fluxo
+docker-up → migrate:up → readyz) e marcamos SPEC-002 e PLAN-002 como <strong>Done</strong>. E esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="conceitos">4. Conceitos novos que você aprendeu</h2>
+
+<h3><code>database/sql</code> vs "driver" — qual é a diferença?</h3>
+<p><code>database/sql</code> é a <strong>interface padrão</strong> de Go pra bancos SQL: <code>db.Query</code>,
+<code>db.Exec</code>, <code>PingContext</code>... Ela não sabe falar com nenhum banco específico. Quem sabe falar
+"Postgresês" é o <strong>driver</strong> (o pgx). Você programa contra a interface padrão e troca o driver por baixo.</p>
+<div class="diagram">seu código  →  database/sql (interface padrão)  →  driver pgx  →  PostgreSQL
+               (Query, Exec, Ping...)            (fala o protocolo)</div>
+
+<h3>Pool de conexões</h3>
+<p>Abrir uma conexão TCP+autenticação com o banco a cada query é caro. O <code>*sql.DB</code> não é "uma conexão" —
+é um <strong>pool</strong> que reaproveita um conjunto de conexões. Os parâmetros que configuramos controlam
+quantas ficam abertas, quantas ociosas, e por quanto tempo. Guardar esse bug na memória: o pool tem um
+<strong>limite</strong>, e estourar esse limite trava (foi o que aconteceu — seção 6).</p>
+
+<h3><code>go:embed</code> — empacotar arquivos no binário</h3>
+<p>A diretiva <code>//go:embed *.sql</code> faz o compilador <strong>colar os arquivos SQL dentro do binário</strong>.
+Resultado: o app/runner de migration carrega as migrations consigo, sem precisar do código-fonte por perto.
+Um único executável, autossuficiente.</p>
+
+<h3><code>context</code> com timeout</h3>
+<p>Quase toda operação de I/O recebe um <code>context.Context</code>. Usamos <code>context.WithTimeout</code> pra
+<strong>limitar</strong> o ping de conexão e o check do <code>/readyz</code>. Assim, um banco lento ou travado não
+trava o app pra sempre — depois do prazo, a operação é cancelada e vira erro.</p>
+
+<!-- ============================================================ -->
+<h2 id="readyz">5. O <code>Pinger</code>: uma interface que torna o <code>/readyz</code> testável</h2>
+
+<p>O handler do <code>/readyz</code> precisa "perguntar ao banco se ele responde". Mas se ele dependesse do
+<code>*sql.DB</code> concreto, só dava pra testar com um Postgres de verdade. Solução clássica de Go: dependa de
+uma <strong>interface pequena</strong>, definida por quem a usa.</p>
+
+<pre><code>// Definida no pacote transport/http (quem consome)
+type Pinger interface {
+    PingContext(ctx context.Context) error
+}</code></pre>
+
+<p>O <code>*sql.DB</code> real já satisfaz essa interface (tem o método <code>PingContext</code>). E nos testes,
+criamos um <strong>fake</strong> de duas linhas:</p>
+
+<pre><code>type fakePinger struct{ err error }
+func (f fakePinger) PingContext(context.Context) error { return f.err }</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que isso é poderoso?</span>
+  Com o fake, testamos os dois caminhos do <code>/readyz</code> <strong>sem nenhum banco</strong>:
+  <code>fakePinger{}</code> (sem erro) → 200 "up"; <code>fakePinger{err: ...}</code> → 503 "down". É o princípio
+  "aceite interfaces, retorne structs" do SPEC-001, agora aplicado à persistência. A mesma costura (o "port")
+  que vai deixar cada feature plugar seu repositório depois.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="bug">6. O bug que os testes pegaram 🐛</h2>
+
+<p>Esse é o momento mais didático da aula. Na <strong>primeira</strong> vez que rodamos os testes de integração,
+eles <strong>travaram</strong> (ficaram pendurados pra sempre). O banco mostrava que as migrations tinham funcionado
+(<code>versão 1, dirty=false</code>) — então o que estava travando?</p>
+
+<h3>O diagnóstico</h3>
+<p>Cada chamada de migration (<code>MigrateUp</code>, <code>MigrateDown</code>, <code>MigrationVersion</code>)
+pegava uma conexão emprestada do <strong>pool compartilhado</strong> e <strong>nunca devolvia</strong> (eu tinha
+evitado de propósito fechar o "migrator", porque fechá-lo fecharia o pool inteiro). O teste de ida-e-volta faz
+<strong>8 chamadas</strong>, mas o pool tinha <code>MaxOpenConns = 5</code>...</p>
+
+<div class="diagram">Chamada 1 (up)       → pega conexão 1  (não devolve)
+Chamada 2 (version)  → pega conexão 2  (não devolve)
+Chamada 3 (down)     → pega conexão 3  (não devolve)
+Chamada 4 (version)  → pega conexão 4  (não devolve)
+Chamada 5 (up)       → pega conexão 5  (não devolve)  ← pool esgotado (5/5)
+Chamada 6 (version)  → espera uma conexão livre...  →  TRAVA PRA SEMPRE</div>
+
+<div class="box bug">
+  <span class="lbl">Por que o teste manual da Fase 3 não pegou isso?</span>
+  Lá, cada <code>task migrate:up</code> era um <strong>processo separado</strong> que fazia <strong>uma</strong>
+  operação e morria — abria 1 conexão, usava, e o processo terminava. Nunca acumulava. O bug só aparece quando
+  <strong>várias</strong> operações rodam no <strong>mesmo processo</strong>, compartilhando o mesmo pool. Foi
+  exatamente o teste de integração que criou essa condição.
+</div>
+
+<h3>A correção</h3>
+<p>Migrations passaram a usar uma <strong>conexão dedicada e de vida curta</strong>, separada do pool que o
+servidor HTTP usa. Cada operação abre sua conexão, faz o trabalho, e <strong>fecha tudo</strong> no fim. Sem
+disputa com o pool de requisições, sem vazamento.</p>
+<pre><code>func withMigrator(databaseURL, fn) error {
+    db, _ := sql.Open("pgx", databaseURL)   // conexão DEDICADA, só pra esta operação
+    // ... monta o migrator ...
+    defer m.Close()                         // fecha o migrator E essa conexão dedicada
+    return fn(m)
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">A lição</span>
+  Um teste unitário com um fake <strong>jamais</strong> teria pego isso — o problema era a interação real com o
+  pool de conexões sob múltiplas chamadas. É por isso que testes de integração contra um banco de verdade valem
+  o esforço: eles exercitam o comportamento que mocks escondem. Migrations e o "pool de servir" são preocupações
+  diferentes e merecem conexões diferentes.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="tools">7. Ferramentas e o ecossistema</h2>
+
+<table>
+  <tr><th>Ferramenta</th><th>Pra que serve</th></tr>
+  <tr><td><strong>golang-migrate</strong></td><td>Aplica/desfaz migrations SQL versionadas; registra a versão aplicada numa tabela <code>schema_migrations</code>.</td></tr>
+  <tr><td><strong>Docker Compose</strong></td><td><code>healthcheck</code> + <code>depends_on: service_healthy</code> garantem ordem de subida: o banco fica pronto antes da api.</td></tr>
+  <tr><td><strong>DBeaver</strong></td><td>Cliente gráfico pra inspecionar o banco. Conecte em <code>localhost:5433</code> (o banco do projeto), não 5432 (o nativo).</td></tr>
+  <tr><td><strong>pgcrypto</strong></td><td>Extensão do Postgres que fornece <code>gen_random_uuid()</code> pras chaves primárias UUID.</td></tr>
+</table>
+
+<div class="box warn">
+  <span class="lbl">5432 vs 5433 — não confunda!</span>
+  Você tem <strong>dois</strong> Postgres na máquina: o <strong>nativo</strong> (instalação Windows, porta 5432) e o
+  <strong>do projeto</strong> (container Docker, porta 5433). Use sempre <strong>5433</strong> pro YieldForge. Se
+  apontar pra 5432 sem querer, você fala com o banco errado e fica procurando tabelas que não estão lá.
+</div>
+
+<h3>O fluxo completo, do zero</h3>
+<pre><code>cp .env.example .env        # DATABASE_URL já aponta pra localhost:5433
+task docker-up              # sobe api (8080) + postgres (5433)
+task migrate:up             # aplica as migrations (noutro terminal)
+curl localhost:8080/readyz  # {"status":"ready","checks":{"db":"up"}}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="next">8. O que vem a seguir</h2>
+
+<p>Com a persistência pronta, a próxima pedra da fundação é a <strong>SPEC-003 — Autenticação &amp; Isolamento por
+usuário</strong>. É lá que a coluna <code>user_id</code> (que o <code>0001</code> já reservou nas convenções) ganha
+significado: cada usuário só enxerga os próprios dados.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001</td><td>Esqueleto Go (config, logs, HTTP, Docker)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-002</td><td>Persistência &amp; Migrations</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-003</td><td>Autenticação &amp; isolamento por usuário</td><td>⬜ A seguir</td></tr>
+  <tr><td>SPEC-004</td><td>Observabilidade (OpenTelemetry)</td><td>⬜</td></tr>
+  <tr><td>SPEC-005 / 006</td><td>Ports de LLM e de dados de mercado</td><td>⬜</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-002 o YieldForge ganhou um banco de verdade, um jeito seguro e reversível de mudar o schema, e um
+  <code>/readyz</code> honesto — tudo isso sem ainda escrever uma linha de regra de negócio. Fundação sólida,
+  pronta pras features.
+</div>
+
+<footer>
+  YieldForge · Aula 02 (SPEC-002) · gerada como material de estudo. Veja também a
+  <a href="SPEC-001-aula.html">Aula 01</a>, o <a href="../02-specs/SPEC-002-persistence-baseline-and-migrations.md">SPEC-002</a>
+  e o <a href="../03-plans/PLAN-002-persistence-baseline-and-migrations.md">PLAN-002</a>.
+</footer>
+
+</div>
+</body>
+</html>
