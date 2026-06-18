@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -24,6 +25,15 @@ type Config struct {
 	IdleTimeout     time.Duration // HTTP server idle (keep-alive) timeout
 	ShutdownTimeout time.Duration // graceful shutdown budget
 
+	// Database (SPEC-002). DatabaseURL is a required secret with no default — the
+	// app fails fast if it is unset. The remaining knobs tune the connection pool.
+	DatabaseURL       string        // postgres://user:pass@host:5432/db?sslmode=...
+	DBMaxOpenConns    int           // pool: max open connections
+	DBMaxIdleConns    int           // pool: max idle connections
+	DBConnMaxLifetime time.Duration // pool: max lifetime of a connection
+	DBConnMaxIdleTime time.Duration // pool: max idle time before a connection is closed
+	DBConnectTimeout  time.Duration // bounded timeout for the initial connect/ping
+
 	// Warnings holds non-fatal configuration notes (e.g. a value that was invalid
 	// and replaced by a default). They should be logged once the logger exists.
 	Warnings []string
@@ -38,6 +48,14 @@ const (
 	defaultWriteTimeout    = 10 * time.Second
 	defaultIdleTimeout     = 60 * time.Second
 	defaultShutdownTimeout = 10 * time.Second
+
+	// Database pool defaults — deliberately conservative to stay within free-tier
+	// Postgres connection caps (ADR-0003); tune once a host is chosen.
+	defaultDBMaxOpenConns    = 10
+	defaultDBMaxIdleConns    = 5
+	defaultDBConnMaxLifetime = 30 * time.Minute
+	defaultDBConnMaxIdleTime = 5 * time.Minute
+	defaultDBConnectTimeout  = 5 * time.Second
 )
 
 var validLogLevels = map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
@@ -47,6 +65,21 @@ func (c Config) IsDev() bool { return c.AppEnv == "dev" }
 
 // Addr returns the server listen address (e.g. ":8080").
 func (c Config) Addr() string { return fmt.Sprintf(":%d", c.Port) }
+
+// RedactedDatabaseURL returns the database target with all credentials stripped,
+// safe for logging. It keeps only scheme, host, port and database name — never the
+// user or password. On a parse failure it returns a constant marker rather than
+// risk leaking the raw DSN.
+func (c Config) RedactedDatabaseURL() string {
+	if c.DatabaseURL == "" {
+		return ""
+	}
+	u, err := url.Parse(c.DatabaseURL)
+	if err != nil {
+		return "[unparseable DATABASE_URL]"
+	}
+	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+}
 
 // Load resolves configuration from the environment, applying defaults and
 // validation. A local .env file (if present) seeds variables that are not already
@@ -94,7 +127,35 @@ func Load() (Config, error) {
 	}
 	cfg.LogFormat = format
 
-	// Timeouts — fatal if unparseable.
+	// Database URL — required secret (no default). Missing/empty is fatal (D1).
+	cfg.DatabaseURL = getString("DATABASE_URL", "")
+	if cfg.DatabaseURL == "" {
+		errs = append(errs,
+			"DATABASE_URL is required (e.g. postgres://user:pass@host:5432/db?sslmode=disable)")
+	}
+
+	// Pool sizes — fatal if non-numeric or negative.
+	for _, p := range []struct {
+		key string
+		def int
+		dst *int
+	}{
+		{"DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns, &cfg.DBMaxOpenConns},
+		{"DB_MAX_IDLE_CONNS", defaultDBMaxIdleConns, &cfg.DBMaxIdleConns},
+	} {
+		n, err := getInt(p.key, p.def)
+		if err != nil {
+			errs = append(errs, err.Error())
+			continue
+		}
+		if n < 0 {
+			errs = append(errs, fmt.Sprintf("%s must be >= 0, got %d", p.key, n))
+			continue
+		}
+		*p.dst = n
+	}
+
+	// Timeouts and pool durations — fatal if unparseable.
 	for _, t := range []struct {
 		key string
 		def time.Duration
@@ -104,6 +165,9 @@ func Load() (Config, error) {
 		{"HTTP_WRITE_TIMEOUT", defaultWriteTimeout, &cfg.WriteTimeout},
 		{"HTTP_IDLE_TIMEOUT", defaultIdleTimeout, &cfg.IdleTimeout},
 		{"SHUTDOWN_TIMEOUT", defaultShutdownTimeout, &cfg.ShutdownTimeout},
+		{"DB_CONN_MAX_LIFETIME", defaultDBConnMaxLifetime, &cfg.DBConnMaxLifetime},
+		{"DB_CONN_MAX_IDLE_TIME", defaultDBConnMaxIdleTime, &cfg.DBConnMaxIdleTime},
+		{"DB_CONNECT_TIMEOUT", defaultDBConnectTimeout, &cfg.DBConnectTimeout},
 	} {
 		d, err := getDuration(t.key, t.def)
 		if err != nil {

@@ -8,16 +8,26 @@ import (
 	"time"
 )
 
+// testDatabaseURL is a syntactically valid DSN used to satisfy the now-required
+// DATABASE_URL (SPEC-002 D1) on success-path tests. It is never connected to.
+const testDatabaseURL = "postgres://user:pass@localhost:5432/yieldforge_test?sslmode=disable"
+
 // clearConfigEnv forces every config variable to the "unset" state (empty string,
 // which Load treats as unset) so each test starts from defaults deterministically.
+// DATABASE_URL is then set to a valid placeholder, since it is required (D1) and an
+// unset value would otherwise make every success-path Load() fail.
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"APP_ENV", "APP_PORT", "LOG_LEVEL", "LOG_FORMAT",
 		"HTTP_READ_TIMEOUT", "HTTP_WRITE_TIMEOUT", "HTTP_IDLE_TIMEOUT", "SHUTDOWN_TIMEOUT",
+		"DATABASE_URL",
+		"DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS",
+		"DB_CONN_MAX_LIFETIME", "DB_CONN_MAX_IDLE_TIME", "DB_CONNECT_TIMEOUT",
 	} {
 		t.Setenv(k, "")
 	}
+	t.Setenv("DATABASE_URL", testDatabaseURL)
 }
 
 func TestLoad_Defaults(t *testing.T) {
@@ -141,6 +151,10 @@ func TestLoad_FatalErrors(t *testing.T) {
 		{"port out of range", "APP_PORT", "70000", "APP_PORT"},
 		{"bad read timeout", "HTTP_READ_TIMEOUT", "nope", "HTTP_READ_TIMEOUT"},
 		{"duration without unit", "SHUTDOWN_TIMEOUT", "10", "SHUTDOWN_TIMEOUT"},
+		{"non-numeric max open conns", "DB_MAX_OPEN_CONNS", "abc", "DB_MAX_OPEN_CONNS"},
+		{"negative max idle conns", "DB_MAX_IDLE_CONNS", "-1", "DB_MAX_IDLE_CONNS"},
+		{"bad conn lifetime", "DB_CONN_MAX_LIFETIME", "nope", "DB_CONN_MAX_LIFETIME"},
+		{"bad connect timeout", "DB_CONNECT_TIMEOUT", "5", "DB_CONNECT_TIMEOUT"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -153,6 +167,101 @@ func TestLoad_FatalErrors(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.wantSubstr) {
 				t.Errorf("error %q should mention %q", err.Error(), tc.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestLoad_DatabaseDefaults(t *testing.T) {
+	clearConfigEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DatabaseURL != testDatabaseURL {
+		t.Errorf("DatabaseURL = %q, want %q", cfg.DatabaseURL, testDatabaseURL)
+	}
+	if cfg.DBMaxOpenConns != 10 {
+		t.Errorf("DBMaxOpenConns = %d, want 10", cfg.DBMaxOpenConns)
+	}
+	if cfg.DBMaxIdleConns != 5 {
+		t.Errorf("DBMaxIdleConns = %d, want 5", cfg.DBMaxIdleConns)
+	}
+	if cfg.DBConnMaxLifetime != 30*time.Minute {
+		t.Errorf("DBConnMaxLifetime = %v, want 30m", cfg.DBConnMaxLifetime)
+	}
+	if cfg.DBConnMaxIdleTime != 5*time.Minute {
+		t.Errorf("DBConnMaxIdleTime = %v, want 5m", cfg.DBConnMaxIdleTime)
+	}
+	if cfg.DBConnectTimeout != 5*time.Second {
+		t.Errorf("DBConnectTimeout = %v, want 5s", cfg.DBConnectTimeout)
+	}
+}
+
+func TestLoad_DatabasePoolOverrides(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("DB_MAX_OPEN_CONNS", "20")
+	t.Setenv("DB_MAX_IDLE_CONNS", "0")
+	t.Setenv("DB_CONN_MAX_LIFETIME", "1h")
+	t.Setenv("DB_CONN_MAX_IDLE_TIME", "90s")
+	t.Setenv("DB_CONNECT_TIMEOUT", "2s")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DBMaxOpenConns != 20 {
+		t.Errorf("DBMaxOpenConns = %d, want 20", cfg.DBMaxOpenConns)
+	}
+	if cfg.DBMaxIdleConns != 0 {
+		t.Errorf("DBMaxIdleConns = %d, want 0 (zero is valid)", cfg.DBMaxIdleConns)
+	}
+	if cfg.DBConnMaxLifetime != time.Hour {
+		t.Errorf("DBConnMaxLifetime = %v, want 1h", cfg.DBConnMaxLifetime)
+	}
+	if cfg.DBConnMaxIdleTime != 90*time.Second {
+		t.Errorf("DBConnMaxIdleTime = %v, want 90s", cfg.DBConnMaxIdleTime)
+	}
+	if cfg.DBConnectTimeout != 2*time.Second {
+		t.Errorf("DBConnectTimeout = %v, want 2s", cfg.DBConnectTimeout)
+	}
+}
+
+func TestLoad_DatabaseURLRequired(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("DATABASE_URL", "") // explicitly unset the required secret
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected an error when DATABASE_URL is unset, got nil")
+	}
+	if !strings.Contains(err.Error(), "DATABASE_URL") {
+		t.Errorf("error %q should mention DATABASE_URL", err.Error())
+	}
+}
+
+func TestRedactedDatabaseURL(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "strips user and password",
+			in:   "postgres://user:s3cr3t@db.example.com:5432/yieldforge?sslmode=require",
+			want: "postgres://db.example.com:5432/yieldforge",
+		},
+		{"empty stays empty", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Config{DatabaseURL: tc.in}.RedactedDatabaseURL()
+			if got != tc.want {
+				t.Errorf("RedactedDatabaseURL() = %q, want %q", got, tc.want)
+			}
+			if strings.Contains(got, "s3cr3t") {
+				t.Errorf("redacted URL %q must never contain the password", got)
 			}
 		})
 	}
