@@ -3,6 +3,10 @@
 
 version: '3'
 
+# Load .env (if present) so tasks see DATABASE_URL / TEST_DATABASE_URL. Missing file
+# is ignored. Real environment variables still take precedence.
+dotenv: ['.env']
+
 vars:
   BINARY: yield-forge
   COMPOSE: deploy/docker-compose.yml
@@ -33,6 +37,11 @@ tasks:
     desc: Run unit tests only (skip the socket-based integration tests)
     cmds:
       - go test ./... -short
+
+  test:integration:
+    desc: 'Run all tests incl. DB integration (needs TEST_DATABASE_URL, e.g. the compose db on localhost:5433)'
+    cmds:
+      - go test ./... -count=1
 
   fmt:
     desc: Format all Go code

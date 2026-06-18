@@ -12,7 +12,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -53,15 +52,10 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	db, err := database.Connect(context.Background(), cfg)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
 
 	switch args[0] {
 	case "up":
-		if err := database.MigrateUp(db); err != nil {
+		if err := database.MigrateUp(cfg.DatabaseURL); err != nil {
 			return err
 		}
 		fmt.Println("migrations applied (database is up to date)")
@@ -74,12 +68,12 @@ func run(args []string) error {
 			}
 			steps = n
 		}
-		if err := database.MigrateDown(db, steps); err != nil {
+		if err := database.MigrateDown(cfg.DatabaseURL, steps); err != nil {
 			return err
 		}
 		fmt.Printf("rolled back %d migration(s)\n", steps)
 	case "status":
-		v, dirty, err := database.MigrationVersion(db)
+		v, dirty, err := database.MigrationVersion(cfg.DatabaseURL)
 		if err != nil {
 			return err
 		}
