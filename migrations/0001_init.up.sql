@@ -1,0 +1,13 @@
+-- 0001_init — baseline schema foundations (SPEC-002 FR-204).
+--
+-- This migration introduces NO feature tables. It only enables required extensions
+-- and records the project-wide conventions every later feature migration MUST follow:
+--
+--   * Primary keys:  id uuid primary key default gen_random_uuid()
+--   * Timestamps:    created_at / updated_at timestamptz not null default now()  (UTC, BR-207)
+--   * Ownership:     feature rows carry user_id uuid (FK added with auth, SPEC-003)
+--   * Money:         numeric(18,2) or integer minor units — NEVER float (BR-203)
+--   * Naming:        snake_case columns; plural, snake_case table names
+--
+-- pgcrypto provides gen_random_uuid() for the UUID primary keys above.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
