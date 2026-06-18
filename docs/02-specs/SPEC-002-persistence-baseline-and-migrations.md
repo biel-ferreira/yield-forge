@@ -9,7 +9,7 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — §7 Data, §10 NFR (Security/Reliability), §12 Constraints |
 | Related ADRs | [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md), [ADR-0003](../04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md) |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
+| Status       | Done                                                   |
 | Plan         | [PLAN-002](../03-plans/PLAN-002-persistence-baseline-and-migrations.md) |
 
 ---

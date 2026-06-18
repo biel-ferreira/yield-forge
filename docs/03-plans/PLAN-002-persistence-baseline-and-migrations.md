@@ -8,7 +8,7 @@
 | Related Feature | Foundational — database connection + schema-change process   |
 | Related Spec    | [SPEC-002](../02-specs/SPEC-002-persistence-baseline-and-migrations.md) |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                        |
+| Status          | Done                                                         |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-17                                                   |
 
