@@ -3,6 +3,10 @@
 
 version: '3'
 
+# Load .env (if present) so tasks see DATABASE_URL / TEST_DATABASE_URL. Missing file
+# is ignored. Real environment variables still take precedence.
+dotenv: ['.env']
+
 vars:
   BINARY: yield-forge
   COMPOSE: deploy/docker-compose.yml
@@ -34,6 +38,11 @@ tasks:
     cmds:
       - go test ./... -short
 
+  test:integration:
+    desc: 'Run all tests incl. DB integration (needs TEST_DATABASE_URL, e.g. the compose db on localhost:5433)'
+    cmds:
+      - go test ./... -count=1
+
   fmt:
     desc: Format all Go code
     cmds:
@@ -49,6 +58,26 @@ tasks:
     cmds:
       - go vet ./...
       - command -v golangci-lint >/dev/null 2>&1 && golangci-lint run || echo "golangci-lint not installed; ran go vet only"
+
+  migrate:up:
+    desc: Apply all pending database migrations
+    cmds:
+      - go run ./cmd/migrate up
+
+  migrate:down:
+    desc: 'Roll back migrations (default 1; e.g. task migrate:down -- 2)'
+    cmds:
+      - go run ./cmd/migrate down {{.CLI_ARGS}}
+
+  migrate:status:
+    desc: Print the current schema version
+    cmds:
+      - go run ./cmd/migrate status
+
+  migrate:create:
+    desc: 'Scaffold a new migration pair (e.g. task migrate:create -- add_holdings)'
+    cmds:
+      - go run ./cmd/migrate create {{.CLI_ARGS}}
 
   docker-up:
     desc: Build and run the stack via docker compose

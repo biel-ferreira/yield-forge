@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-FROM golang:1.23-alpine AS build
+# Go 1.24 is the module's minimum (SPEC-002 pulled in pgx and its deps).
+FROM golang:1.24-alpine AS build
 
 WORKDIR /src
 
-# Download dependencies first for better layer caching. go.sum is optional today
-# (no third-party deps yet) and is picked up automatically once it exists.
-COPY go.mod go.sum* ./
+# Download dependencies first for better layer caching.
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy the source and build a static, stripped binary. Build metadata is injected

@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SPEC-001 — Project Scaffolding & Hexagonal Layering, with a package-oriented
   (by-feature) hybrid layout; FR-008 requires this changelog.
 - PLAN-001 — implementation plan for SPEC-001 (phases, risks, DoD).
+- SPEC-002 — Persistence Baseline & Migrations, and PLAN-002 (resolved decisions:
+  DB mandatory, `database/sql` + pgx, `golang-migrate`, manual migrations).
 - Repository setup: `.gitignore` and `.gitattributes` (LF line-ending normalisation).
 - This `CHANGELOG.md` for change traceability.
 
@@ -52,11 +54,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Taskfile.yml` — cross-platform task runner (`task run|build|test|lint|docker-up`),
   alongside the `Makefile`.
 
+#### SPEC-002 implementation (persistence baseline)
+
+- PostgreSQL connection pool in `internal/platform/database` (`database/sql` with the
+  pgx stdlib driver): ping-on-connect (fail fast), configurable pool sizing, graceful
+  close after the HTTP server drains.
+- Database configuration: required `DATABASE_URL` secret plus pool knobs
+  (`DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME`,
+  `DB_CONN_MAX_IDLE_TIME`, `DB_CONNECT_TIMEOUT`); redacted-DSN logging that never
+  prints the password; `.env.example` updated.
+- Schema migrations via `golang-migrate`, embedded with `go:embed`. Baseline
+  `migrations/0001_init` enables `pgcrypto` and documents the table conventions
+  (UUID PKs, `timestamptz`/UTC, money-never-float, `user_id` shape). `cmd/migrate`
+  runner + `task migrate:up|down|status|create`.
+- `/readyz` now performs a bounded database health check —
+  `200 {"checks":{"db":"up"}}` / `503 {"checks":{"db":"down"}}`; `/healthz` unchanged.
+- `docker-compose` Postgres service (`postgres:16-alpine`, `pg_isready` healthcheck,
+  `depends_on: service_healthy`, host port **5433**); `api` wired with `DATABASE_URL`.
+- Env-gated integration tests (real Postgres via `TEST_DATABASE_URL`): connect,
+  unreachable-fails-fast, migration up→down→up round-trip, and live `/readyz`.
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while
   keeping hexagonal principles; clarified in ADR-0002 and SPEC-001 §3a.
 - `httpserver.Run` accepts a `context.Context` so shutdown can be triggered by
   cancellation (tests) as well as by OS signals (production).
+- Minimum Go version raised to **1.24** with the project's first third-party runtime
+  dependencies (`jackc/pgx/v5`, `golang-migrate/migrate/v4`).
+- `DATABASE_URL` is now **required** — the app fails fast at startup if it is unset.
+- `/readyz` changed from an always-ready stub to a real database dependency check
+  (via an injected `Pinger` seam).
+- `cmd/api` restructured into a `run() error` so the database pool is reliably closed
+  on graceful shutdown.
 
 [Unreleased]: https://github.com/biel-ferreira/yield-forge/commits/main
