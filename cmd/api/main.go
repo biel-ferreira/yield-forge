@@ -70,7 +70,7 @@ func run() error {
 	}()
 	logger.Info("database connected")
 
-	router := transporthttp.NewRouter(logger, buildinfo.Get())
+	router := transporthttp.NewRouter(logger, buildinfo.Get(), db)
 
 	if err := httpserver.Run(ctx, cfg, router, logger); err != nil {
 		logger.Error("server error", slog.String("error", err.Error()))
