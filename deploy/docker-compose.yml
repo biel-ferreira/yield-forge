@@ -1,6 +1,13 @@
-# YieldForge — local development stack.
+# YieldForge — local development stack (app + PostgreSQL).
+#
 # Run from the repo root:
-#   docker compose -f deploy/docker-compose.yml up --build      (or: make docker-up)
+#   docker compose -f deploy/docker-compose.yml up --build      (or: task docker-up)
+#
+# Migrations are applied manually (SPEC-002 D3), from the host, against the db
+# port published below:
+#   1. task docker-up        # builds + starts api and db
+#   2. task migrate:up        # applies migrations via localhost:5433 (uses .env)
+#   3. curl localhost:8080/readyz   ->  {"status":"ready","checks":{"db":"up"}}
 
 name: yield-forge
 
@@ -21,30 +28,32 @@ services:
       APP_PORT: "8080"
       LOG_LEVEL: info
       LOG_FORMAT: json
-      # DATABASE_URL is added in SPEC-002, pointing at the db service below, e.g.:
-      # DATABASE_URL: postgres://yieldforge:yieldforge@db:5432/yieldforge_dev?sslmode=disable
+      # Inside the compose network the database is reachable at host "db".
+      DATABASE_URL: postgres://yieldforge:yieldforge@db:5432/yieldforge_dev?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
-    # Enabled in SPEC-002, once the db service below is active:
-    # depends_on:
-    #   db:
-    #     condition: service_healthy
 
-  # ---- Postgres for local dev — enabled in SPEC-002 (shape shown now) ----
-  # db:
-  #   image: postgres:16-alpine
-  #   environment:
-  #     POSTGRES_USER: yieldforge
-  #     POSTGRES_PASSWORD: yieldforge
-  #     POSTGRES_DB: yieldforge_dev
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - dbdata:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U yieldforge -d yieldforge_dev"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 5
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: yieldforge
+      POSTGRES_PASSWORD: yieldforge
+      POSTGRES_DB: yieldforge_dev
+    ports:
+      # Published on host 5433 (not 5432) to avoid clashing with a native Postgres
+      # install. Host tools (task migrate:up, task run) reach it at localhost:5433.
+      # Matches the DATABASE_URL in .env.example. The api container still uses the
+      # in-network port 5432 (db:5432), unaffected by this mapping.
+      - "5433:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yieldforge -d yieldforge_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-# volumes:
-#   dbdata:
+volumes:
+  dbdata:
