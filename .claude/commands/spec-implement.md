@@ -19,7 +19,8 @@ Follow the PLAN's phases in order (bottom-up: domain → persistence → applica
 tests → docs). After **each** phase:
 - Keep the code compiling and the phase's tests passing.
 - Run the quality gate: `task vet` and `task test:short` (raw: `go vet ./...`;
-  `go test ./... -short`). gofmt runs automatically via hook.
+  `go test ./... -short`). gofmt runs automatically via hook. When a phase adds DB or HTTP
+  integration tests and `TEST_DATABASE_URL` is set, also run `task test:integration`.
 - **Pause and summarize the phase for the user to review before continuing** — this is
   the established cadence (a phase, you review, continue). Do not steamroll all phases.
 
@@ -30,10 +31,13 @@ citing the SPEC/BR. Do **not** edit committed migrations or accepted ADRs (creat
 ones — the PreToolUse hook enforces this).
 
 ## 2. Review before closing
-Invoke the **hexagonal-reviewer** subagent on the finished change. Fix any blocking
-findings (layering leaks, guard violations, money-as-float, trusted client `user_id`)
-before proceeding. For security-sensitive specs (e.g. auth), also suggest the user run
-`/security-review`.
+Run two review lenses on the finished change and fix blocking findings before proceeding:
+- **hexagonal-reviewer** subagent — architecture/layering, binding guards (explainability
+  / non-advice), conventions, identity-from-context.
+- **go-correctness-reviewer** subagent — nil derefs, unchecked errors, concurrency/races,
+  resource leaks, SQL safety, edge cases, best practices.
+
+For security-sensitive specs (e.g. auth), also suggest the user run `/security-review`.
 
 ## 3. Close the spec (working agreement)
 - Update `CHANGELOG.md` `[Unreleased]` in the same change (Keep a Changelog format).
@@ -41,6 +45,12 @@ before proceeding. For security-sensitive specs (e.g. auth), also suggest the us
 - Flip the SPEC and PLAN **Status to Done**, and update the indexes
   (`docs/02-specs/README.md`, `docs/03-plans/README.md`).
 - Invoke the **lesson-writer** subagent to produce `docs/lessons/SPEC-$ARGUMENTS-aula.html`.
-- Final gate: `task vet` + `task test:short` clean; `go build ./...` clean.
+- Final gate: `task vet`, `task test:short`, and `go build ./...` clean. Then the
+  **integration tests**: if `TEST_DATABASE_URL` is set (or the compose Postgres on host
+  port 5433 is up), run `task test:integration` and require it green. If no DB is
+  available, say so explicitly — do **not** silently skip: the spec is not Done until the
+  integration tests have passed against a real Postgres at least once.
+- Once the change is pushed and a PR is opened, run **`/pr-review`** as the final
+  pre-merge gate (architecture + correctness + SDD closeout).
 
 Report what was built, the review verdict, and the closing checklist status.

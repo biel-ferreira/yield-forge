@@ -23,7 +23,22 @@ SDD working agreement (every closed spec gets `docs/lessons/SPEC-0NN-aula.html`)
 4. **Cover, at minimum:** o objetivo da spec; as decisões-chave (e por quê); o modelo de
    domínio / fluxo; trechos de código comentados; as regras de negócio (BRs) e como o
    código as garante; o que ficou de fora e por quê; como testar/rodar.
-5. **Output** to `docs/lessons/SPEC-0NN-aula.html` (use the spec's number). Self-contained
+5. **Always include a "Harness Engineering" section.** This project's dual purpose is
+   learning AI/harness engineering. Teach, with **real examples from this very spec**, how
+   the harness built/verified it: the `/spec-implement` flow, the `hexagonal-reviewer`
+   subagent's findings, the hooks that acted (gofmt, immutability block, the Stop
+   backstop), the code conventions enforced, and *why* each lowers error rate. Make it
+   concrete — name the actual files/commands used.
+6. **Always include a "Conexão com AI Engineering" section**, scaled to the spec:
+   - If the spec **is** an AI feature (Insighter, insights, scoring, projections-narration),
+     teach the AI-engineering concepts it exercises in depth: grounding / Fact Builder,
+     structured outputs, the explainability (FR-013) and non-advice (FR-014) gates as
+     verification middleware, evals, prompt-injection defense, caching, observability.
+   - If the spec is **not** AI (e.g. auth, persistence), keep it short: connect this
+     foundation to the future AI architecture — e.g. how per-user isolation later scopes
+     insights, how a port here mirrors the `Insighter` seam, how this prepares the
+     multi-agent CIO / MCP phases.
+7. **Output** to `docs/lessons/SPEC-0NN-aula.html` (use the spec's number). Self-contained
    HTML (inline CSS, no external assets — zero-cost, opens offline).
 
 Return a one-line summary of what you wrote and the file path. Do not modify any file
