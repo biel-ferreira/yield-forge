@@ -27,12 +27,19 @@ var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrInvalidEmail       = errors.New("invalid email")
 	ErrWeakPassword       = errors.New("password too short")
+	ErrPasswordTooLong    = errors.New("password too long")
 	ErrSessionNotFound    = errors.New("session not found or expired")
 	ErrUserNotFound       = errors.New("user not found")
 )
 
-// MinPasswordLength is the minimum accepted password length (SPEC-003 FR-301).
-const MinPasswordLength = 8
+const (
+	// MinPasswordLength is the minimum accepted password length (SPEC-003 FR-301).
+	MinPasswordLength = 8
+	// MaxPasswordLength caps the password at bcrypt's 72-byte limit: bytes beyond it
+	// are silently ignored by bcrypt, so without this two long passwords sharing a
+	// 72-byte prefix would be interchangeable. Reject them at the boundary instead.
+	MaxPasswordLength = 72
+)
 
 // User is an authenticated account. PasswordHash never crosses the API boundary —
 // it is exposed only between the service and its persistence adapter (BR-302).
@@ -73,10 +80,14 @@ func ValidateEmail(email string) (string, error) {
 	return normalized, nil
 }
 
-// ValidatePassword enforces the minimum password policy (SPEC-003 FR-301).
+// ValidatePassword enforces the password policy (SPEC-003 FR-301): at least
+// MinPasswordLength and at most MaxPasswordLength bytes.
 func ValidatePassword(password string) error {
 	if len(password) < MinPasswordLength {
 		return fmt.Errorf("%w: need at least %d characters", ErrWeakPassword, MinPasswordLength)
+	}
+	if len(password) > MaxPasswordLength {
+		return fmt.Errorf("%w: at most %d bytes", ErrPasswordTooLong, MaxPasswordLength)
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -164,6 +165,12 @@ func TestAuthMiddleware_DenyByDefault(t *testing.T) {
 		r := authRouter(fakeAuth{authErr: auth.ErrSessionNotFound})
 		rr := doReq(r, http.MethodPost, "/auth/logout", "")
 		require.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+
+	t.Run("infrastructure error is 500, not 401", func(t *testing.T) {
+		r := authRouter(fakeAuth{authErr: errors.New("database is down")})
+		rr := doReq(r, http.MethodGet, "/auth/me", "", &http.Cookie{Name: "yf_session", Value: "tok"})
+		require.Equal(t, http.StatusInternalServerError, rr.Code)
 	})
 
 	t.Run("authenticated unknown route reaches the 404 handler", func(t *testing.T) {

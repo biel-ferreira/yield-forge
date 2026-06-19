@@ -48,5 +48,5 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /auth/me", authH.me)
 	mux.HandleFunc("/", api.notFound) // catch-all → JSON 404 (when authenticated)
 
-	return requestID(logRequests(d.Logger)(requireAuth(d.Auth, d.CookieName)(mux)))
+	return requestID(logRequests(d.Logger)(requireAuth(d.Auth, d.CookieName, d.Logger)(mux)))
 }

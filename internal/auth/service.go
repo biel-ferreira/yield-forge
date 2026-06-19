@@ -22,16 +22,25 @@ type Service struct {
 }
 
 // NewService builds a Service. ttl is the session lifetime (config.SessionTTL).
+//
+// It precomputes a dummy hash so a login for an unknown email still performs a real
+// Compare — keeping timing comparable to a wrong-password login and denying an
+// account-enumeration oracle (SPEC-003 BR-305). A hasher that cannot hash a constant
+// string is a misconfiguration, so we fail loudly at wiring time rather than let the
+// timing defense silently degrade.
 func NewService(users UserRepository, sessions SessionRepository, hasher PasswordHasher, clk clock.Clock, ttl time.Duration) *Service {
-	s := &Service{users: users, sessions: sessions, hasher: hasher, clock: clk, ttl: ttl}
-	// Precompute a dummy hash so a login for an unknown email still performs a real
-	// Compare — keeping timing comparable to a wrong-password login and denying an
-	// account-enumeration oracle (SPEC-003 BR-305). A failure here is non-fatal: the
-	// dummy compare simply does less work.
-	if h, err := hasher.Hash("yieldforge-constant-time-dummy"); err == nil {
-		s.dummyHash = h
+	dummyHash, err := hasher.Hash("yieldforge-constant-time-dummy")
+	if err != nil {
+		panic(fmt.Sprintf("auth: cannot build constant-time dummy hash (broken hasher?): %v", err))
 	}
-	return s
+	return &Service{
+		users:     users,
+		sessions:  sessions,
+		hasher:    hasher,
+		clock:     clk,
+		ttl:       ttl,
+		dummyHash: dummyHash,
+	}
 }
 
 // Register validates and creates a new user, storing only the password hash

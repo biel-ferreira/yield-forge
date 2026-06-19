@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,4 +31,5 @@ func TestValidateEmail(t *testing.T) {
 func TestValidatePassword(t *testing.T) {
 	require.NoError(t, auth.ValidatePassword("longenough1"))
 	require.ErrorIs(t, auth.ValidatePassword("short"), auth.ErrWeakPassword)
+	require.ErrorIs(t, auth.ValidatePassword(strings.Repeat("a", auth.MaxPasswordLength+1)), auth.ErrPasswordTooLong)
 }

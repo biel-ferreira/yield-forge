@@ -1,6 +1,8 @@
 package http
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/biel-ferreira/yield-forge/internal/auth"
@@ -10,7 +12,7 @@ import (
 // every route requires a valid session except the explicit public allowlist. On
 // success it injects the authenticated UserID into the request context (the seam
 // feature repositories scope by, FR-306) and records it for the request log.
-func requireAuth(authn AuthService, cookieName string) func(http.Handler) http.Handler {
+func requireAuth(authn AuthService, cookieName string, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isPublicRoute(r.Method, r.URL.Path) {
@@ -21,7 +23,15 @@ func requireAuth(authn AuthService, cookieName string) func(http.Handler) http.H
 			token := sessionTokenFromRequest(r, cookieName)
 			user, err := authn.Authenticate(r.Context(), token)
 			if err != nil {
-				writeError(w, http.StatusUnauthorized, "authentication required")
+				// A missing/expired/unknown session is a normal 401. Any other error
+				// is an infrastructure failure (e.g. the DB is down) — surface it as a
+				// 500 and log it, rather than masking it as "not authenticated".
+				if errors.Is(err, auth.ErrSessionNotFound) {
+					writeError(w, http.StatusUnauthorized, "authentication required")
+					return
+				}
+				logger.Error("authentication check failed", slog.String("error", err.Error()))
+				writeError(w, http.StatusInternalServerError, "internal error")
 				return
 			}
 

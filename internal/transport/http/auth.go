@@ -64,6 +64,10 @@ func (h authHandler) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest,
 			fmt.Sprintf("password must be at least %d characters", auth.MinPasswordLength))
 		return
+	case errors.Is(err, auth.ErrPasswordTooLong):
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("password must be at most %d bytes", auth.MaxPasswordLength))
+		return
 	case err != nil:
 		h.logger.Error("register failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")

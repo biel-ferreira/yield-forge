@@ -19,8 +19,11 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/auth"
 )
 
-// uniqueViolation is the PostgreSQL SQLSTATE code for unique_violation.
-const uniqueViolation = "23505"
+// PostgreSQL SQLSTATE codes we map to domain errors.
+const (
+	uniqueViolation           = "23505" // unique_violation
+	invalidTextRepresentation = "22P02" // e.g. a non-UUID string cast to uuid
+)
 
 // Compile-time checks that the adapters satisfy the auth ports.
 var (
@@ -76,6 +79,12 @@ func scanUser(row *sql.Row) (auth.User, error) {
 	var u auth.User
 	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
+		return auth.User{}, auth.ErrUserNotFound
+	}
+	// A malformed id (non-UUID string cast to uuid) can never match a row, so treat it
+	// as not-found rather than surfacing a 500 to a future caller passing a bad id.
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == invalidTextRepresentation {
 		return auth.User{}, auth.ErrUserNotFound
 	}
 	if err != nil {
