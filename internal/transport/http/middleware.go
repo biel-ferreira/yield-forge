@@ -11,7 +11,27 @@ import (
 
 type ctxKey int
 
-const requestIDKey ctxKey = iota
+const (
+	requestIDKey ctxKey = iota
+	logFieldsKey
+)
+
+// logFields carries request-scoped attributes that inner middleware (e.g. auth)
+// fills in so the outer request logger can include them. It is a pointer in the
+// context so a value set deep in the chain is visible when logRequests logs.
+type logFields struct {
+	userID string
+}
+
+func withLogFields(ctx context.Context) (context.Context, *logFields) {
+	lf := &logFields{}
+	return context.WithValue(ctx, logFieldsKey, lf), lf
+}
+
+func logFieldsFromContext(ctx context.Context) *logFields {
+	lf, _ := ctx.Value(logFieldsKey).(*logFields)
+	return lf
+}
 
 // requestID assigns a request id to each request — reusing an incoming
 // X-Request-Id header when present, otherwise generating one — and exposes it on
@@ -50,15 +70,24 @@ func logRequests(logger *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
+			// Seed the per-request log fields so inner middleware (auth) can add the
+			// resolved user_id, then serve with that context.
+			ctx, lf := withLogFields(r.Context())
+			r = r.WithContext(ctx)
+
 			next.ServeHTTP(rec, r)
 
-			logger.LogAttrs(r.Context(), slog.LevelInfo, "http request",
+			attrs := []slog.Attr{
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", rec.status),
 				slog.Float64("duration_ms", float64(time.Since(start).Microseconds())/1000.0),
 				slog.String("request_id", RequestIDFromContext(r.Context())),
-			)
+			}
+			if lf.userID != "" {
+				attrs = append(attrs, slog.String("user_id", lf.userID))
+			}
+			logger.LogAttrs(r.Context(), slog.LevelInfo, "http request", attrs...)
 		})
 	}
 }

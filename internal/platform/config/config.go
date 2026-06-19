@@ -34,6 +34,10 @@ type Config struct {
 	DBConnMaxIdleTime time.Duration // pool: max idle time before a connection is closed
 	DBConnectTimeout  time.Duration // bounded timeout for the initial connect/ping
 
+	// Auth & sessions (SPEC-003).
+	SessionTTL     time.Duration // how long a login session stays valid
+	AuthCookieName string        // name of the session cookie
+
 	// Warnings holds non-fatal configuration notes (e.g. a value that was invalid
 	// and replaced by a default). They should be logged once the logger exists.
 	Warnings []string
@@ -56,6 +60,10 @@ const (
 	defaultDBConnMaxLifetime = 30 * time.Minute
 	defaultDBConnMaxIdleTime = 5 * time.Minute
 	defaultDBConnectTimeout  = 5 * time.Second
+
+	// Auth defaults (SPEC-003).
+	defaultSessionTTL     = 168 * time.Hour // 7 days
+	defaultAuthCookieName = "yf_session"
 )
 
 var validLogLevels = map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
@@ -65,6 +73,10 @@ func (c Config) IsDev() bool { return c.AppEnv == "dev" }
 
 // Addr returns the server listen address (e.g. ":8080").
 func (c Config) Addr() string { return fmt.Sprintf(":%d", c.Port) }
+
+// CookieSecure reports whether the session cookie should carry the Secure flag.
+// True everywhere except local development, where plain HTTP is used (SPEC-003 §10).
+func (c Config) CookieSecure() bool { return !c.IsDev() }
 
 // RedactedDatabaseURL returns the database target with all credentials stripped,
 // safe for logging. It keeps only scheme, host, port and database name — never the
@@ -134,6 +146,9 @@ func Load() (Config, error) {
 			"DATABASE_URL is required (e.g. postgres://user:pass@host:5432/db?sslmode=disable)")
 	}
 
+	// Session cookie name (SPEC-003).
+	cfg.AuthCookieName = getString("AUTH_COOKIE_NAME", defaultAuthCookieName)
+
 	// Pool sizes — fatal if non-numeric or negative.
 	for _, p := range []struct {
 		key string
@@ -168,6 +183,7 @@ func Load() (Config, error) {
 		{"DB_CONN_MAX_LIFETIME", defaultDBConnMaxLifetime, &cfg.DBConnMaxLifetime},
 		{"DB_CONN_MAX_IDLE_TIME", defaultDBConnMaxIdleTime, &cfg.DBConnMaxIdleTime},
 		{"DB_CONNECT_TIMEOUT", defaultDBConnectTimeout, &cfg.DBConnectTimeout},
+		{"SESSION_TTL", defaultSessionTTL, &cfg.SessionTTL},
 	} {
 		d, err := getDuration(t.key, t.def)
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/biel-ferreira/yield-forge/internal/auth"
 	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 	"github.com/biel-ferreira/yield-forge/internal/platform/config"
 	"github.com/biel-ferreira/yield-forge/internal/platform/database"
@@ -43,7 +44,14 @@ func TestReadyz_LiveDatabase_Integration(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := NewRouter(logger, buildinfo.Info{}, db)
+	router := NewRouter(Deps{
+		Logger:     logger,
+		Build:      buildinfo.Info{},
+		Ready:      db,
+		Auth:       fakeAuth{authErr: auth.ErrSessionNotFound},
+		CookieName: "yf_session",
+		SessionTTL: time.Hour,
+	})
 
 	get := func() *httptest.ResponseRecorder {
 		rr := httptest.NewRecorder()

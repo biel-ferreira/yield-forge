@@ -29,7 +29,7 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | -------- | --------------------------------------- | ----------------------- | ----------- |
 | SPEC-001 | [Project Scaffolding & Hexagonal Layering](SPEC-001-project-scaffolding-and-layering.md) | ADR-0002, §10 NFR | ✅ Done |
 | SPEC-002 | [Persistence Baseline & Migrations](SPEC-002-persistence-baseline-and-migrations.md) | §7 Data, NFR | ✅ Done |
-| SPEC-003 | Authentication & Per-User Isolation     | FR-015                  | Not started |
+| SPEC-003 | [Authentication & Per-User Isolation](SPEC-003-authentication-and-per-user-isolation.md) | FR-015 | ✅ Done |
 | SPEC-004 | Observability Baseline (OpenTelemetry)  | §10 Observability       | Not started |
 | SPEC-005 | `Insighter` Port & Free/Local LLM Adapter | FR-018, FR-013, FR-014  | Not started |
 | SPEC-006 | `MarketDataProvider` Port & Ingestion Worker | FR-006, FR-007       | Not started |

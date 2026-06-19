@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 03 — SPEC-003: Autenticação e Isolamento por Usuário | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 03 · Spec de Fundação</span>
+    <h1>SPEC-003 — Autenticação &amp; Isolamento por Usuário</h1>
+    <p>Como o app ganhou <strong>identidade</strong>: registro, login, logout, sessões no servidor, "negar por padrão" e a costura que vai escopar todo dado por usuário.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: o que mudou no SPEC-003</a></li>
+    <li><a href="#decisoes">As 4 decisões (e por que NÃO JWT, por que NÃO OAuth)</a></li>
+    <li><a href="#sessao">Como uma sessão vive no banco (token cru vs. <code>sha256</code>)</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#conceitos">Conceitos-chave: bcrypt vs sha256, deny-by-default, o seam <code>auth.UserID(ctx)</code></a></li>
+    <li><a href="#review">Os achados da review que viraram correções 🐛</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: o que mudou no SPEC-003</h2>
+
+<p>No SPEC-001 ganhamos um esqueleto que roda; no SPEC-002, um banco de verdade. Mas o app
+ainda não sabia <strong>quem</strong> estava falando com ele — qualquer requisição era anônima. O
+SPEC-003 é a <strong>terceira pedra da fundação</strong>: o app passa a ter <strong>identidade</strong> e
+<strong>isolamento por usuário</strong>.</p>
+
+<p>A partir daqui existe uma tabela <code>users</code>, sessões no servidor, os endpoints
+<code>register</code>/<code>login</code>/<code>logout</code>/<code>me</code>, um <strong>middleware de autenticação</strong> que
+protege as rotas, e um valor <strong>"usuário atual"</strong> que viaja no <code>context</code> — a costura
+(o <em>seam</em>) que toda feature vai usar pra escopar dados com <code>WHERE user_id = $1</code>.</p>
+
+<p>Importante, no mesmo espírito das aulas anteriores: <strong>ainda não há feature de negócio</strong>.
+Nenhuma carteira, nenhum perfil. O SPEC-003 prova o isolamento <em>mecanicamente</em> — ele constrói
+o cofre e a fechadura, mas o cofre ainda está vazio.</p>
+
+<div class="diagram">ANTES (SPEC-002)                       DEPOIS (SPEC-003)
+  toda requisição é anônima             requisição carrega um UserID autenticado
+  qualquer um chama qualquer rota        deny-by-default: só a allowlist é pública
+  sem usuários, sem senhas               users + sessions; senha só como hash bcrypt
+  user_id era só uma convenção (0001)    user_id virou uma fronteira de verdade</div>
+
+<p>Os endpoints novos:</p>
+<pre><code>POST /auth/register  {"email","password"}   →  201 {"id","email"}         | 400 | 409
+POST /auth/login     {"email","password"}   →  200 {"id","email"} + cookie | 401
+POST /auth/logout    (autenticado)          →  204  (apaga a sessão + limpa o cookie)
+GET  /auth/me        (autenticado)          →  200 {"id","email"}          | 401</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que "sessões no servidor" e não só um token solto?</span>
+  Uma sessão no servidor é uma <strong>linha no banco</strong> que podemos apagar. Isso dá <strong>logout de
+  verdade</strong> (revogação imediata) e expiração controlada por nós. O cliente só guarda um token
+  opaco; quem decide se ele ainda vale é o servidor. Veja a <a href="#sessao">seção 3</a>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">2. As 4 decisões (e por que NÃO JWT, por que NÃO OAuth)</h2>
+
+<p>Toda spec tem bifurcações reais. Aqui foram quatro, mais uma decisão fina sobre logout. Vale
+entender o trade-off de cada uma — é aqui que mora o aprendizado de segurança.</p>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Como autenticar?</td>
+    <td>E-mail + senha, com <strong>sessões no servidor</strong></td>
+    <td>Autossuficiente, zero custo, revogável, alto valor de aprendizado. Cabe num MVP que é, na prática, single-user (você).</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Como guardar a senha?</td>
+    <td><strong>bcrypt</strong> atrás do port <code>PasswordHasher</code></td>
+    <td>Já vem no <code>golang.org/x/crypto</code>, é testado em batalha e tem comparação em tempo constante embutida. Trocar por argon2id depois é um detalhe atrás do port.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Como transportar a sessão?</td>
+    <td>Cookie <strong><code>HttpOnly</code> + <code>Secure</code> + <code>SameSite</code></strong></td>
+    <td>O padrão mais seguro: <code>HttpOnly</code> impede que JavaScript (e um XSS) leia o token; <code>SameSite</code> ajuda contra CSRF; <code>Secure</code> só relaxa em dev local.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Como escopar dados por usuário?</td>
+    <td><strong>No nível da aplicação</strong> (<code>WHERE user_id = $1</code>)</td>
+    <td>Transparente e fácil de raciocinar. O <em>Row-Level Security</em> do Postgres fica como defesa-em-profundidade futura <em>por cima</em> disto.</td>
+  </tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que NÃO JWT agora?</span>
+  Um JWT é <strong>autocontido</strong>: o servidor valida a assinatura e confia no conteúdo sem
+  consultar o banco. Soa ótimo — até você precisar de <strong>logout</strong>. Como o token vale por si só,
+  revogá-lo antes da expiração exige uma "blacklist"... que é, justamente, uma sessão no servidor.
+  Para um app que quer logout imediato e simplicidade, sessão no banco é mais direto. JWT continua
+  sendo plugável depois, atrás do mesmo seam <code>auth</code>.
+</div>
+
+<div class="box why">
+  <span class="lbl">Por que NÃO OAuth/login social agora?</span>
+  "Entrar com o Google" exige <strong>cadastrar a aplicação num provedor externo</strong>, gerenciar
+  client secrets e callbacks. Isso fere a posture de <strong>zero custo / zero dependência externa</strong> e
+  adiciona complexidade que o MVP não precisa. O esquema deixa espaço pra adicionar depois sem redesign.
+</div>
+
+<div class="box tip">
+  <span class="lbl">A decisão fina: logout = <code>DELETE</code> de verdade</span>
+  Logout <strong>apaga a linha</strong> da sessão (<code>DELETE</code>), não um soft-delete. A expiração natural
+  (<code>expires_at</code>) já cobre as sessões velhas; apagar no logout mantém a tabela enxuta. Simples e correto.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="sessao">3. Como uma sessão vive no banco</h2>
+
+<p>Esta é a parte mais importante de segurança da aula. O fluxo de uma sessão é, no fundo, dois
+comandos SQL: <strong>login = <code>INSERT</code></strong>, <strong>logout = <code>DELETE</code></strong>. Mas o truque está em
+<em>o que</em> guardamos.</p>
+
+<div class="diagram">LOGIN
+  1. usuário manda email+senha
+  2. servidor confere a senha com bcrypt.Compare
+  3. gera um token aleatório de 256 bits  → "abc123..."  (o token CRU)
+  4. INSERT na tabela sessions guardando sha256("abc123...")   ← só o HASH
+  5. devolve o token CRU pro cliente, dentro de um cookie HttpOnly
+
+REQUISIÇÃO PROTEGIDA
+  1. o cookie chega com o token cru "abc123..."
+  2. servidor calcula sha256("abc123...") e faz SELECT ... WHERE token_hash = ...
+  3. achou + não expirou → injeta UserID no context → handler roda
+
+LOGOUT
+  1. DELETE FROM sessions WHERE token_hash = sha256(token)   → sessão revogada
+  2. cookie é limpo no cliente (MaxAge = -1)</div>
+
+<p>Repare na assimetria: o <strong>cookie do cliente guarda o token cru</strong>; o <strong>banco guarda só o
+<code>sha256</code> do token</strong>. É exatamente o que a <strong>BR-303</strong> exige. O código que faz isso são duas
+funções pequenas:</p>
+
+<pre><code>// internal/auth/token.go
+func NewSessionToken() (string, error) {
+    b := make([]byte, 32)            // 32 bytes = 256 bits de entropia
+    if _, err := rand.Read(b); err != nil { ... }   // crypto/rand, não math/rand
+    return base64.RawURLEncoding.EncodeToString(b), nil   // token CRU → cliente
+}
+
+func HashToken(token string) string {
+    sum := sha256.Sum256([]byte(token))
+    return hex.EncodeToString(sum[:])   // o HASH → banco
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que guardar só o hash protege contra vazamento do banco? (BR-303)</span>
+  Imagine que alguém rouba um <code>pg_dump</code> do banco. Se guardássemos o token cru, o atacante
+  poderia <strong>colar cada token num cookie e se passar por qualquer usuário logado</strong>. Guardando só o
+  <code>sha256</code>, o dump contém apenas hashes — e <code>sha256</code> é <strong>de mão única</strong>. O atacante teria que
+  inverter o hash de um valor de 256 bits aleatórios, o que é inviável. O vazamento não rende
+  nenhuma sessão usável. É a mesma ideia das senhas, aplicada aos tokens.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="fases">4. As 7 fases, uma a uma</h2>
+
+<p>Construímos de baixo pra cima, cada fase compilando e testável sozinha — domínio puro primeiro,
+adaptadores e HTTP por último. Você revisou cada uma.</p>
+
+<h3>Fase 1 — Domínio, ports e config</h3>
+<p>O coração do pacote <code>internal/auth</code>: os tipos <code>User</code> e <code>Session</code>, os erros-sentinela, a
+validação de e-mail/senha, os três ports (<code>UserRepository</code>, <code>SessionRepository</code>,
+<code>PasswordHasher</code>) e o helper de contexto. Tudo <strong>puro</strong> — sem SQL, sem HTTP, sem bcrypt.</p>
+<pre><code>// internal/auth/auth.go — erros como sentinelas, checados com errors.Is
+var (
+    ErrEmailTaken         = errors.New("email already registered")
+    ErrInvalidCredentials = errors.New("invalid email or password")  // GENÉRICO de propósito
+    ErrSessionNotFound    = errors.New("session not found or expired")
+    ErrUserNotFound       = errors.New("user not found")
+)</code></pre>
+<div class="box why">
+  <span class="lbl">Por que <code>MinPasswordLength = 8</code> <em>e</em> <code>MaxPasswordLength = 72</code>?</span>
+  O mínimo é política óbvia. O <strong>máximo de 72</strong> não é arbitrário: o bcrypt <strong>ignora
+  silenciosamente</strong> tudo além de 72 bytes. Sem esse teto, duas senhas longas com o mesmo prefixo de
+  72 bytes seriam <strong>intercambiáveis</strong> — um buraco sutil. Rejeitamos na fronteira. (Isso virou um
+  achado de review — veja a <a href="#review">seção 6</a>.)
+</div>
+<p>Também nasceu aqui o <strong><code>Clock</code> port</strong> (<code>internal/platform/clock</code>): a sessão precisa
+saber a hora pra calcular a expiração, e o CLAUDE.md proíbe <code>time.Now()</code> direto no core. O
+SPEC-001 adiou esse port "até o primeiro consumidor de tempo" — a expiração de sessão é ele.</p>
+
+<h3>Fase 2 — Hashing de senha &amp; tokens de sessão</h3>
+<p>O adaptador <code>internal/auth/bcrypt</code> implementa o port <code>PasswordHasher</code> com custo documentado
+(12), e o <code>token.go</code> gera/hasheia o token de sessão (visto na seção 3). Dois tipos de hash, dois
+propósitos diferentes — a distinção mais importante da aula está na <a href="#conceitos">seção 5</a>.</p>
+
+<h3>Fase 3 — Persistência (migration + adaptadores)</h3>
+<p>A migration <code>0002_auth</code> cria as duas primeiras tabelas com dono — seguindo as convenções que
+o <code>0001</code> documentou (UUID PK, <code>timestamptz</code>/UTC):</p>
+<pre><code>CREATE TABLE users (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    email text NOT NULL, password_hash text NOT NULL, ...);
+CREATE UNIQUE INDEX users_email_key ON users (email);
+
+CREATE TABLE sessions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,   -- apaga o user, somem as sessões
+    token_hash text NOT NULL, expires_at timestamptz NOT NULL, ...);
+CREATE UNIQUE INDEX sessions_token_hash_key ON sessions (token_hash);</code></pre>
+<p>E os adaptadores Postgres em <code>internal/auth/postgres</code> implementam os ports com SQL
+parametrizado — <code>INSERT ... RETURNING</code>, busca por e-mail, busca por <code>token_hash</code>, <code>DELETE</code>.</p>
+
+<h3>Fase 4 — O serviço de aplicação</h3>
+<p>O <code>Service</code> orquestra os ports — <strong>sem saber</strong> que existe banco ou HTTP. <code>Register</code>,
+<code>Login</code>, <code>Logout</code>, <code>Authenticate</code>. É puro o suficiente pra ser testado com <em>fakes</em>
+escritos à mão. Olhe o <code>Login</code>, onde mora a defesa anti-enumeração:</p>
+<pre><code>func (s *Service) Login(ctx, email, password string) (User, string, error) {
+    user, err := s.users.GetUserByEmail(ctx, NormalizeEmail(email))
+    if err != nil {
+        if errors.Is(err, ErrUserNotFound) {
+            _ = s.hasher.Compare(s.dummyHash, password) // gasta o MESMO tempo de um Compare real
+            return User{}, "", ErrInvalidCredentials    // erro IDÊNTICO ao de senha errada
+        }
+        return User{}, "", fmt.Errorf("login: %w", err)
+    }
+    if err := s.hasher.Compare(user.PasswordHash, password); err != nil {
+        return User{}, "", ErrInvalidCredentials
+    }
+    // sucesso → gera token, guarda sha256(token) + expiração, devolve o token CRU
+    ...
+}</code></pre>
+
+<h3>Fase 5 — Transporte (handlers + middleware + seam)</h3>
+<p>Os handlers em <code>transport/http/auth.go</code> traduzem HTTP↔serviço: DTOs separados do domínio,
+o envelope genérico <code>{"error":"..."}</code>, e o cookie de sessão moldado com <code>HttpOnly</code>/<code>Secure</code>/
+<code>SameSite</code>. O middleware <code>authmw.go</code> faz o <em>deny-by-default</em>. A senha <strong>nunca</strong> volta na
+resposta — o <code>userResponse</code> só tem <code>id</code> e <code>email</code>.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários com fakes (serviço, handlers, middleware) que rodam <strong>sem banco</strong>; e de integração
+contra Postgres real, com o mesmo <em>gating</em> do SPEC-002 (<code>-short</code> + <code>TEST_DATABASE_URL</code>). Os
+três destaques: o fluxo completo register→login→me→logout sobre <code>httptest</code>; uma asserção de que
+<strong>nada de texto puro</strong> é guardado (nem senha, nem token); e a prova do seam de isolamento (FR-306)
+com <strong>dois usuários</strong>.</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p>Atualizamos <code>CHANGELOG.md</code>, <code>README.md</code> (endpoints de auth, posture protegido-por-padrão,
+novas variáveis <code>SESSION_TTL</code> e <code>AUTH_COOKIE_NAME</code>), marcamos SPEC-003 e PLAN-003 como
+<strong>Done</strong>. E esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="conceitos">5. Conceitos-chave que você aprendeu</h2>
+
+<h3>Dois hashes, dois propósitos: bcrypt (lento) vs sha256 (rápido)</h3>
+<p>Parece contraditório: por que hashear senha com um algoritmo <strong>lento</strong> e token com um
+<strong>rápido</strong>? A resposta está na <em>entropia</em> da entrada.</p>
+<table>
+  <tr><th></th><th>Senha (bcrypt)</th><th>Token de sessão (sha256)</th></tr>
+  <tr><td>Entrada</td><td>Escolhida por humano — baixa entropia ("senha123")</td><td>32 bytes de <code>crypto/rand</code> — 256 bits de entropia</td></tr>
+  <tr><td>Ameaça</td><td>Atacante testa milhões de senhas comuns</td><td>Não há o que "adivinhar" — o token já é aleatório</td></tr>
+  <tr><td>Defesa</td><td>Ser <strong>lento</strong> de propósito (custo 12) + <strong>salt</strong> embutido</td><td>Ser <strong>rápido</strong> e determinístico, pra buscar no banco</td></tr>
+</table>
+<div class="box why">
+  <span class="lbl">Por que bcrypt é lento DE PROPÓSITO? E o que é salt?</span>
+  Uma senha humana tem pouca entropia: um atacante com o hash pode testar dicionários inteiros.
+  bcrypt é deliberadamente <strong>caro</strong> (custo 12 ≈ dezenas/centenas de ms por tentativa) — pra você o
+  login demora um piscar de olhos, mas pro atacante cada chute custa caro, inviabilizando força bruta
+  em massa. O <strong>salt</strong> é um valor aleatório que o bcrypt gera e embute em cada hash, então duas
+  pessoas com a mesma senha têm hashes <strong>diferentes</strong> — mata as "rainbow tables". Já o token de
+  sessão <strong>não precisa nada disso</strong>: ele já é aleatório, e a busca tem que ser rápida — por isso
+  <code>sha256</code> simples.
+</div>
+
+<h3>Deny-by-default e a allowlist pública (BR-301)</h3>
+<p>O middleware nega <strong>tudo</strong> que não está numa lista pública explícita. Adicionar uma rota nova
+é seguro-por-padrão: ela exige login até você liberá-la conscientemente.</p>
+<pre><code>// internal/transport/http/authmw.go
+func isPublicRoute(method, path string) bool {
+    switch path {
+    case "/healthz", "/readyz", "/version":  return true
+    case "/auth/register", "/auth/login":    return method == http.MethodPost
+    default:                                 return false   // ← negar é o padrão
+    }
+}</code></pre>
+
+<h3>Identidade vem do contexto, nunca do payload (BR-304) — o seam <code>auth.UserID(ctx)</code></h3>
+<p>Esta é a regra que torna o isolamento <strong>real</strong>. O middleware resolve a sessão, descobre quem é
+o usuário e <strong>injeta o ID no <code>context</code></strong>. Handlers e (futuros) repositórios leem dali — nunca de
+um <code>user_id</code> que o cliente mandou no corpo.</p>
+<pre><code>// internal/auth/context.go — chave de contexto privada, impossível de colidir
+type ctxKey int
+const userIDKey ctxKey = iota
+
+func WithUserID(ctx, userID string) context.Context { return context.WithValue(ctx, userIDKey, userID) }
+
+func UserID(ctx context.Context) (string, bool) {     // o "seam" que as features vão usar
+    id, ok := ctx.Value(userIDKey).(string)
+    if !ok || id == "" { return "", false }           // não-autenticado é um ERRO, não um zero silencioso
+    return id, true
+}</code></pre>
+<div class="box why">
+  <span class="lbl">Por que confiar num <code>user_id</code> do payload seria catastrófico?</span>
+  Se o handler lesse o dono do dado de um campo enviado pelo cliente, eu poderia mandar
+  <code>{"user_id": "id-do-vizinho"}</code> e <strong>ler ou apagar a carteira de outra pessoa</strong> — é a
+  vulnerabilidade clássica de <em>IDOR</em>. Tirando a identidade <strong>sempre</strong> da sessão autenticada (que
+  o cliente não controla), esse ataque some por construção. Quando o SPEC-101 (Profile) chegar, todo
+  <code>SELECT</code> vai fazer <code>WHERE user_id = $1</code> com o ID vindo do <code>context</code> — e nada mais.
+</div>
+
+<h3>O <code>Clock</code> port pra expiração determinística</h3>
+<p>A expiração da sessão compara <code>expires_at</code> com "agora". Mas "agora" via <code>time.Now()</code> deixaria
+os testes não-determinísticos. Por isso o <code>Authenticate</code> usa o <code>Clock</code> injetado: nos testes,
+passamos um <code>Clock</code> fake que devolve uma hora fixa, e conseguimos provar "sessão expirou → 401"
+sem <code>sleep</code> nenhum.</p>
+
+<!-- ============================================================ -->
+<h2 id="review">6. Os achados da review que viraram correções 🐛</h2>
+
+<p>Esta é a seção mais didática. O subagente revisor (e o gate de qualidade) pegaram quatro coisas
+que, sozinhas, teriam virado bugs sutis em produção. Cada uma ensina algo sobre <strong>onde os 500
+escondem 401</strong> e vice-versa.</p>
+
+<div class="box bug">
+  <span class="lbl">(a) Cast de UUID inválido virava 500 — deveria ser "não encontrado"</span>
+  Os IDs são <code>string</code> e o SQL faz <code>WHERE id = $1::uuid</code>. Se alguém passar uma string que
+  <strong>não é um UUID</strong>, o Postgres devolve o erro <code>22P02</code> (<em>invalid_text_representation</em>) — e isso
+  borbulharia como um <strong>500</strong>. Mas uma string que nunca poderia casar com nenhuma linha é, na
+  prática, "não encontrado". Mapeamos <code>22P02 → auth.ErrUserNotFound</code>:
+  <pre><code>var pgErr *pgconn.PgError
+if errors.As(err, &amp;pgErr) &amp;&amp; pgErr.Code == invalidTextRepresentation { // "22P02"
+    return auth.User{}, auth.ErrUserNotFound   // não-encontrado, não erro de servidor
+}</code></pre>
+</div>
+
+<div class="box bug">
+  <span class="lbl">(b) Distinguir 401 (sem sessão) de 500 (banco fora)</span>
+  No middleware, é tentador tratar <strong>qualquer</strong> falha do <code>Authenticate</code> como "não
+  autenticado → 401". Errado: se o <strong>banco caiu</strong>, isso não é problema de credencial — é
+  infraestrutura, e deve ser um 500 (logado!). Só <code>ErrSessionNotFound</code> vira 401; o resto vira 500.
+  <pre><code>if errors.Is(err, auth.ErrSessionNotFound) {
+    writeError(w, http.StatusUnauthorized, "authentication required")  // 401: sessão ausente/expirada
+    return
+}
+logger.Error("authentication check failed", ...)
+writeError(w, http.StatusInternalServerError, "internal error")        // 500: o banco falhou</code></pre>
+  Mascarar um 500 como 401 esconde incidentes reais e confunde o cliente ("minhas credenciais estão
+  certas, por que 401?!").
+</div>
+
+<div class="box bug">
+  <span class="lbl">(c) bcrypt trunca em 72 bytes → validar o tamanho máximo</span>
+  Como vimos na Fase 1, o bcrypt <strong>descarta</strong> bytes além de 72 sem avisar. Sem um teto, senhas
+  longas com prefixo comum colidiriam. A correção foi a constante <code>MaxPasswordLength = 72</code> e a
+  rejeição explícita no <code>ValidatePassword</code> — um limite de segurança virou uma regra de validação
+  visível, com erro <code>ErrPasswordTooLong</code> → <code>400</code>.
+</div>
+
+<div class="box bug">
+  <span class="lbl">(d) Corrida entre testes de integração que compartilham um banco</span>
+  Os testes de integração rodam contra <strong>um</strong> Postgres. Por padrão o Go roda pacotes de teste em
+  <strong>paralelo</strong> — então dois pacotes mexiam nas mesmas tabelas ao mesmo tempo e davam falhas
+  intermitentes (<em>flaky</em>). A correção foi serializar os binários de teste com <code>-p 1</code> no
+  <code>Taskfile.yml</code>:
+  <pre><code># task test:integration
+- go test ./... -count=1 -p 1   # -p 1 serializa: os testes compartilham um banco</code></pre>
+  Lição: testes que compartilham estado externo (um banco) não são independentes — ou você isola o
+  estado por teste, ou serializa a execução. Aqui, serializar foi o mais simples e honesto.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">7. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>Este projeto tem um propósito duplo: além de aprender Go e backend, aprender <strong>engenharia de
+harness</strong> — como dar à IA trilhos que <strong>baixam a taxa de erro</strong>. O SPEC-003 foi construído por
+esse harness, e vale ver os mecanismos concretos que atuaram.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "faça auth" de uma vez. O PLAN-003 já fatiou o trabalho em 7 fases bottom-up
+(domínio → primitivas → persistência → serviço → transporte → testes → docs), e cada fase foi
+implementada, compilada e <strong>revisada por você</strong> antes da próxima. Fatiar reduz a janela onde um
+erro pode se propagar: se a Fase 2 (hashing) estiver errada, você pega ali, não três camadas depois.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>Os quatro achados da <a href="#review">seção 6</a> não apareceram por sorte — vieram de um
+<strong>revisor especializado</strong> rodando sobre o diff. Ele conhece as regras da casa: dependência só
+aponta pra dentro, <code>auth</code> não importa SQL/HTTP, erros embrulhados com <code>%w</code>, dinheiro não é float.
+Foi ele que questionou "e se o id não for um UUID?" (achado a) e "isto é 401 ou 500?" (achado b).
+Um revisor com contexto fixo pega classes inteiras de bug que um humano cansado deixa passar.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que o core ficou puro</span>
+  Há uma verificação mecânica de que <code>internal/auth</code> (o núcleo) <strong>não importa</strong> nenhum tipo
+  de SQL, HTTP ou SDK (BR-306). O bcrypt mora em <code>internal/auth/bcrypt</code>; o SQL em
+  <code>internal/auth/postgres</code>; o middleware em <code>transport/http</code>. E os adaptadores têm <em>compile-time
+  checks</em> (<code>var _ auth.UserRepository = UserRepository{}</code>) que <strong>quebram a build</strong> se o adaptador
+  deixar de satisfazer o port. O compilador vira parte do harness.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs, a review foca no que importa.</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: ADRs aceitos não podem ser editados. O SPEC-003 referencia ADR-0002/0003 mas não os altera — se a IA tentasse "corrigir" um ADR aceito, o hook barraria.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar a tarefa, o gate exige build/vet/test limpos. Foi esse backstop que tornou a corrida dos testes (achado d) <strong>visível</strong> em vez de passar batido.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-003</th><th>Por que baixa erro</th></tr>
+  <tr><td>Erros embrulhados com <code>%w</code> + prefixo</td><td><code>fmt.Errorf("login: %w", err)</code></td><td>Rastreabilidade da causa sem perder o tipo (<code>errors.Is</code> ainda funciona).</td></tr>
+  <tr><td>"Parse, don't validate"</td><td><code>ValidateEmail</code> devolve o e-mail <strong>normalizado</strong></td><td>Um e-mail inválido vira inrepresentável na fronteira; o resto do código confia.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>AuthService</code> no <code>transport/http</code> só expõe o que o HTTP usa</td><td>Fakes triviais nos testes; baixo acoplamento.</td></tr>
+  <tr><td>Doc-comments citam a BR</td><td><code>// ... (SPEC-003 BR-303)</code></td><td>Traço direto do documento ao código — a SDD fecha o ciclo.</td></tr>
+  <tr><td>Tempo vem do <code>Clock</code></td><td><code>s.clock.Now()</code> na expiração</td><td>Testes determinísticos de expiração, sem <code>sleep</code>.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">8. Conexão com AI Engineering</h2>
+
+<p>O SPEC-003 <strong>não</strong> é uma feature de IA — é fundação de segurança. Mas ele prepara o terreno da
+arquitetura de IA que vem por aí, e vários padrões aqui têm um espelho direto lá na frente.</p>
+
+<table>
+  <tr><th>O que construímos agora</th><th>Como serve a IA depois</th></tr>
+  <tr>
+    <td><strong>Isolamento por <code>user_id</code></strong> (FR-306)</td>
+    <td>O <strong>Fact Builder</strong> que alimenta o LLM vai computar fatos da carteira <strong>de um usuário só</strong>. O <code>WHERE user_id = $1</code> de hoje é o que garante que os fatos (e logo os <em>insights</em>) de A nunca vazem pra B. Sem esse isolamento, um insight personalizado seria um vazamento de dados.</td>
+  </tr>
+  <tr>
+    <td><strong>O port <code>PasswordHasher</code></strong> (swappable)</td>
+    <td>É o mesmo formato de costura do futuro port <code>Insighter</code> (o LLM). Trocar bcrypt→argon2id sem tocar no serviço é o ensaio de trocar o provedor de LLM (local→hospedado) sem tocar nas features. A disciplina de "provedor atrás de um port" é a base do ADR-0003.</td>
+  </tr>
+  <tr>
+    <td><strong>Identidade no <code>context</code></strong></td>
+    <td>Quando um <strong>agente CIO multi-agente</strong> e o <strong>MCP</strong> chegarem, a identidade vai precisar fluir pelas chamadas de ferramenta sem ser confiada à entrada. O <code>auth.UserID(ctx)</code> de hoje é o mesmo canal por onde a autorização vai viajar amanhã.</td>
+  </tr>
+  <tr>
+    <td><strong>Gates de verificação como middleware</strong></td>
+    <td>O deny-by-default é, em essência, um <em>gate de verificação</em> na borda. É a mesma forma dos gates de IA que vêm: o de <strong>explicabilidade</strong> (FR-013, todo insight carrega explicação) e o de <strong>não-aconselhamento</strong> (FR-014, nunca dar ordem de compra/venda) serão middlewares que <strong>negam por padrão</strong> uma saída do LLM que não passe na regra.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  Segurança e IA confiável compartilham a mesma postura: <strong>negar por padrão e provar conformidade na
+  borda</strong>. Aqui foi "sem sessão válida, sem acesso". Lá será "sem explicação e sem disclaimer, sem
+  resposta". A mesma engenharia de gate, propósitos diferentes.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">9. O que vem a seguir</h2>
+
+<p>Com identidade e isolamento prontos, as <strong>features de negócio</strong> finalmente têm onde se apoiar.
+A coluna <code>user_id</code> que o <code>0001</code> reservou e o SPEC-003 tornou real agora ganha dados pra escopar.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001</td><td>Esqueleto Go (config, logs, HTTP, Docker)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-002</td><td>Persistência &amp; Migrations</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-003</td><td>Autenticação &amp; isolamento por usuário</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-101</td><td>Perfil do investidor (escopado por <code>user_id</code>)</td><td>⬜ A seguir</td></tr>
+  <tr><td>SPEC-102</td><td>Carteira (FIIs + renda fixa, por usuário)</td><td>⬜</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O que muda concretamente no SPEC-101?</span>
+  Pela primeira vez, um repositório de feature vai chamar <code>auth.UserID(ctx)</code> e colocar
+  <code>WHERE user_id = $1</code> em cada query. O cofre que construímos hoje começa a guardar coisa de verdade.
+  E como o seam já está provado por teste de integração (dois usuários, IDs não vazam), a feature
+  herda o isolamento <strong>de graça</strong>.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-003 o YieldForge ganhou identidade: registro/login/logout/me, sessões revogáveis no
+  servidor (senha em bcrypt, token só como <code>sha256</code>), um middleware que nega por padrão, e a costura
+  <code>auth.UserID(ctx)</code> que vai escopar todo dado por usuário — fundação de segurança pronta pras features.
+</div>
+
+<footer>
+  YieldForge · Aula 03 (SPEC-003) · gerada como material de estudo. Veja também a
+  <a href="SPEC-001-aula.html">Aula 01</a>, a <a href="SPEC-002-aula.html">Aula 02</a>, o
+  <a href="../02-specs/SPEC-003-authentication-and-per-user-isolation.md">SPEC-003</a>
+  e o <a href="../03-plans/PLAN-003-authentication-and-per-user-isolation.md">PLAN-003</a>.
+</footer>
+
+</div>
+</body>
+</html>

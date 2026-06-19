@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula Especial — Harness Engineering | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula Especial · Harness Engineering</span>
+    <h1>Engenharia do Harness — o sistema em volta do modelo</h1>
+    <p>Não foi um SPEC. Foi a sessão em que montamos as <em>ferramentas de IA</em> que vão construir o YieldForge. Aqui está cada conceito, explicado, com o que de fato criamos.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#oque">O que é Harness Engineering (a ideia central)</a></li>
+    <li><a href="#dois">Os dois harnesses: o de desenvolvimento e o do produto</a></li>
+    <li><a href="#espectro">O princípio-chave: o espectro <em>soft → hard rule</em></a></li>
+    <li><a href="#tier0">Tier 0 — a fundação: memória, permissões e hooks</a></li>
+    <li><a href="#rules">Rules: por que não existe um arquivo "rules"</a></li>
+    <li><a href="#conventions">As code conventions (e como as decidimos)</a></li>
+    <li><a href="#tier1">Tier 1 — o fluxo SDD virou harness</a></li>
+    <li><a href="#subvscmd">Subagent vs slash command: o critério</a></li>
+    <li><a href="#duallens">Verificação por perspectivas diversas (2 reviewers)</a></li>
+    <li><a href="#ai">A ponte para AI Engineering (o porquê de tudo isso)</a></li>
+    <li><a href="#glossario">Glossário rápido</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="oque">1. O que é Harness Engineering</h2>
+
+<p><strong>Harness engineering é a engenharia do sistema <em>em volta</em> do modelo — não do modelo.</strong>
+O modelo (Opus, Gemini, etc.) é fixo: você não o treina. O que você controla é tudo o que o cerca. E é
+aí que mora a qualidade do resultado.</p>
+
+<p>São cinco alavancas:</p>
+<table>
+  <tr><th>Alavanca</th><th>Pergunta que ela responde</th><th>Exemplo no que fizemos</th></tr>
+  <tr><td><strong>Contexto</strong></td><td>O que o modelo enxerga?</td><td><code>CLAUDE.md</code>, os docs de SDD</td></tr>
+  <tr><td><strong>Ferramentas</strong></td><td>O que ele pode fazer?</td><td>Permissões no <code>settings.json</code></td></tr>
+  <tr><td><strong>Memória</strong></td><td>O que persiste entre sessões?</td><td><code>CLAUDE.md</code> (carregado sempre)</td></tr>
+  <tr><td><strong>Controle de fluxo</strong></td><td>Quem orquestra quem?</td><td>Commands chamando subagents</td></tr>
+  <tr><td><strong>Verificação</strong></td><td>Como sei que deu certo?</td><td>Hooks, reviewers, gates de teste</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que isso importa pro seu aprendizado</span>
+  Você quis aprender "tudo de ponta do uso de IA". A virada de chave é entender que <strong>melhorar o resultado
+  raramente é "prompt mágico"</strong> — é desenhar contexto, ferramentas e verificação ao redor do modelo. Essa
+  é a disciplina. O resto da aula é ela, na prática.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="dois">2. Os dois harnesses</h2>
+
+<p>Um detalhe que organiza tudo: no YieldForge existem <strong>dois</strong> harnesses, e os primitivos são os
+mesmos nos dois. Aprender um te ensina o outro.</p>
+
+<div class="diagram">HARNESS DE DESENVOLVIMENTO              HARNESS DO PRODUTO
+(o Claude Code construindo o app)      (o app usando LLM pra gerar insights)
+
+  CLAUDE.md, hooks, subagents,           Insighter (port), Fact Builder,
+  commands, reviewers                    gates FR-013/FR-014, evals, CIO multi-agente
+
+  → te deixa eficiente                   → é o CORAÇÃO do produto
+       \                                      /
+        └──── MESMOS conceitos ───────────────┘
+        contexto · ferramentas · verificação · orquestração</div>
+
+<div class="box tip">
+  <span class="lbl">A sacada do "dogfooding"</span>
+  Quando você monta um subagent reviewer com um <em>gate</em> de verificação no harness de dev, está praticando
+  exatamente o que vai implementar no produto: o gate de <strong>non-advice</strong> (FR-014) e o de
+  <strong>explicabilidade</strong> (FR-013) são <em>verificadores</em> que envolvem cada chamada de LLM — o mesmo
+  padrão, agora protegendo o usuário final.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="espectro">3. O princípio-chave: o espectro soft → hard rule</h2>
+
+<p>Se você levar <strong>uma</strong> ideia desta aula, que seja esta:</p>
+
+<div class="box why">
+  <span class="lbl">Coloque cada regra no nível mais baixo capaz de garanti-la.</span>
+  A mesma "regra" tem valor totalmente diferente dependendo de <em>onde</em> você a coloca. "Sempre rodar
+  <code>gofmt</code>" como uma frase no <code>CLAUDE.md</code> é uma <strong>soft rule</strong> — o modelo pode
+  esquecer. A mesma regra como um <strong>hook</strong> é uma <strong>hard rule</strong> — roda toda vez,
+  independente do modelo.
+</div>
+
+<p>O espectro, do mais fraco (probabilístico) ao mais forte (determinístico):</p>
+<table>
+  <tr><th>Tipo de regra</th><th>Onde vive</th><th>Enforcement</th></tr>
+  <tr><td>Instrução que eu leio e <em>devo</em> seguir</td><td><code>CLAUDE.md</code></td><td>Probabilístico (posso esquecer)</td></tr>
+  <tr><td>Instrução por papel</td><td>system prompt de subagent</td><td>Probabilístico, isolado</td></tr>
+  <tr><td>Instrução por subpasta</td><td><code>CLAUDE.md</code> aninhado</td><td>Carregado só quando relevante</td></tr>
+  <tr><td><strong>Garantia</strong></td><td><strong>hooks</strong></td><td><strong>Determinístico</strong></td></tr>
+  <tr><td>O que posso executar</td><td><code>settings.json</code> (permissões)</td><td>Determinístico</td></tr>
+  <tr><td>Proteção do usuário final</td><td>gates em código (FR-013/014)</td><td>Determinístico, no produto</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="tier0">4. Tier 0 — a fundação</h2>
+
+<p>Tudo começou por aqui, porque é o de maior retorno: sem a fundação, todo o resto rende menos.</p>
+
+<h3>4.1 <code>CLAUDE.md</code> — a memória do projeto</h3>
+<p>Um arquivo na raiz, <strong>carregado em toda sessão</strong>. Antes dele, eu redescobria a cada conversa que
+o projeto é hexagonal, que o quality gate é <code>task vet</code> + <code>task test:short</code>, que existe a
+constraint de non-advice. Agora isso é memória persistente. É a alavanca <em>contexto + memória</em> em um arquivo.</p>
+
+<h3>4.2 Permissões — <code>settings.json</code> vs <code>settings.local.json</code></h3>
+<p>Permissões são a alavanca <em>ferramentas</em>: o que eu posso rodar sem te perguntar. Separamos em dois:</p>
+<table>
+  <tr><th>Arquivo</th><th>O que vai nele</th><th>Git</th></tr>
+  <tr><td><code>.claude/settings.json</code></td><td>Regras do projeto (ex.: <code>go build/test/vet</code>, <code>task *</code>) — valem pra qualquer colaborador</td><td><strong>Commitado</strong></td></tr>
+  <tr><td><code>.claude/settings.local.json</code></td><td>Específico da sua máquina (paths de leitura, etc.)</td><td>Gitignorado</td></tr>
+</table>
+<div class="box tip">
+  <span class="lbl">Precedência</span>
+  <code>settings.local.json</code> (sua máquina) &gt; <code>.claude/settings.json</code> (projeto) &gt; user global.
+  Hard rules de projeto vão no versionado pra todo mundo herdar. Limpamos ~60 regras auto-geradas e bagunçadas
+  para um conjunto pequeno e seguro.
+</div>
+
+<h3>4.3 Hooks — os três modos: bloquear, agir, avisar</h3>
+<p>Hooks são a estrela do Tier 0: comandos que <strong>o harness executa</strong> em eventos do ciclo de vida —
+não eu. É como uma soft rule vira hard rule. Criamos um de cada modo:</p>
+
+<table>
+  <tr><th>Evento</th><th>Modo</th><th>O que criamos</th><th>Arquivo</th></tr>
+  <tr><td><code>PreToolUse</code></td><td><strong>Bloquear</strong> (antes da ação)</td><td>Impede editar migration/ADR já commitado (<code>exit 2</code>)</td><td><code>block-immutable.ps1</code></td></tr>
+  <tr><td><code>PostToolUse</code></td><td><strong>Agir</strong> (depois da ação)</td><td><code>gofmt</code> no arquivo <code>.go</code> recém-editado</td><td><code>gofmt-edited.ps1</code></td></tr>
+  <tr><td><code>Stop</code></td><td><strong>Avisar</strong> (ao terminar)</td><td><code>go vet</code> + lembrete de CHANGELOG, não-bloqueante</td><td><code>on-stop.ps1</code></td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">A regra elegante do hook de imutabilidade</span>
+  O working agreement diz "ADRs são imutáveis once accepted" e "migrations são append-only". Em vez de parsear
+  status, escolhemos uma regra única e robusta: <strong>"uma vez commitado no git, é imutável"</strong>. Arquivo
+  novo (não rastreado) pode editar; arquivo já commitado → bloqueio. Testamos os 4 cenários antes de confiar nele.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Por que escrevemos os hooks em PowerShell?</span>
+  Sondamos seu ambiente: <code>jq</code> não estava instalado, então parsear o JSON do stdin com <code>jq</code>
+  estava fora. PowerShell já tinha <code>ConvertFrom-Json</code> nativo. <strong>Lição de harness:</strong> o
+  harness se adapta à máquina real — você verifica o terreno antes de construir.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="rules">5. "Rules": por que não criamos um arquivo de rules</h2>
+
+<p>Você perguntou se deveríamos pôr "Rules" no projeto (estilo <code>.cursor/rules</code>). A resposta ensina a
+diferença do Claude Code: <strong>rules são o harness — mas não são um arquivo só.</strong> São o espectro inteiro
+da seção 3. Copiar um arquivo "rules" seria cargo cult. Em vez disso, <em>roteamos</em> cada regra:</p>
+
+<ul>
+  <li><strong>Soft rules</strong> → <code>CLAUDE.md</code> (e aninhado por pacote quando for local).</li>
+  <li><strong>Hard rules</strong> → hooks + permissões (o que dá pra garantir, garanta).</li>
+  <li><strong>Regras de produto</strong> (explicabilidade/non-advice) → gates em código (a forma mais forte, porque protege o usuário).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="conventions">6. As code conventions (e como as decidimos)</h2>
+
+<p>Aqui teve um momento didático importante: o código existente <em>parecia</em> ter convenções, mas você
+esclareceu que era só "como saiu no começo". Então decidimos <strong>deliberadamente</strong>. E o jeito certo
+foi <strong>derivar do código real</strong> e debater os trade-offs — não inventar.</p>
+
+<h3>O debate do testify</h3>
+<p>Sua intuição: "sem testify/mock não fica mais difícil?". A resposta separou duas coisas que costumam ser
+confundidas:</p>
+<table>
+  <tr><th>&nbsp;</th><th>Asserções</th><th>Mocks</th></tr>
+  <tr><td>O medo</td><td><code>testify</code> reduz boilerplate</td><td>"sem framework fica confuso"</td></tr>
+  <tr><td>A realidade</td><td>Verdade — mas a diferença é pequena</td><td><strong>Inverte:</strong> a confusão vem dos <em>frameworks</em> (gomock), não dos fakes</td></tr>
+  <tr><td>Por quê</td><td>—</td><td>Hexagonal deixa os ports pequenos → fake à mão é ~15 linhas óbvias</td></tr>
+</table>
+<div class="box tip">
+  <span class="lbl">A decisão</span>
+  <code>testify/require</code> para asserções (ergonomia) + <strong>fakes à mão</strong> para os ports (sem
+  gomock/mockery). O conforto onde importa, o idioma limpo onde framework atrapalha.
+</div>
+
+<h3>As convenções fixadas</h3>
+<table>
+  <tr><th>Convenção</th><th>Regra</th></tr>
+  <tr><td><strong>💰 Dinheiro</strong></td><td>Nunca <code>float64</code>. Valores em <code>int64</code> centavos; taxas em <em>basis points</em>; arredondamento num helper <code>money</code></td></tr>
+  <tr><td>Erros</td><td><code>fmt.Errorf("ação minúscula: %w", err)</code>; sentinelas; <code>errors.Is/As</code></td></tr>
+  <tr><td>Parse, don't validate</td><td>Value objects validam no construtor — instância inválida não existe</td></tr>
+  <tr><td>Context</td><td><code>ctx</code> sempre 1º parâmetro; <code>Background()</code> só em main/testes</td></tr>
+  <tr><td>Tempo</td><td>UTC via port <code>Clock</code>, nunca <code>time.Now()</code> direto</td></tr>
+  <tr><td>Testes</td><td><code>testify/require</code> + fakes à mão; table-driven; integração com gating</td></tr>
+  <tr><td>Doc comments</td><td>Citam a SPEC/BR que governam (rastreabilidade SDD→código)</td></tr>
+</table>
+<div class="box warn">
+  <span class="lbl">Por que dinheiro é a convenção nº 1 do seu produto</span>
+  Você lida com BRL, dividend yield, juros compostos nas projeções. <code>float64</code> acumula erro e
+  <strong>quebra</strong> o critério do PRD "mesmos inputs → mesmo Health Score". <code>int64</code> centavos +
+  regra de arredondamento explícita é o que torna o resultado determinístico e reproduzível.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="tier1">7. Tier 1 — o fluxo SDD virou harness</h2>
+
+<p>O SDD de vocês (PRD → SPEC → PLAN → CODE) já era ótimo context engineering. Faltava <strong>conectá-lo ao
+Claude Code</strong> como peças reutilizáveis. Transformamos cada etapa em um primitivo:</p>
+
+<div class="diagram">  /spec-new  ──▶  /plan-new  ──▶  /spec-implement  ──▶  /pr-review
+  (rascunha       (rascunha        (constrói fase a       (gate final
+   o SPEC)         o PLAN)          fase, com review)       do PR)
+                                         │
+                                         ├─▶ hexagonal-reviewer   (arquitetura)
+                                         ├─▶ go-correctness-reviewer (bugs)
+                                         └─▶ lesson-writer         (a aula PT-BR)</div>
+
+<table>
+  <tr><th>Artefato</th><th>Tipo</th><th>Papel</th></tr>
+  <tr><td><code>/spec-new</code></td><td>command</td><td>Rascunha um SPEC do template, ancorado numa fatia do PRD</td></tr>
+  <tr><td><code>/plan-new</code></td><td>command</td><td>Rascunha o PLAN espelhando o número do SPEC</td></tr>
+  <tr><td><code>/spec-implement</code></td><td>command</td><td>Implementa fase a fase; roda quality gate; fecha com docs + aula</td></tr>
+  <tr><td><code>/pr-review</code></td><td>command</td><td>Gate final do PR (2 reviewers + closeout SDD)</td></tr>
+  <tr><td><code>hexagonal-reviewer</code></td><td>subagent</td><td>Layering, guards de non-advice/explicabilidade, conventions</td></tr>
+  <tr><td><code>go-correctness-reviewer</code></td><td>subagent</td><td>nil deref, errors não-checados, concorrência, leaks, edge cases</td></tr>
+  <tr><td><code>lesson-writer</code></td><td>subagent</td><td>Gera a aula PT-BR HTML (com seções de Harness + AI Engineering)</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O gate só vale se for executado</span>
+  Você pegou uma falha real: o <code>/spec-implement</code> só rodava testes <em>unitários</em>. Os de
+  <strong>integração</strong> estavam no PLAN como prosa, mas não eram disparados. Movemos "rodar integração" pra
+  passo obrigatório do command (com Postgres real, ou reporta explicitamente — nunca pula em silêncio). Isso é,
+  de novo, promover soft rule → enforcement.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="subvscmd">8. Subagent vs slash command — o critério</h2>
+
+<p>A pergunta "isso é subagent ou command?" apareceu várias vezes. O critério que usamos:</p>
+<table>
+  <tr><th>&nbsp;</th><th>Subagent</th><th>Slash command</th></tr>
+  <tr><td>O que é</td><td>Contexto isolado, paralelizável</td><td>Template de prompt no contexto principal</td></tr>
+  <tr><td>Custo</td><td>Manutenção; só compensa se grande/paralelo</td><td>Barato</td></tr>
+  <tr><td>Use quando</td><td>Trabalho isolado e reutilizável (review, aula)</td><td>Fluxo que você acompanha (implementar)</td></tr>
+</table>
+<div class="box tip">
+  <span class="lbl">Aplicando</span>
+  Por isso o "go-implementer" virou o <strong>command</strong> <code>/spec-implement</code> (você acompanha), e
+  <code>reviewer</code>/<code>lesson-writer</code> viraram <strong>subagents</strong> (contexto isolado: o review
+  não polui o implementer). Esse discernimento evita "subagent sprawl" — criar subagent pra tudo.
+</div>
+<div class="box why">
+  <span class="lbl">E o "PR reviewer"? E plugin?</span>
+  Plugin é só um <em>empacotamento</em> pra distribuir entre projetos — não precisa num projeto só. O
+  <code>/pr-review</code> ficou: command (o <em>plumbing</em> do GitHub via <code>gh</code>) + subagents (o
+  <em>cérebro</em> reutilizável). Cérebro = subagent; casca/orquestração = command.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="duallens">9. Verificação por perspectivas diversas</h2>
+
+<p>Você notou que o passe de correção do <code>/pr-review</code> estava raso. A correção virou um padrão de
+harness de verdade: <strong>duas lentes independentes</strong>, cada uma com foco próprio.</p>
+
+<div class="diagram">          diff do código
+              │
+      ┌───────┴────────┐
+      ▼                ▼
+ hexagonal-reviewer   go-correctness-reviewer
+ (arquitetura,        (nil deref, races, leaks,
+  guards, conventions) SQL injection, edge cases)
+      │                │
+      └───────┬────────┘
+              ▼
+        veredito combinado</div>
+
+<div class="box tip">
+  <span class="lbl">Por que duas e não uma maior?</span>
+  Diversidade pega o que redundância não pega. Um reviewer focado em arquitetura e outro focado em bugs cobrem
+  modos de falha diferentes — e cada um trabalha com contexto enxuto, sem se dispersar. É o mesmo princípio dos
+  "céticos independentes" que se usa pra validar achados de IA: <strong>perspectivas diversas &gt; um olhar só</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="ai">10. A ponte para AI Engineering</h2>
+
+<p>Aqui fecha o ciclo: cada conceito do harness de dev tem um gêmeo no <strong>produto</strong>. É por isso que
+montar o harness te ensina AI Engineering de verdade.</p>
+
+<table>
+  <tr><th>Conceito de harness (que praticamos)</th><th>Onde reaparece no YieldForge</th></tr>
+  <tr><td>Grounding / contexto controlado</td><td>Fact Builder dá fatos computados ao LLM (não liberdade de inventar números)</td></tr>
+  <tr><td>Gate de verificação (hook que bloqueia)</td><td>FR-013 (explicabilidade) e FR-014 (non-advice) como <em>middleware</em> em cada chamada</td></tr>
+  <tr><td>Verificação por perspectivas diversas (2 reviewers)</td><td>Validar insights com múltiplos verificadores antes de mostrar ao usuário</td></tr>
+  <tr><td>Subagents orquestrados por um command</td><td>Fase 2: CIO multi-agente (Macro/FI/FII/Risk) atrás do port <code>Insighter</code></td></tr>
+  <tr><td>Ferramentas atrás de permissão</td><td>Fase 3: capacidades expostas como <strong>MCP</strong> tools</td></tr>
+  <tr><td>Determinismo (gofmt sempre, money int64)</td><td>"Mesmos inputs → mesmo Health Score" (reprodutibilidade do PRD)</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O port <code>Insighter</code> é o seu harness de produto</span>
+  Assim como envolvemos cada edição com hooks, o produto envolve cada chamada de LLM com gates. Projete o
+  <code>Insighter</code> com os mesmos princípios — pluggable, observável, com verificação — e você terá aprendido
+  harness engineering <em>construindo</em> o coração do YieldForge. O mergulho fundo nisso (grounding, structured
+  outputs, evals, prompt injection, observabilidade de custo/latência) vem no <strong>SPEC-005</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="glossario">11. Glossário rápido</h2>
+
+<table>
+  <tr><th>Termo</th><th>Em uma frase</th></tr>
+  <tr><td><strong>Harness</strong></td><td>O sistema em volta do modelo: contexto, ferramentas, memória, fluxo, verificação.</td></tr>
+  <tr><td><strong>Memória (<code>CLAUDE.md</code>)</strong></td><td>Fatos do projeto carregados em toda sessão.</td></tr>
+  <tr><td><strong>Hook</strong></td><td>Comando que o harness roda em um evento — vira hard rule.</td></tr>
+  <tr><td><strong>PreToolUse / PostToolUse / Stop</strong></td><td>Bloquear antes / agir depois / avisar ao terminar.</td></tr>
+  <tr><td><strong>Subagent</strong></td><td>Agente com contexto isolado e papel próprio; bom pra review.</td></tr>
+  <tr><td><strong>Slash command</strong></td><td>Template de fluxo no contexto principal; bom pra acompanhar.</td></tr>
+  <tr><td><strong>Soft vs hard rule</strong></td><td>Instrução que pode ser esquecida vs garantida deterministicamente.</td></tr>
+  <tr><td><strong>Gate</strong></td><td>Verificador que envolve uma ação e a barra se algo estiver errado.</td></tr>
+  <tr><td><strong>Plugin</strong></td><td>Empacotamento de commands/agents/hooks pra distribuir entre projetos.</td></tr>
+  <tr><td><strong>MCP</strong></td><td>Protocolo pra expor capacidades como ferramentas que qualquer cliente de IA consome.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="next">12. O que vem a seguir</h2>
+
+<p>O harness está montado. O próximo passo é <strong>estreá-lo de verdade</strong>: implementar o
+<strong>SPEC-003 (autenticação)</strong> com <code>/spec-implement 003</code> — que já vai usar os reviewers, os
+hooks e fechar com a aula automática.</p>
+
+<table>
+  <tr><th>Camada</th><th>O que montamos</th><th>Status</th></tr>
+  <tr><td>Tier 0</td><td><code>CLAUDE.md</code> + permissões + 3 hooks (bloquear/agir/avisar)</td><td>✅ Feito e testado</td></tr>
+  <tr><td>Tier 1</td><td>3 subagents + 4 commands (loop SDD completo, review de 2 lentes)</td><td>✅ Feito</td></tr>
+  <tr><td>Tier 3 (produto)</td><td>Gates FR-013/014, evals, observabilidade de IA, MCP, CIO</td><td>⬜ A partir do SPEC-005</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  Nesta sessão você não escreveu uma feature — você construiu as <strong>ferramentas de IA</strong> que vão
+  construir todas as features, e de quebra aprendeu que harness engineering é desenhar contexto, ferramentas e
+  verificação ao redor do modelo. As mesmas peças que vão virar o motor de insights do produto.
+</div>
+
+<footer>
+  YieldForge · Aula Especial — Harness Engineering · gerada como material de estudo. Veja também a
+  <a href="SPEC-001-aula.html">Aula 01</a>, a <a href="SPEC-002-aula.html">Aula 02</a>, o
+  <a href="../../CLAUDE.md">CLAUDE.md</a> e a pasta <a href="../../.claude/">.claude/</a> (memória, hooks, subagents, commands).
+</footer>
+
+</div>
+</body>
+</html>
