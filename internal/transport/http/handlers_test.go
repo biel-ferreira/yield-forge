@@ -21,23 +21,36 @@ type fakePinger struct{ err error }
 
 func (f fakePinger) PingContext(context.Context) error { return f.err }
 
-// fakeAuth is a test double for the auth use cases. err is returned by Authenticate
-// (and the others): a non-nil err means "no valid session", so deny-by-default
-// routes respond 401 in these transport tests.
+// fakeAuth is a configurable test double for the auth use cases: each field sets the
+// result of the matching method, so handler and middleware tests can drive specific
+// outcomes (e.g. a duplicate-email register, a bad-credentials login, an
+// authenticated request) without a real service.
 type fakeAuth struct {
-	user auth.User
-	err  error
+	registerUser auth.User
+	registerErr  error
+	loginUser    auth.User
+	loginToken   string
+	loginErr     error
+	logoutErr    error
+	authUser     auth.User
+	authErr      error
+	meUser       auth.User
+	meErr        error
 }
 
 func (f fakeAuth) Register(context.Context, string, string) (auth.User, error) {
-	return f.user, f.err
+	return f.registerUser, f.registerErr
 }
 func (f fakeAuth) Login(context.Context, string, string) (auth.User, string, error) {
-	return f.user, "raw-token", f.err
+	return f.loginUser, f.loginToken, f.loginErr
 }
-func (f fakeAuth) Logout(context.Context, string) error                    { return nil }
-func (f fakeAuth) Authenticate(context.Context, string) (auth.User, error) { return f.user, f.err }
-func (f fakeAuth) GetUserByID(context.Context, string) (auth.User, error)  { return f.user, f.err }
+func (f fakeAuth) Logout(context.Context, string) error { return f.logoutErr }
+func (f fakeAuth) Authenticate(context.Context, string) (auth.User, error) {
+	return f.authUser, f.authErr
+}
+func (f fakeAuth) GetUserByID(context.Context, string) (auth.User, error) {
+	return f.meUser, f.meErr
+}
 
 func testRouter(ready Pinger) http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -45,7 +58,7 @@ func testRouter(ready Pinger) http.Handler {
 		Logger:     logger,
 		Build:      buildinfo.Info{Version: "test", Commit: "abc1234", BuildTime: "2026-01-01T00:00:00Z"},
 		Ready:      ready,
-		Auth:       fakeAuth{err: auth.ErrSessionNotFound}, // unauthenticated by default
+		Auth:       fakeAuth{authErr: auth.ErrSessionNotFound}, // unauthenticated by default
 		CookieName: "yf_session",
 		SessionTTL: time.Hour,
 	})

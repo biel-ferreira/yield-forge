@@ -48,7 +48,7 @@ func TestReadyz_LiveDatabase_Integration(t *testing.T) {
 		Logger:     logger,
 		Build:      buildinfo.Info{},
 		Ready:      db,
-		Auth:       fakeAuth{err: auth.ErrSessionNotFound},
+		Auth:       fakeAuth{authErr: auth.ErrSessionNotFound},
 		CookieName: "yf_session",
 		SessionTTL: time.Hour,
 	})

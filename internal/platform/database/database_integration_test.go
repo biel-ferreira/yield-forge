@@ -79,25 +79,33 @@ func TestMigrations_RoundTrip_Integration(t *testing.T) {
 		}
 	}
 
-	// up → down → up: proves every migration's down cleanly reverses it (BR-205).
+	// Apply every migration, capture the latest version, roll the whole stack back to
+	// zero, then re-apply — proving each migration's down cleanly reverses its up,
+	// regardless of how many migrations exist (BR-205).
 	if err := MigrateUp(url); err != nil {
 		t.Fatalf("MigrateUp: %v", err)
 	}
-	assertVersion(1)
+	top, _, err := MigrationVersion(url)
+	if err != nil {
+		t.Fatalf("MigrationVersion: %v", err)
+	}
+	if top < 1 {
+		t.Fatalf("expected at least one migration applied, got version %d", top)
+	}
 
-	if err := MigrateDown(url, 1); err != nil {
-		t.Fatalf("MigrateDown: %v", err)
+	if err := MigrateDown(url, int(top)); err != nil {
+		t.Fatalf("MigrateDown(%d): %v", top, err)
 	}
 	assertVersion(0)
 
 	if err := MigrateUp(url); err != nil {
 		t.Fatalf("MigrateUp (again): %v", err)
 	}
-	assertVersion(1)
+	assertVersion(top)
 
 	// Re-running up on an up-to-date database is a no-op, not an error (FR-203).
 	if err := MigrateUp(url); err != nil {
 		t.Fatalf("MigrateUp should be idempotent: %v", err)
 	}
-	assertVersion(1)
+	assertVersion(top)
 }
