@@ -10,11 +10,13 @@ explainable, data-driven insights.
 Built with **Spec-Driven Development** — see [`docs/`](docs/) for the PRD, specs,
 plans, and architecture. Start at the [PRD](docs/01-product/PRD.md).
 
-**Status:** early development. Two foundational specs are complete:
+**Status:** early development. Three foundational specs are complete:
 [SPEC-001](docs/02-specs/SPEC-001-project-scaffolding-and-layering.md) (runnable Go
-skeleton — config, structured logging, health endpoints, graceful shutdown, Docker)
-and [SPEC-002](docs/02-specs/SPEC-002-persistence-baseline-and-migrations.md)
-(PostgreSQL connection pool, `golang-migrate` migrations, DB-aware `/readyz`).
+skeleton — config, structured logging, health endpoints, graceful shutdown, Docker),
+[SPEC-002](docs/02-specs/SPEC-002-persistence-baseline-and-migrations.md)
+(PostgreSQL connection pool, `golang-migrate` migrations, DB-aware `/readyz`), and
+[SPEC-003](docs/02-specs/SPEC-003-authentication-and-per-user-isolation.md)
+(email+password auth, server-side sessions, deny-by-default per-user isolation).
 
 ---
 
@@ -100,11 +102,31 @@ DBeaver) using the credentials in `.env.example`.
 
 ## Endpoints
 
-| Method | Path        | Purpose                                  |
-| ------ | ----------- | ---------------------------------------- |
-| GET    | `/healthz`  | Liveness — `200 {"status":"ok"}` (always, if the process is up) |
-| GET    | `/readyz`   | Readiness — `200`/`503` reflecting the database (`checks.db`) |
-| GET    | `/version`  | Build metadata (`version`/`commit`/`built_at`) |
+| Method | Path             | Auth | Purpose                                  |
+| ------ | ---------------- | ---- | ---------------------------------------- |
+| GET    | `/healthz`       | public | Liveness — `200 {"status":"ok"}` (always, if the process is up) |
+| GET    | `/readyz`        | public | Readiness — `200`/`503` reflecting the database (`checks.db`) |
+| GET    | `/version`       | public | Build metadata (`version`/`commit`/`built_at`) |
+| POST   | `/auth/register` | public | Create an account — `{email,password}` → `201 {id,email}` |
+| POST   | `/auth/login`    | public | Start a session — sets an `HttpOnly` session cookie |
+| POST   | `/auth/logout`   | session | Revoke the current session (`204`) |
+| GET    | `/auth/me`       | session | The authenticated caller's `{id,email}` |
+
+## Authentication
+
+Email + password with **server-side sessions** (SPEC-003). Passwords are stored only
+as bcrypt hashes; the session token lives in an `HttpOnly` + `SameSite=Lax` cookie
+(`Secure` outside dev), and only its `sha256` is stored. Routes are **deny-by-default**:
+everything requires a valid session except the five public routes above. Identity comes
+from the session, never from request input — the seam feature endpoints scope data by.
+
+```bash
+curl -c jar -X POST localhost:8080/auth/register -d '{"email":"me@x.com","password":"supersecret"}'
+curl -c jar -X POST localhost:8080/auth/login    -d '{"email":"me@x.com","password":"supersecret"}'
+curl -b jar localhost:8080/auth/me     # {"id":"...","email":"me@x.com"}
+```
+
+Config: `SESSION_TTL` (default `168h`) and `AUTH_COOKIE_NAME` (default `yf_session`).
 
 ## Project layout
 
@@ -116,8 +138,9 @@ ports; adapters sit beside them. Full tree and rules in
 cmd/api/              entrypoint (config → logger → db → server)
 cmd/migrate/          migration runner (up / down / status / create)
 internal/
-  platform/           config, logging, httpserver, database, buildinfo (cross-cutting)
-  transport/http/     router, handlers, DTOs, middleware
+  platform/           config, logging, httpserver, database, clock, buildinfo (cross-cutting)
+  transport/http/     router, handlers, DTOs, middleware (incl. auth middleware)
+  auth/               authentication feature — domain, service, ports + bcrypt/postgres adapters
   portfolio/ profile/ marketdata/ insight/ projection/   feature packages
 migrations/           versioned SQL migrations (embedded via go:embed)
 deploy/               Dockerfile, docker-compose.yml

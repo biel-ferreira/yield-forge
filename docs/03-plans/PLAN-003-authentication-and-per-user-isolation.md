@@ -8,7 +8,7 @@
 | Related Feature | Foundational — identity + per-user data boundary             |
 | Related Spec    | [SPEC-003](../02-specs/SPEC-003-authentication-and-per-user-isolation.md) |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                        |
+| Status          | Done                                                         |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-18                                                   |
 

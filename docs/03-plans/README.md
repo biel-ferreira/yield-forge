@@ -24,7 +24,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | -------- | -------- | ---------------------------------------- | ------ |
 | PLAN-001 | SPEC-001 | [Project Scaffolding & Hexagonal Layering](PLAN-001-project-scaffolding-and-layering.md) | ✅ Done |
 | PLAN-002 | SPEC-002 | [Persistence Baseline & Migrations](PLAN-002-persistence-baseline-and-migrations.md) | ✅ Done |
-| PLAN-003 | SPEC-003 | [Authentication & Per-User Isolation](PLAN-003-authentication-and-per-user-isolation.md) | 📝 Draft |
+| PLAN-003 | SPEC-003 | [Authentication & Per-User Isolation](PLAN-003-authentication-and-per-user-isolation.md) | ✅ Done |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
 

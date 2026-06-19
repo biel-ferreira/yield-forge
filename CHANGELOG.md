@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PLAN-001 — implementation plan for SPEC-001 (phases, risks, DoD).
 - SPEC-002 — Persistence Baseline & Migrations, and PLAN-002 (resolved decisions:
   DB mandatory, `database/sql` + pgx, `golang-migrate`, manual migrations).
+- SPEC-003 — Authentication & Per-User Isolation, and PLAN-003 (resolved decisions:
+  email+password + server-side sessions, bcrypt, HttpOnly cookie, app-level scoping).
 - Repository setup: `.gitignore` and `.gitattributes` (LF line-ending normalisation).
 - This `CHANGELOG.md` for change traceability.
 
@@ -74,6 +76,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Env-gated integration tests (real Postgres via `TEST_DATABASE_URL`): connect,
   unreachable-fails-fast, migration up→down→up round-trip, and live `/readyz`.
 
+#### SPEC-003 implementation (authentication & per-user isolation)
+
+- `internal/auth` feature package: `User`/`Session` domain, the `UserRepository`,
+  `SessionRepository`, and `PasswordHasher` ports, the auth `Service`
+  (register/login/logout/authenticate), session-token generation, and the
+  `auth.UserID(ctx)` per-user-isolation seam.
+- bcrypt password hashing (`internal/auth/bcrypt`) behind the `PasswordHasher` port;
+  passwords stored only as hashes. Session tokens from `crypto/rand`; only
+  `sha256(token)` persisted (a DB leak yields no usable sessions).
+- Migration `0002_auth` (users + sessions, FK `ON DELETE CASCADE`) with a tested down;
+  Postgres repository adapters (`internal/auth/postgres`).
+- Auth endpoints — `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`,
+  `GET /auth/me` — with generic auth errors (anti-enumeration) and a hardened session
+  cookie (`HttpOnly` + `SameSite=Lax`, `Secure` outside dev).
+- Deny-by-default auth middleware: every route requires a valid session except the
+  public allowlist (`/healthz`, `/readyz`, `/version`, `/auth/register`,
+  `/auth/login`); resolves and injects the authenticated `user_id` into the context
+  and the request log.
+- `Clock` port (`internal/platform/clock`) for deterministic session expiry;
+  configuration `SESSION_TTL` + `AUTH_COOKIE_NAME`; `.env.example` updated.
+- Unit tests (hand-written fakes) for the service, handlers, and middleware; env-gated
+  integration tests over real Postgres: full register→login→me→logout flow,
+  no-plaintext-stored assertion, and the per-user isolation seam.
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while
@@ -87,5 +113,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (via an injected `Pinger` seam).
 - `cmd/api` restructured into a `run() error` so the database pool is reliably closed
   on graceful shutdown.
+- `transport/http` `NewRouter` now takes a `Deps` struct (logger, build, readiness,
+  auth service, cookie settings) instead of positional arguments.
+- Repository read methods named with a `Get<Entity>By<Attr>` convention (e.g.
+  `GetUserByEmail`); documented in `CLAUDE.md` for future feature repositories.
+- `testify/require` adopted for new tests (`stretchr/testify` promoted to a direct
+  dependency), per the testing convention.
+
+### Fixed
+
+- `.gitignore` had been overwritten with a literal PowerShell here-string, leaving all
+  ignore rules inert; restored to plain patterns so `.env`, `/bin/`, and build
+  artifacts are ignored again.
+- Integration tests run serialized (`go test ./... -p 1` in `task test:integration`):
+  they share one database, and the migration round-trip drops every table, so package
+  test binaries must not run concurrently.
 
 [Unreleased]: https://github.com/biel-ferreira/yield-forge/commits/main
