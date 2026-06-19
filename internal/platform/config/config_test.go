@@ -24,6 +24,7 @@ func clearConfigEnv(t *testing.T) {
 		"DATABASE_URL",
 		"DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS",
 		"DB_CONN_MAX_LIFETIME", "DB_CONN_MAX_IDLE_TIME", "DB_CONNECT_TIMEOUT",
+		"SESSION_TTL", "AUTH_COOKIE_NAME",
 	} {
 		t.Setenv(k, "")
 	}
@@ -225,6 +226,28 @@ func TestLoad_DatabasePoolOverrides(t *testing.T) {
 	}
 	if cfg.DBConnectTimeout != 2*time.Second {
 		t.Errorf("DBConnectTimeout = %v, want 2s", cfg.DBConnectTimeout)
+	}
+}
+
+func TestLoad_AuthDefaults(t *testing.T) {
+	clearConfigEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SessionTTL != 168*time.Hour {
+		t.Errorf("SessionTTL = %v, want 168h", cfg.SessionTTL)
+	}
+	if cfg.AuthCookieName != "yf_session" {
+		t.Errorf("AuthCookieName = %q, want yf_session", cfg.AuthCookieName)
+	}
+	// dev (default APP_ENV) → cookie not Secure; prod → Secure.
+	if cfg.CookieSecure() {
+		t.Error("CookieSecure() = true in dev, want false")
+	}
+	if !(Config{AppEnv: "prod"}).CookieSecure() {
+		t.Error("CookieSecure() = false in prod, want true")
 	}
 }
 
