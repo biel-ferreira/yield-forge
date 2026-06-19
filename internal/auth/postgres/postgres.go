@@ -56,16 +56,16 @@ func (r UserRepository) CreateUser(ctx context.Context, email, passwordHash stri
 	return u, nil
 }
 
-// UserByEmail returns the user with the given normalized email, or auth.ErrUserNotFound.
-func (r UserRepository) UserByEmail(ctx context.Context, email string) (auth.User, error) {
+// GetUserByEmail returns the user with the given normalized email, or auth.ErrUserNotFound.
+func (r UserRepository) GetUserByEmail(ctx context.Context, email string) (auth.User, error) {
 	const q = `
 		SELECT id::text, email, password_hash, created_at, updated_at
 		FROM users WHERE email = $1`
 	return scanUser(r.db.QueryRowContext(ctx, q, email))
 }
 
-// UserByID returns the user with the given id, or auth.ErrUserNotFound.
-func (r UserRepository) UserByID(ctx context.Context, id string) (auth.User, error) {
+// GetUserByID returns the user with the given id, or auth.ErrUserNotFound.
+func (r UserRepository) GetUserByID(ctx context.Context, id string) (auth.User, error) {
 	const q = `
 		SELECT id::text, email, password_hash, created_at, updated_at
 		FROM users WHERE id = $1::uuid`
@@ -107,9 +107,9 @@ func (r SessionRepository) CreateSession(ctx context.Context, userID, tokenHash 
 	return s, nil
 }
 
-// SessionByTokenHash returns the session for a token hash, or auth.ErrSessionNotFound.
+// GetSessionByTokenHash returns the session for a token hash, or auth.ErrSessionNotFound.
 // Expiry is evaluated by the service against the Clock (BR-307), not filtered here.
-func (r SessionRepository) SessionByTokenHash(ctx context.Context, tokenHash string) (auth.Session, error) {
+func (r SessionRepository) GetSessionByTokenHash(ctx context.Context, tokenHash string) (auth.Session, error) {
 	const q = `
 		SELECT id::text, user_id::text, token_hash, expires_at, created_at
 		FROM sessions WHERE token_hash = $1`

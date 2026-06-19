@@ -32,7 +32,7 @@ func (f *fakeUsers) CreateUser(_ context.Context, email, hash string) (auth.User
 	return u, nil
 }
 
-func (f *fakeUsers) UserByEmail(_ context.Context, email string) (auth.User, error) {
+func (f *fakeUsers) GetUserByEmail(_ context.Context, email string) (auth.User, error) {
 	u, ok := f.byEmail[email]
 	if !ok {
 		return auth.User{}, auth.ErrUserNotFound
@@ -40,7 +40,7 @@ func (f *fakeUsers) UserByEmail(_ context.Context, email string) (auth.User, err
 	return u, nil
 }
 
-func (f *fakeUsers) UserByID(_ context.Context, id string) (auth.User, error) {
+func (f *fakeUsers) GetUserByID(_ context.Context, id string) (auth.User, error) {
 	u, ok := f.byID[id]
 	if !ok {
 		return auth.User{}, auth.ErrUserNotFound
@@ -60,7 +60,7 @@ func (f *fakeSessions) CreateSession(_ context.Context, userID, tokenHash string
 	return s, nil
 }
 
-func (f *fakeSessions) SessionByTokenHash(_ context.Context, tokenHash string) (auth.Session, error) {
+func (f *fakeSessions) GetSessionByTokenHash(_ context.Context, tokenHash string) (auth.Session, error) {
 	s, ok := f.byHash[tokenHash]
 	if !ok {
 		return auth.Session{}, auth.ErrSessionNotFound

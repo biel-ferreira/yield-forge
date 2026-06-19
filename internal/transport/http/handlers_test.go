@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/biel-ferreira/yield-forge/internal/auth"
 	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 )
 
@@ -19,13 +21,34 @@ type fakePinger struct{ err error }
 
 func (f fakePinger) PingContext(context.Context) error { return f.err }
 
+// fakeAuth is a test double for the auth use cases. err is returned by Authenticate
+// (and the others): a non-nil err means "no valid session", so deny-by-default
+// routes respond 401 in these transport tests.
+type fakeAuth struct {
+	user auth.User
+	err  error
+}
+
+func (f fakeAuth) Register(context.Context, string, string) (auth.User, error) {
+	return f.user, f.err
+}
+func (f fakeAuth) Login(context.Context, string, string) (auth.User, string, error) {
+	return f.user, "raw-token", f.err
+}
+func (f fakeAuth) Logout(context.Context, string) error                    { return nil }
+func (f fakeAuth) Authenticate(context.Context, string) (auth.User, error) { return f.user, f.err }
+func (f fakeAuth) GetUserByID(context.Context, string) (auth.User, error)  { return f.user, f.err }
+
 func testRouter(ready Pinger) http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewRouter(logger, buildinfo.Info{
-		Version:   "test",
-		Commit:    "abc1234",
-		BuildTime: "2026-01-01T00:00:00Z",
-	}, ready)
+	return NewRouter(Deps{
+		Logger:     logger,
+		Build:      buildinfo.Info{Version: "test", Commit: "abc1234", BuildTime: "2026-01-01T00:00:00Z"},
+		Ready:      ready,
+		Auth:       fakeAuth{err: auth.ErrSessionNotFound}, // unauthenticated by default
+		CookieName: "yf_session",
+		SessionTTL: time.Hour,
+	})
 }
 
 // doGet issues a GET with a healthy readiness dependency.
@@ -115,21 +138,23 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestNotFound(t *testing.T) {
+// TestUnknownRoute_DeniedWithoutSession verifies deny-by-default (SPEC-003 BR-301):
+// an unauthenticated request to a non-public route gets a JSON 401, not HTML.
+func TestUnknownRoute_DeniedWithoutSession(t *testing.T) {
 	rr := doGet(t, "/does-not-exist")
 
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", rr.Code)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 (deny-by-default)", rr.Code)
 	}
 	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json (not HTML default)", ct)
 	}
-	var body statusResponse
+	var body errorResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if body.Status != "not found" {
-		t.Errorf("status = %q, want 'not found'", body.Status)
+	if body.Error == "" {
+		t.Error("expected a non-empty error message")
 	}
 }
 

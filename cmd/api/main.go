@@ -9,7 +9,11 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/biel-ferreira/yield-forge/internal/auth"
+	authbcrypt "github.com/biel-ferreira/yield-forge/internal/auth/bcrypt"
+	authpostgres "github.com/biel-ferreira/yield-forge/internal/auth/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
+	"github.com/biel-ferreira/yield-forge/internal/platform/clock"
 	"github.com/biel-ferreira/yield-forge/internal/platform/config"
 	"github.com/biel-ferreira/yield-forge/internal/platform/database"
 	"github.com/biel-ferreira/yield-forge/internal/platform/httpserver"
@@ -70,7 +74,25 @@ func run() error {
 	}()
 	logger.Info("database connected")
 
-	router := transporthttp.NewRouter(logger, buildinfo.Get(), db)
+	// Authentication (SPEC-003): wire the repositories, hasher, and clock into the
+	// service, then hand it to the router.
+	authService := auth.NewService(
+		authpostgres.NewUserRepository(db),
+		authpostgres.NewSessionRepository(db),
+		authbcrypt.New(),
+		clock.System{},
+		cfg.SessionTTL,
+	)
+
+	router := transporthttp.NewRouter(transporthttp.Deps{
+		Logger:       logger,
+		Build:        buildinfo.Get(),
+		Ready:        db,
+		Auth:         authService,
+		CookieName:   cfg.AuthCookieName,
+		CookieSecure: cfg.CookieSecure(),
+		SessionTTL:   cfg.SessionTTL,
+	})
 
 	if err := httpserver.Run(ctx, cfg, router, logger); err != nil {
 		logger.Error("server error", slog.String("error", err.Error()))

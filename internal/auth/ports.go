@@ -12,11 +12,11 @@ type UserRepository interface {
 	// CreateUser inserts a new user and returns it (with DB-generated id/timestamps).
 	// It returns ErrEmailTaken if the email already exists.
 	CreateUser(ctx context.Context, email, passwordHash string) (User, error)
-	// UserByEmail returns the user with the given (already normalized) email, or
+	// GetUserByEmail returns the user with the given (already normalized) email, or
 	// ErrUserNotFound.
-	UserByEmail(ctx context.Context, email string) (User, error)
-	// UserByID returns the user with the given id, or ErrUserNotFound.
-	UserByID(ctx context.Context, id string) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	// GetUserByID returns the user with the given id, or ErrUserNotFound.
+	GetUserByID(ctx context.Context, id string) (User, error)
 }
 
 // SessionRepository persists and retrieves sessions by their token hash. Expiry is
@@ -25,8 +25,8 @@ type UserRepository interface {
 type SessionRepository interface {
 	// CreateSession stores a session and returns it (with DB-generated id/timestamps).
 	CreateSession(ctx context.Context, userID, tokenHash string, expiresAt time.Time) (Session, error)
-	// SessionByTokenHash returns the session for a token hash, or ErrSessionNotFound.
-	SessionByTokenHash(ctx context.Context, tokenHash string) (Session, error)
+	// GetSessionByTokenHash returns the session for a token hash, or ErrSessionNotFound.
+	GetSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error)
 	// DeleteSession removes the session with the given token hash (logout). Deleting a
 	// session that does not exist is not an error.
 	DeleteSession(ctx context.Context, tokenHash string) error

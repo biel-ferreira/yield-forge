@@ -72,6 +72,9 @@ Deliberately chosen (not accidental). Apply to all new Go code:
   directly — keeps projections and tests deterministic.
 - **Interfaces small + consumer-defined**: "accept interfaces, return structs." Keeps
   ports tiny so fakes stay trivial.
+- **Repository methods name their operation:** reads are `Get<Entity>By<Attr>`
+  (e.g. `GetUserByEmail`, `GetUserByID`); writes use `Create*` / `Update*` / `Delete*`.
+  A read that can be absent returns a `…NotFound` sentinel.
 - **Tests:** standard `testing` + **table-driven** structure; **`testify/require`** for
   assertions; **hand-written fakes** for ports — no `gomock`/`mockery`. Integration
   tests gated by `testing.Short()` + `TEST_DATABASE_URL` (skip cleanly without a DB).

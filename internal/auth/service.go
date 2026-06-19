@@ -64,7 +64,7 @@ func (s *Service) Register(ctx context.Context, email, password string) (User, e
 func (s *Service) Login(ctx context.Context, email, password string) (User, string, error) {
 	normalized := NormalizeEmail(email)
 
-	user, err := s.users.UserByEmail(ctx, normalized)
+	user, err := s.users.GetUserByEmail(ctx, normalized)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			_ = s.hasher.Compare(s.dummyHash, password) // burn comparable time
@@ -91,6 +91,11 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, stri
 	return user, token, nil
 }
 
+// GetUserByID returns the user with the given id (e.g. for /auth/me, FR-304).
+func (s *Service) GetUserByID(ctx context.Context, id string) (User, error) {
+	return s.users.GetUserByID(ctx, id)
+}
+
 // Logout revokes the session identified by the raw token (hard DELETE, SPEC-003
 // FR-303). An empty token or an already-gone session is a no-op.
 func (s *Service) Logout(ctx context.Context, rawToken string) error {
@@ -111,7 +116,7 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (User, erro
 		return User{}, ErrSessionNotFound
 	}
 
-	session, err := s.sessions.SessionByTokenHash(ctx, HashToken(rawToken))
+	session, err := s.sessions.GetSessionByTokenHash(ctx, HashToken(rawToken))
 	if err != nil {
 		return User{}, err
 	}
@@ -121,7 +126,7 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (User, erro
 		return User{}, ErrSessionNotFound
 	}
 
-	user, err := s.users.UserByID(ctx, session.UserID)
+	user, err := s.users.GetUserByID(ctx, session.UserID)
 	if err != nil {
 		return User{}, fmt.Errorf("authenticate: %w", err)
 	}
