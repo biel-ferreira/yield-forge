@@ -10,25 +10,27 @@ explainable, data-driven insights.
 Built with **Spec-Driven Development** — see [`docs/`](docs/) for the PRD, specs,
 plans, and architecture. Start at the [PRD](docs/01-product/PRD.md).
 
-**Status:** early development. Three foundational specs are complete:
+**Status:** early development. Four foundational specs are complete:
 [SPEC-001](docs/02-specs/SPEC-001-project-scaffolding-and-layering.md) (runnable Go
 skeleton — config, structured logging, health endpoints, graceful shutdown, Docker),
 [SPEC-002](docs/02-specs/SPEC-002-persistence-baseline-and-migrations.md)
-(PostgreSQL connection pool, `golang-migrate` migrations, DB-aware `/readyz`), and
+(PostgreSQL connection pool, `golang-migrate` migrations, DB-aware `/readyz`),
 [SPEC-003](docs/02-specs/SPEC-003-authentication-and-per-user-isolation.md)
-(email+password auth, server-side sessions, deny-by-default per-user isolation).
+(email+password auth, server-side sessions, deny-by-default per-user isolation), and
+[SPEC-004](docs/02-specs/SPEC-004-observability-baseline.md)
+(OpenTelemetry traces + metrics + log correlation, no-op without a backend).
 
 ---
 
 ## Tech stack
 
 Go · PostgreSQL · Next.js (later) · free/local LLM behind a swappable port · Docker ·
-OpenTelemetry (SPEC-004). The whole stack targets **zero cost** (free tiers /
+OpenTelemetry. The whole stack targets **zero cost** (free tiers /
 free-forever / local) — see [ADR-0003](docs/04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md).
 
 ## Prerequisites
 
-- **Go** ≥ 1.24 (raised from 1.23 by the pgx / golang-migrate dependencies)
+- **Go** ≥ 1.25 (raised by the OpenTelemetry ecosystem in SPEC-004)
 - **Docker** — for the local PostgreSQL (and the containerised run)
 - **[Task](https://taskfile.dev)** (optional — convenience task runner). Without it,
   use the raw `go` commands shown below.
@@ -128,6 +130,27 @@ curl -b jar localhost:8080/auth/me     # {"id":"...","email":"me@x.com"}
 
 Config: `SESSION_TTL` (default `168h`) and `AUTH_COOKIE_NAME` (default `yf_session`).
 
+## Observability
+
+OpenTelemetry **traces + metrics + log correlation** (SPEC-004), wired as cross-cutting
+infrastructure so every endpoint is observable: route-named HTTP spans (`GET /auth/me`)
+→ child DB query spans, request-latency metrics, and `trace_id`/`span_id` on the logs.
+
+It is **off by default and never required to run** — with no exporter configured the
+pipeline is a no-op (zero cost). Point it at any OTLP backend to turn it on:
+
+```bash
+# e.g. a local Jaeger all-in-one exposing OTLP/HTTP on :4318
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 task run
+# or just print spans/metrics to the console:
+OTEL_EXPORTER_KIND=stdout task run
+```
+
+Config: `OTEL_EXPORTER_OTLP_ENDPOINT` (empty ⇒ disabled), `OTEL_EXPORTER_KIND`
+(`otlp`/`stdout`/`none`), `OTEL_EXPORTER_OTLP_HEADERS` (secret, e.g. a backend API key),
+`OTEL_SERVICE_NAME`, `OTEL_TRACE_SAMPLE_RATIO`. Telemetry never carries secrets/PII
+(no passwords, tokens, raw emails, or SQL argument values).
+
 ## Project layout
 
 Package-oriented hexagonal layout — each feature owns its domain, service, and
@@ -138,7 +161,7 @@ ports; adapters sit beside them. Full tree and rules in
 cmd/api/              entrypoint (config → logger → db → server)
 cmd/migrate/          migration runner (up / down / status / create)
 internal/
-  platform/           config, logging, httpserver, database, clock, buildinfo (cross-cutting)
+  platform/           config, logging, httpserver, database, clock, observability, buildinfo (cross-cutting)
   transport/http/     router, handlers, DTOs, middleware (incl. auth middleware)
   auth/               authentication feature — domain, service, ports + bcrypt/postgres adapters
   portfolio/ profile/ marketdata/ insight/ projection/   feature packages

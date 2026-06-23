@@ -18,6 +18,7 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/platform/database"
 	"github.com/biel-ferreira/yield-forge/internal/platform/httpserver"
 	"github.com/biel-ferreira/yield-forge/internal/platform/logging"
+	"github.com/biel-ferreira/yield-forge/internal/platform/observability"
 	transporthttp "github.com/biel-ferreira/yield-forge/internal/transport/http"
 )
 
@@ -52,6 +53,26 @@ func run() error {
 	)
 
 	ctx := context.Background()
+
+	// Observability (SPEC-004): set up OpenTelemetry. With no exporter configured this
+	// is a no-op (the app runs identically). Register its shutdown FIRST so it flushes
+	// LAST — after the HTTP server drains and the DB pool closes (defers run LIFO).
+	shutdownTelemetry, err := observability.Setup(ctx, cfg, buildinfo.Version)
+	if err != nil {
+		logger.Error("telemetry setup failed", slog.String("error", err.Error()))
+		return err
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+		if serr := shutdownTelemetry(sctx); serr != nil {
+			logger.Error("telemetry shutdown", slog.String("error", serr.Error()))
+		}
+	}()
+	logger.Info("telemetry configured",
+		slog.String("exporter", cfg.OTELExporterKind),
+		slog.Bool("enabled", cfg.TelemetryEnabled()),
+	)
 
 	// Connect to PostgreSQL and fail fast if it is unreachable. The pool is closed
 	// after the HTTP server drains (the deferred Close runs once run returns).

@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layering, the explainable AI insight pipeline, and multi-agent / MCP readiness.
 - ADR-0001 (record architecture decisions), ADR-0002 (tech stack & backend
   layering), ADR-0003 (zero-cost infrastructure & pluggable LLM provider).
+- ADR-0004 (frontend repository strategy — mono-repo: Next.js under `web/`,
+  path-scoped CI, OpenAPI contract; *Proposed*).
 - Two-tier SPEC/PLAN structure — foundational (`0xx`) and feature (`1xx`).
 - SPEC-001 — Project Scaffolding & Hexagonal Layering, with a package-oriented
   (by-feature) hybrid layout; FR-008 requires this changelog.
@@ -33,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DB mandatory, `database/sql` + pgx, `golang-migrate`, manual migrations).
 - SPEC-003 — Authentication & Per-User Isolation, and PLAN-003 (resolved decisions:
   email+password + server-side sessions, bcrypt, HttpOnly cookie, app-level scoping).
+- SPEC-004 — Observability Baseline (OpenTelemetry), and PLAN-004 (resolved decisions:
+  traces + metrics + log-correlation, OTLP/HTTP exporter disabled-by-default, otelhttp,
+  slog trace-correlation, otelsql).
 - Repository setup: `.gitignore` and `.gitattributes` (LF line-ending normalisation).
 - This `CHANGELOG.md` for change traceability.
 
@@ -100,6 +105,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integration tests over real Postgres: full register→login→me→logout flow,
   no-plaintext-stored assertion, and the per-user isolation seam.
 
+#### SPEC-004 implementation (observability baseline)
+
+- `internal/platform/observability`: `Setup` builds the OpenTelemetry Tracer/Meter
+  providers, a service `Resource`, the W3C propagator, and a configurable exporter —
+  **disabled by default** (no endpoint ⇒ no-op, the app runs identically at zero cost).
+  OTLP/HTTP + stdout exporters; graceful flush-on-shutdown wired into `cmd/api`
+  (flushes last, after the HTTP server drains and the DB pool closes).
+- HTTP instrumentation via `otelhttp` — one server span per request named by the
+  **matched route** (`GET /auth/me`, low-cardinality) + request duration/count metrics;
+  liveness/readiness probes filtered out of traces.
+- Database instrumentation via `otelsql` at the pool — child query spans under the
+  request span; records the parameterised statement only, never argument values
+  (no PII/secrets); repositories untouched.
+- Log↔trace correlation: a `slog` handler adds `trace_id`/`span_id` to context-aware
+  records (alongside `request_id`); auth handlers/middleware log via `*Context`.
+- The `observability.Tracer()` / `Meter()` seam + documented conventions for feature
+  instrumentation (SPEC-005 AI spans/cost, SPEC-006 ingestion metrics).
+- Configuration `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_KIND`, `OTEL_EXPORTER_OTLP_ENDPOINT`,
+  `OTEL_EXPORTER_OTLP_HEADERS` (secret), `OTEL_TRACE_SAMPLE_RATIO`; `.env.example` updated.
+- Unit tests (in-memory exporter): no-op-safe `Setup`, route-named span, probe
+  filtering, incoming-trace continuation, log correlation; gated integration test
+  proving a request produces a parent HTTP span with a child DB span.
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while
@@ -119,6 +147,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GetUserByEmail`); documented in `CLAUDE.md` for future feature repositories.
 - `testify/require` adopted for new tests (`stretchr/testify` promoted to a direct
   dependency), per the testing convention.
+- Minimum Go version raised to **1.25** — the OpenTelemetry ecosystem and the
+  `golang.org/x/*` libraries now require it; Dockerfile builder bumped to `golang:1.25`.
+- Test files are named after the file under test (`foo.go` → `foo_test.go` /
+  `foo_integration_test.go`), never after a concept; documented in `CLAUDE.md`.
 
 ### Fixed
 
