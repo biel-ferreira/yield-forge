@@ -30,7 +30,7 @@ func requireAuth(authn AuthService, cookieName string, logger *slog.Logger) func
 					writeError(w, http.StatusUnauthorized, "authentication required")
 					return
 				}
-				logger.Error("authentication check failed", slog.String("error", err.Error()))
+				logger.ErrorContext(r.Context(), "authentication check failed", slog.String("error", err.Error()))
 				writeError(w, http.StatusInternalServerError, "internal error")
 				return
 			}

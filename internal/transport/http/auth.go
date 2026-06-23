@@ -69,7 +69,7 @@ func (h authHandler) register(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("password must be at most %d bytes", auth.MaxPasswordLength))
 		return
 	case err != nil:
-		h.logger.Error("register failed", slog.String("error", err.Error()))
+		h.logger.ErrorContext(r.Context(), "register failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -88,17 +88,17 @@ func (h authHandler) login(w http.ResponseWriter, r *http.Request) {
 	user, token, err := h.service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
-			h.logger.Warn("login failed", slog.String("email", maskEmail(req.Email)))
+			h.logger.WarnContext(r.Context(), "login failed", slog.String("email", maskEmail(req.Email)))
 			writeError(w, http.StatusUnauthorized, "invalid email or password")
 			return
 		}
-		h.logger.Error("login error", slog.String("error", err.Error()))
+		h.logger.ErrorContext(r.Context(), "login error", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	h.setSessionCookie(w, token)
-	h.logger.Info("login", slog.String("user_id", user.ID))
+	h.logger.InfoContext(r.Context(), "login", slog.String("user_id", user.ID))
 	writeJSON(w, http.StatusOK, userResponse{ID: user.ID, Email: user.Email})
 }
 
@@ -107,7 +107,7 @@ func (h authHandler) login(w http.ResponseWriter, r *http.Request) {
 func (h authHandler) logout(w http.ResponseWriter, r *http.Request) {
 	token := sessionTokenFromRequest(r, h.cookieName)
 	if err := h.service.Logout(r.Context(), token); err != nil {
-		h.logger.Error("logout error", slog.String("error", err.Error()))
+		h.logger.ErrorContext(r.Context(), "logout error", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

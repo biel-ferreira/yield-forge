@@ -2,12 +2,44 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/biel-ferreira/yield-forge/internal/platform/config"
 )
+
+func TestTraceCorrelation(t *testing.T) {
+	traceID, err := trace.TraceIDFromHex("0123456789abcdef0123456789abcdef")
+	require.NoError(t, err)
+	spanID, err := trace.SpanIDFromHex("0123456789abcdef")
+	require.NoError(t, err)
+	sc := trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID})
+
+	t.Run("active span adds trace_id and span_id", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := NewWith(&buf, "info", "json")
+		logger.InfoContext(trace.ContextWithSpanContext(context.Background(), sc), "within a span")
+
+		var rec map[string]any
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &rec))
+		require.Equal(t, "0123456789abcdef0123456789abcdef", rec["trace_id"])
+		require.Equal(t, "0123456789abcdef", rec["span_id"])
+	})
+
+	t.Run("no span leaves the record untouched", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := NewWith(&buf, "info", "json")
+		logger.InfoContext(context.Background(), "no span here")
+
+		require.NotContains(t, buf.String(), "trace_id")
+		require.NotContains(t, buf.String(), "span_id")
+	})
+}
 
 func TestNewWith_JSONFormat(t *testing.T) {
 	var buf bytes.Buffer
