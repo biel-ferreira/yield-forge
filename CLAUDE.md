@@ -12,9 +12,9 @@ These flow down from PRD §6 into every spec, line of code, and user-facing stri
 1. **Explainability first** — every AI insight/score/suggestion MUST carry a
    human-readable explanation. No black-box output. (FR-013 is the enforcement gate.)
 2. **AI as copilot, never advisor** — NEVER emit specific buy/sell orders, tickers to
-   buy, quantities, or price targets. Output is *areas/considerations* + a non-advice
+   buy, quantities, or price targets. Output is _areas/considerations_ + a non-advice
    disclaimer. (FR-014 is the enforcement gate.)
-3. **Facts are computed, not generated** — the LLM reasons *over* deterministic
+3. **Facts are computed, not generated** — the LLM reasons _over_ deterministic
    portfolio/market facts (the Fact Builder); it never invents numbers.
 4. **Zero cost** — free tiers / free-forever / local only. Every external provider
    (LLM, market data, DB host) sits behind a port and is config-swappable.
@@ -45,7 +45,7 @@ and [SPEC-001](docs/02-specs/SPEC-001-project-scaffolding-and-layering.md)):
   database, buildinfo). HTTP router/handlers/middleware in `internal/transport/http/`.
 - Identity comes from the authenticated session/context, **never** from a request
   payload (no client-supplied `user_id` is trusted). Per-user scoping is `WHERE
-  user_id = $1` with the ID from context.
+user_id = $1` with the ID from context.
 - All external providers behind ports: `Insighter` (LLM), `MarketDataProvider`,
   repositories, `Clock`. This is the seam for the future multi-agent CIO + MCP — keep
   it intact.
@@ -82,6 +82,9 @@ Deliberately chosen (not accidental). Apply to all new Go code:
   errors use the generic `{"error":"..."}` envelope via the `writeJSON` helper.
 - **Doc comments cite the governing SPEC/BR** they implement (e.g. `(SPEC-002 BR-201)`)
   — keeps SDD traceability from doc to code.
+- **Language:** code, docs (PRD/SPEC/PLAN/ADR/README), comments, and commit messages are
+  in **English**. The only exception is the **PT-BR HTML lessons**
+  (`docs/lessons/*-aula.html`) — deliberately Portuguese teaching material.
 - **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`).
 - **Dependencies:** stdlib-first; justify any new dependency (zero-cost posture,
   ADR-0003). `golangci-lint` is the mechanical enforcer once configured.
@@ -90,15 +93,15 @@ Deliberately chosen (not accidental). Apply to all new Go code:
 
 Task runner is [`Task`](https://taskfile.dev) (`Taskfile.yml`); raw `go` fallback shown.
 
-| Need | Task | Raw |
-| --- | --- | --- |
-| Quality gate (run before done) | `task vet` + `task test:short` | `go vet ./...`; `go test ./... -short` |
-| Build | `task build` | `go build ./...` |
-| Run API | `task run` | `go run ./cmd/api` (needs `DATABASE_URL`) |
-| Unit tests (no DB) | `task test:short` | `go test ./... -short` |
-| Integration tests (real PG) | `task test:integration` | `go test ./... -count=1` (needs `TEST_DATABASE_URL`) |
-| Migrations | `task migrate:up` / `:status` / `:create -- <name>` | `go run ./cmd/migrate <cmd>` |
-| Docker stack | `task docker-up` | `docker compose -f deploy/docker-compose.yml up --build` |
+| Need                           | Task                                                | Raw                                                      |
+| ------------------------------ | --------------------------------------------------- | -------------------------------------------------------- |
+| Quality gate (run before done) | `task vet` + `task test:short`                      | `go vet ./...`; `go test ./... -short`                   |
+| Build                          | `task build`                                        | `go build ./...`                                         |
+| Run API                        | `task run`                                          | `go run ./cmd/api` (needs `DATABASE_URL`)                |
+| Unit tests (no DB)             | `task test:short`                                   | `go test ./... -short`                                   |
+| Integration tests (real PG)    | `task test:integration`                             | `go test ./... -count=1` (needs `TEST_DATABASE_URL`)     |
+| Migrations                     | `task migrate:up` / `:status` / `:create -- <name>` | `go run ./cmd/migrate <cmd>`                             |
+| Docker stack                   | `task docker-up`                                    | `docker compose -f deploy/docker-compose.yml up --build` |
 
 - Always finish a change with `gofmt`-clean, `go vet` clean, unit tests passing.
 - Migrations are paired up/down SQL in `migrations/` (embedded via `go:embed`),
