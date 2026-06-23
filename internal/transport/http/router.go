@@ -5,6 +5,10 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 )
 
@@ -23,9 +27,12 @@ type Deps struct {
 // middleware chain. Auth is deny-by-default — every route requires a valid session
 // except the public allowlist in isPublicRoute (SPEC-003 FR-305).
 //
-// Chain (outermost first): requestID → logRequests → requireAuth → mux. requireAuth
-// is inside logRequests so failed-auth responses are still logged and the resolved
-// user_id reaches the log line.
+// Chain (outermost first): otelhttp → requestID → logRequests → requireAuth →
+// routeNamer → mux. otelhttp is outermost so the server span exists in context for
+// the inner middleware (log correlation reads it); routeNamer (innermost) renames the
+// span to the matched route. requireAuth stays inside logRequests so failed-auth
+// responses are still logged and the resolved user_id reaches the log line
+// (SPEC-004 FR-403/FR-405).
 func NewRouter(d Deps) http.Handler {
 	api := apiHandler{build: d.Build, ready: d.Ready, logger: d.Logger}
 	authH := authHandler{
@@ -48,5 +55,38 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /auth/me", authH.me)
 	mux.HandleFunc("/", api.notFound) // catch-all → JSON 404 (when authenticated)
 
-	return requestID(logRequests(d.Logger)(requireAuth(d.Auth, d.CookieName, d.Logger)(mux)))
+	var handler http.Handler = routeNamer(mux)
+	handler = requireAuth(d.Auth, d.CookieName, d.Logger)(handler)
+	handler = logRequests(d.Logger)(handler)
+	handler = requestID(handler)
+	// Outermost: create the server span + HTTP request metrics. Probes are filtered
+	// out of tracing to keep the signal low-noise (SPEC-004 FR-403). Metrics come for
+	// free from otelhttp via the global MeterProvider (a no-op when telemetry is off).
+	return otelhttp.NewHandler(handler, "http.server", otelhttp.WithFilter(traceableRequest))
+}
+
+// routeNamer renames the server span to the matched route pattern (e.g. "GET
+// /auth/me") and tags it with http.route, keeping span names low-cardinality
+// (SPEC-004 FR-403). It resolves the route via the mux; on a no-op span (telemetry
+// disabled or a filtered probe) SetName/SetAttributes are harmless no-ops.
+func routeNamer(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, pattern := mux.Handler(r); pattern != "" {
+			span := trace.SpanFromContext(r.Context())
+			span.SetName(pattern)
+			span.SetAttributes(attribute.String("http.route", pattern))
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+// traceableRequest keeps liveness/readiness probes out of traces to reduce noise
+// (SPEC-004 FR-403).
+func traceableRequest(r *http.Request) bool {
+	switch r.URL.Path {
+	case "/healthz", "/readyz":
+		return false
+	default:
+		return true
+	}
 }

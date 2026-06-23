@@ -78,6 +78,10 @@ Deliberately chosen (not accidental). Apply to all new Go code:
 - **Tests:** standard `testing` + **table-driven** structure; **`testify/require`** for
   assertions; **hand-written fakes** for ports — no `gomock`/`mockery`. Integration
   tests gated by `testing.Short()` + `TEST_DATABASE_URL` (skip cleanly without a DB).
+- **Test file naming mirrors the file under test**, never a concept: `foo.go` →
+  `foo_test.go` (unit) or `foo_integration_test.go` (integration). E.g. tests for
+  `router.go` live in `router_test.go` (not `otel_test.go`); a live-DB test of a
+  `handlers.go` endpoint lives in `handlers_integration_test.go`.
 - **HTTP:** request/response DTOs are separate from domain types; validate at the edge;
   errors use the generic `{"error":"..."}` envelope via the `writeJSON` helper.
 - **Doc comments cite the governing SPEC/BR** they implement (e.g. `(SPEC-002 BR-201)`)
