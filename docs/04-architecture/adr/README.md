@@ -19,5 +19,6 @@ Each ADR uses: **Status · Context · Decision · Consequences**.
 | 0001 | Record architecture decisions  | Accepted |
 | 0002 | Tech stack and backend layering | Accepted |
 | 0003 | Zero-cost infra & pluggable LLM | Accepted |
+| 0004 | [Frontend repository strategy (mono-repo)](ADR-0004-frontend-repository-strategy.md) | Proposed |
 
 Statuses: `Proposed` · `Accepted` · `Superseded by ADR-XXXX` · `Deprecated`.
