@@ -9,8 +9,8 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — §10 NFR Observability, G11, p95 latency metric |
 | Related ADRs | [ADR-0003](../04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md) (free/self-hosted OTel backend), [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md) |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
-| Plan         | PLAN-004 (authored next via /plan-new 004)             |
+| Status       | Done                                                   |
+| Plan         | [PLAN-004](../03-plans/PLAN-004-observability-baseline.md) |
 
 ---
 

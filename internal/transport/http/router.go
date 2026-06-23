@@ -67,8 +67,8 @@ func NewRouter(d Deps) http.Handler {
 
 // routeNamer renames the server span to the matched route pattern (e.g. "GET
 // /auth/me") and tags it with http.route, keeping span names low-cardinality
-// (SPEC-004 FR-403). It resolves the route via the mux; on a no-op span (telemetry
-// disabled or a filtered probe) SetName/SetAttributes are harmless no-ops.
+// (SPEC-004 FR-403 / BR-406). It resolves the route via the mux; on a no-op span
+// (telemetry disabled or a filtered probe) SetName/SetAttributes are harmless no-ops.
 func routeNamer(mux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, pattern := mux.Handler(r); pattern != "" {

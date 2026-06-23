@@ -55,7 +55,10 @@ func (h traceHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.Handler.Handle(ctx, r)
 }
 
-// WithAttrs and WithGroup re-wrap so the trace enrichment survives logger.With(...).
+// WithAttrs and WithGroup re-wrap so trace enrichment survives logger.With(...).
+// Caveat: under a group (WithGroup), the injected trace_id/span_id nest inside that
+// group rather than at the top level. That's fine today — the app uses With(attrs),
+// not groups — but revisit if grouped loggers ever need top-level correlation.
 func (h traceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return traceHandler{Handler: h.Handler.WithAttrs(attrs)}
 }

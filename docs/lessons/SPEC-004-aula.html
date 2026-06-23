@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 04 — SPEC-004: Observabilidade (OpenTelemetry) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 04 · Spec de Fundação</span>
+    <h1>SPEC-004 — Observabilidade com OpenTelemetry</h1>
+    <p>Como o app passou a se <strong>enxergar por dentro</strong>: traces distribuídos (HTTP→DB), métricas de latência e logs costurados ao <code>trace_id</code> — tudo <strong>desligado por padrão</strong>, custo zero, e pronto pra instrumentar a IA que vem.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: o que é observabilidade e o que o SPEC-004 entregou</a></li>
+    <li><a href="#sinais">Os três sinais: traces, métricas e logs — e como o <code>trace_id</code> costura tudo</a></li>
+    <li><a href="#decisoes">As 5 decisões (D1–D5) e por quê</a></li>
+    <li><a href="#noop">O "no-op por padrão / custo zero" (BR-401): como funciona</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#conceitos">Conceitos-chave de Go + OTel: span, propagação no <code>context</code>, W3C, sampling, o seam</a></li>
+    <li><a href="#engenharia">Momentos reais de engenharia 🐛 (o bump pro Go 1.25, a cardinalidade, o segredo no span)</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: o que é observabilidade e o que mudou</h2>
+
+<p>Nas três aulas anteriores o app ganhou esqueleto (SPEC-001), banco (SPEC-002) e identidade
+(SPEC-003). Ele <em>funciona</em> — mas era uma <strong>caixa-preta em produção</strong>: se uma requisição
+ficasse lenta, você só saberia "está lento <em>em algum lugar</em>", sem onde. O SPEC-004 é a
+<strong>quarta pedra da fundação</strong>: o app passa a poder ser <strong>observado por dentro</strong>.</p>
+
+<p><strong>Observabilidade</strong> é a capacidade de responder "o que está acontecendo aqui dentro?" só
+olhando o que o sistema <em>emite</em> — sem precisar abrir um debugger em produção. Ela se apoia nos
+chamados <strong>três pilares</strong> (ou três sinais): <strong>logs</strong>, <strong>métricas</strong> e <strong>traces</strong>. O
+SPEC-001 já nos deu logs estruturados; o SPEC-004 acrescenta os outros dois e, crucialmente, os
+<strong>costura juntos</strong>.</p>
+
+<div class="diagram">ANTES (SPEC-003)                          DEPOIS (SPEC-004)
+  logs soltos (sem correlação)            logs com trace_id + span_id
+  "está lento em algum lugar"             trace mostra: o SELECT em /auth/me levou 240ms
+  nenhuma métrica de latência             histograma de duração por rota (mede o p95)
+  caixa-preta em produção                 HTTP span -> DB span, ponta a ponta
+  zero dependência de telemetria          ...e CONTINUA zero: tudo desligado por padrão</div>
+
+<p>Concretamente, o SPEC-004 entregou: o pacote <code>internal/platform/observability</code> com um
+<code>Setup()</code> que liga o SDK do OpenTelemetry; instrumentação <strong>HTTP</strong> (um span e métricas por
+requisição) via <code>otelhttp</code>; instrumentação do <strong>banco</strong> via <code>otelsql</code> (cada query vira um span
+filho); a <strong>correlação log↔trace</strong> (um <code>slog.Handler</code> que injeta <code>trace_id</code>/<code>span_id</code>); e o
+<strong>seam</strong> <code>Tracer()</code>/<code>Meter()</code> que as features de IA vão usar. Nenhuma tabela, nenhuma
+migration, nenhum endpoint novo — é pura infraestrutura transversal.</p>
+
+<div class="box why">
+  <span class="lbl">Por que isso importa <em>agora</em>, antes das features?</span>
+  O PRD define um SLO concreto: <strong>p95 &lt; 300 ms</strong> para leituras não-IA. Mas
+  <strong>você não consegue cumprir uma meta de latência que não mede.</strong> Sem o histograma de duração
+  por rota que o SPEC-004 instala, "p95 &lt; 300ms" é só um desejo. Construindo a observabilidade como
+  <em>fundação</em>, toda feature que vier (carteira, perfil, insights) nasce observável <strong>de graça</strong> —
+  ninguém precisa lembrar de instrumentar.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="sinais">2. Os três sinais — e como o <code>trace_id</code> costura tudo</h2>
+
+<p>Os três pilares respondem perguntas diferentes. A mágica está em poder <strong>pular de um pro
+outro</strong> usando um identificador comum.</p>
+
+<table>
+  <tr><th>Sinal</th><th>O que é</th><th>Pergunta que responde</th><th>No SPEC-004</th></tr>
+  <tr>
+    <td><strong>Traces</strong></td>
+    <td>A jornada de <em>uma</em> requisição, quebrada em <strong>spans</strong> pai/filho com tempos</td>
+    <td>"<em>onde</em> o tempo foi gasto nesta requisição?"</td>
+    <td>span HTTP do servidor → span filho do DB</td>
+  </tr>
+  <tr>
+    <td><strong>Métricas</strong></td>
+    <td>Números <strong>agregados</strong> ao longo do tempo (contadores, histogramas)</td>
+    <td>"como está a saúde no <em>todo</em>? qual o p95?"</td>
+    <td>histograma de duração + contagem por rota/status</td>
+  </tr>
+  <tr>
+    <td><strong>Logs</strong></td>
+    <td>Eventos pontuais e textuais ("usuário X logou", "erro Y")</td>
+    <td>"o que <em>exatamente</em> aconteceu neste ponto?"</td>
+    <td><code>slog</code> (do SPEC-001) agora com <code>trace_id</code>/<code>span_id</code></td>
+  </tr>
+</table>
+
+<p>Um <strong>trace</strong> é uma árvore de spans. Cada <strong>span</strong> é uma unidade de trabalho com início, fim e
+um nome — e tem um <strong>pai</strong>. Quando a requisição entra, o <code>otelhttp</code> abre o span <strong>raiz</strong>
+(o servidor HTTP); quando esse handler chama o banco, o <code>otelsql</code> abre um span <strong>filho</strong> dentro
+dele. Visualmente:</p>
+
+<div class="diagram">UM TRACE de  GET /auth/me   (trace_id = 4bf92f3577b34da6...)
+│
+├─ SPAN  "GET /auth/me"            ◄ span raiz, criado pelo otelhttp   [0ms ─────────── 248ms]
+│        http.method=GET  http.route=/auth/me  http.status_code=200
+│        │
+│        └─ SPAN  "db.Query"       ◄ span FILHO, criado pelo otelsql      [12ms ──── 240ms]
+│                 db.system=postgresql
+│                 db.statement="SELECT ... FROM sessions WHERE token_hash = $1"  ◄ SÓ o $1, nunca o valor
+
+E a linha de log daquela requisição (mesmo trace_id):
+{"level":"INFO","msg":"request","method":"GET","path":"/auth/me","status":200,
+ "request_id":"req-abc","trace_id":"4bf92f3577b34da6...","span_id":"00f067aa..."}</div>
+
+<p>Repare: o <code>trace_id</code> aparece <strong>tanto no trace quanto na linha de log</strong>. Esse é o pulo do gato
+da correlação — você vê uma linha de log de erro, copia o <code>trace_id</code>, cola no Jaeger/Grafana e
+enxerga a <strong>cascata inteira</strong> daquela requisição: quais spans rodaram, onde o tempo foi, qual
+query foi lenta. Os três sinais deixam de ser ilhas.</p>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">3. As 5 decisões (D1–D5) e por quê</h2>
+
+<p>Toda spec tem bifurcações. Aqui foram cinco decisões, todas confirmadas com você antes do PLAN e
+agora <em>binding</em>. O trade-off de cada uma é onde mora o aprendizado.</p>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Quais sinais agora?</td>
+    <td><strong>Traces + métricas + correlação de logs</strong> — os três de uma vez</td>
+    <td>O SLO de p95 só fica mensurável com métricas; os traces dão o "onde". Fazer os três juntos evita uma segunda passada de retrabalho (PRD §10).</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Como exportar?</td>
+    <td><strong>OTLP/HTTP</strong>, via config, <strong>desligado por padrão</strong>; <code>stdout</code> pra dev</td>
+    <td>OTLP é vendor-neutro (ADR-0003): troca de backend é só config. Sem endpoint ⇒ no-op (custo zero). Recusamos <code>/metrics</code> pull do Prometheus (superfície pública extra).</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Instrumentar o HTTP como?</td>
+    <td>O middleware <strong><code>otelhttp</code></strong> da contrib oficial</td>
+    <td>É a forma padrão de instrumentar <code>net/http</code>. Spans escritos à mão foram recusados — reinventar a roda e errar nos detalhes (status, duração, propagação).</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>E os logs?</td>
+    <td><strong>Manter o <code>slog</code></strong> e <strong>injetar</strong> <code>trace_id</code>/<code>span_id</code></td>
+    <td>Preserva o baseline de logging do SPEC-001. O SDK de <em>logs</em> do OTel é mais novo/pesado e dá pouco ganho no MVP — adiado (e revisitável).</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Instrumentar o banco como?</td>
+    <td><strong><code>otelsql</code></strong> no nível do pool (<code>platform/database</code>)</td>
+    <td>Spans de DB "de graça", <strong>sem nenhum import de OTel nos repositórios</strong>. Spans manuais por repositório foram recusados — repetitivo e fácil de esquecer.</td>
+  </tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que OTLP/HTTP e não OTLP/gRPC?</span>
+  O OpenTelemetry exporta via dois transportes: gRPC ou HTTP. O gRPC traz uma <strong>árvore de
+  dependências pesada</strong> (todo o stack do gRPC + protobuf). Como nosso protocolo é o mesmo OTLP nos
+  dois casos e a vazão de telemetria de um MVP é modesta, escolhemos <strong>OTLP/HTTP</strong> de propósito:
+  menos dependências, build mais leve, mesma compatibilidade com qualquer collector. É a postura
+  "stdlib-first / justifique cada dependência" aplicada até dentro do OTel.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="noop">4. O coração do design: "no-op por padrão / custo zero" (BR-401)</h2>
+
+<p>Esta é a regra mais importante da aula e o que torna o SPEC-004 honesto com a postura de <strong>custo
+zero</strong>. A <strong>BR-401</strong> diz: <em>telemetria nunca é obrigatória pra rodar</em>. Sem um endpoint
+configurado, o app roda <strong>idêntico</strong> — sem backend, sem erro, sem custo, sem latência extra. E uma
+falha de exportação <strong>nunca</strong> chega no caminho da requisição.</p>
+
+<p>Como isso funciona na prática? O OpenTelemetry tem um truque elegante: os providers
+<strong>globais já começam como "no-op"</strong> (não fazem nada). O <code>Setup()</code> só os <em>substitui</em> por
+providers reais se houver um exportador configurado. Olhe o início do <code>Setup</code>:</p>
+
+<pre><code>// internal/platform/observability/observability.go
+func Setup(ctx context.Context, cfg config.Config, version string) (shutdown func(context.Context) error, err error) {
+    // O propagador W3C é SEMPRE instalado — é baratíssimo e deixa o trace context
+    // fluir pelo context mesmo quando NÃO estamos exportando nada.
+    otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+        propagation.TraceContext{},
+        propagation.Baggage{},
+    ))
+
+    if !cfg.TelemetryEnabled() {        // kind == "none" (o padrão sem endpoint)
+        return noopShutdown, nil        // não troca os providers globais: ficam no-op
+    }
+    // ...daqui pra baixo só roda se houver exportador: monta Resource, exporters,
+    //    TracerProvider (com batcher + sampler) e MeterProvider, e os instala.
+}</code></pre>
+
+<p>E <code>TelemetryEnabled()</code> é uma linha só na config:</p>
+
+<pre><code>// internal/platform/config/config.go
+func (c Config) TelemetryEnabled() bool { return c.OTELExporterKind != "none" }</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que o <code>otelhttp</code> e o <code>otelsql</code> não quebram quando está tudo no-op?</span>
+  Porque eles falam só com os providers <strong>globais</strong>. Quando o <code>Setup</code> deixa o global como no-op,
+  cada <code>span.SetName(...)</code>, <code>span.SetAttributes(...)</code> e <code>span.End()</code> vira uma <strong>chamada que não
+  faz nada</strong> (e o compilador/runtime otimiza a quase-zero). Por isso o <code>routeNamer</code> e o handler de
+  log podem rodar sempre, sem nenhum <code>if telemetria_ligada</code> espalhado pelo código — o "ligado/desligado"
+  mora <strong>num lugar só</strong> (o <code>Setup</code>), e o resto do código é cego pra isso. Menos ramificação =
+  menos bug.
+</div>
+
+<p>O efeito é que a observabilidade é <strong>aditiva e inerte</strong>: mergeada na <code>main</code>, sem endpoint, ela
+não muda absolutamente nada no comportamento do app. Liga-se quando (e onde) você quiser, só
+setando <code>OTEL_EXPORTER_OTLP_ENDPOINT</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="fases">5. As 7 fases, uma a uma</h2>
+
+<p>Como nas specs de infra anteriores, construímos de baixo pra cima — cada fase compilando e
+revisável sozinha. A ordem segue o fluxo de uma requisição: primeiro a base (config + providers),
+depois HTTP, depois DB, depois a costura dos logs, depois testes e docs.</p>
+
+<h3>Fase 1 — Configuração &amp; dependências</h3>
+<p>Os campos <code>OTEL_*</code> na <code>Config</code>, validados no <code>Load()</code> (ratio fora de 0..1 ou <em>kind</em>
+inválido ⇒ falha rápida, como o resto da config). E os módulos novos do OTel (<code>sdk</code>, exporters
+OTLP/HTTP + stdout, <code>otelhttp</code>, <code>otelsql</code>).</p>
+<pre><code>// internal/platform/config/config.go (trechos)
+OTELServiceName      string  // resource service.name (default "yield-forge")
+OTELExporterKind     string  // otlp | stdout | none
+OTELExporterEndpoint string  // URL do OTLP; vazio => kind vira "none"
+OTELExporterHeaders  string  // headers OTLP (SEGREDO), ex. "authorization=Bearer xyz"
+OTELTraceSampleRatio float64 // probabilidade de amostragem 0.0..1.0 (NÃO é taxa financeira)</code></pre>
+<div class="box tip">
+  <span class="lbl">Detalhe de convenção: <code>OTELTraceSampleRatio</code> é um <code>float64</code> — e tudo bem</span>
+  O CLAUDE.md proíbe <code>float64</code> pra <strong>dinheiro e taxas financeiras</strong> (lá é <code>int64</code> em centavos /
+  basis points). Mas a razão de amostragem <strong>não é um valor financeiro</strong> — é uma probabilidade de
+  engenharia (0.25 = "guarde 25% dos traces"). Por isso o comentário no campo grita "<em>NÃO é taxa
+  financeira</em>": deixa explícito pro próximo leitor (e pro revisor) que a exceção é deliberada, não um
+  escorregão.
+</div>
+
+<h3>Fase 2 — Bootstrap da observabilidade (providers + exporter)</h3>
+<p>O <code>Setup()</code> (visto na seção 4): monta o <code>Resource</code> que descreve o serviço, escolhe os
+exporters pelo <em>kind</em>, e devolve um <code>shutdown</code> que dá <em>flush</em> + fecha os providers. O
+<code>Resource</code> carrega <code>service.name</code>, <code>service.version</code> (do <code>buildinfo</code>) e
+<code>deployment.environment</code> (o <code>APP_ENV</code>) — para todo span/métrica saber de qual serviço/versão veio.</p>
+
+<h3>Fase 3 — Instrumentação HTTP (traces + métricas)</h3>
+<p>O router é embrulhado por <code>otelhttp.NewHandler</code> como camada <strong>mais externa</strong>, gerando um span
+de servidor + métricas de duração/contagem por requisição. A ordem da cadeia importa muito:</p>
+<pre><code>// internal/transport/http/router.go
+var handler http.Handler = routeNamer(mux)
+handler = requireAuth(d.Auth, d.CookieName, d.Logger)(handler)
+handler = logRequests(d.Logger)(handler)
+handler = requestID(handler)
+// Mais externo: cria o span do servidor + métricas HTTP. Probes filtradas pra não
+// poluir os traces. Métricas vêm de graça do otelhttp via o MeterProvider global.
+return otelhttp.NewHandler(handler, "http.server", otelhttp.WithFilter(traceableRequest))</code></pre>
+<div class="box why">
+  <span class="lbl">Por que <code>otelhttp</code> é o <strong>mais externo</strong>, e não o mais interno?</span>
+  Porque o span precisa <strong>já existir no <code>context</code></strong> quando os middlewares de dentro rodam. O
+  <code>logRequests</code> lê o <code>trace_id</code> do span pra colocar na linha de log (Fase 5) — se o span fosse
+  criado por <em>dentro</em> do logging, a linha sairia sem <code>trace_id</code>. Colocando o <code>otelhttp</code> por fora,
+  o span "embrulha" tudo: o tempo medido inclui a autenticação e o logging, que é o tempo real do
+  servidor. As probes (<code>/healthz</code>, <code>/readyz</code>) são filtradas com <code>WithFilter</code> pra não afogarem o sinal.
+</div>
+
+<h3>Fase 4 — Instrumentação do banco</h3>
+<p>No <code>platform/database.Connect</code>, o pool é aberto via <code>otelsql.Open</code> — então toda query emite um
+span filho sob o span da requisição, <strong>sem tocar em nenhum repositório</strong>:</p>
+<pre><code>// internal/platform/database/database.go
+db, err := otelsql.Open(driverName, cfg.DatabaseURL,
+    otelsql.WithAttributes(attribute.String("db.system", "postgresql")),
+    otelsql.WithSpanOptions(otelsql.SpanOptions{OmitConnResetSession: true}),
+)
+// ... e métricas do pool (conexões abertas/ociosas/em uso) no MeterProvider global:
+otelsql.RegisterDBStatsMetrics(db, otelsql.WithAttributes(attribute.String("db.system", "postgresql")))</code></pre>
+<p>Detalhe importante: o <code>otelsql</code> devolve os erros do driver <strong>sem embrulhar</strong>, então o mapeamento
+de erros do pgconn que fizemos no SPEC-003 (o <code>23505</code> de e-mail duplicado, o <code>22P02</code> de UUID
+inválido) <strong>continua funcionando</strong>. A instrumentação não vazou pra dentro da lógica de erro.</p>
+
+<h3>Fase 5 — Correlação log/trace &amp; o seam</h3>
+<p>Um <code>slog.Handler</code> "embrulhador" que, quando há um span ativo no <code>context</code>, anexa
+<code>trace_id</code>/<code>span_id</code> ao registro. É a chave de tudo que vimos na seção 2:</p>
+<pre><code>// internal/platform/logging/logging.go
+type traceHandler struct{ slog.Handler }
+
+func (h traceHandler) Handle(ctx context.Context, r slog.Record) error {
+    if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {   // há span ativo?
+        r.AddAttrs(
+            slog.String("trace_id", sc.TraceID().String()),
+            slog.String("span_id", sc.SpanID().String()),
+        )
+    }
+    return h.Handler.Handle(ctx, r)   // delega pro handler de baixo (JSON/text)
+}</code></pre>
+<p>E o <strong>seam</strong> (<code>seam.go</code>): dois acessores <code>Tracer(name)</code> e <code>Meter(name)</code> que as features futuras
+vão injetar pra criar spans/métricas próprios — sem nunca apelar pra globais espalhados.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários com um <strong>exportador em memória</strong> (sem rede): <code>Setup</code> no-op-safe; um request pelo
+handler embrulhado produz um span com o <strong>nome da rota</strong> esperado; probes filtradas; um
+<code>traceparent</code> de entrada é continuado; o log dentro de um span carrega os ids. E um de integração
+(com Postgres real, mesmo <em>gating</em> do SPEC-002/003) provando o <strong>span pai HTTP com o span filho de
+DB</strong>.</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>CHANGELOG.md</code>, <code>README.md</code> (como rodar com um collector local / Jaeger e como ele no-opa sem
+um), <code>.env.example</code> com as novas vars, SPEC-004 e PLAN-004 marcados <strong>Done</strong>. E esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="conceitos">6. Conceitos-chave de Go + OTel</h2>
+
+<h3>Span: a unidade de um trace (pai e filho)</h3>
+<p>Um <strong>span</strong> mede uma operação: tem nome, início, fim, atributos (chave=valor) e um span pai.
+Spans aninhados formam a árvore do trace. No nosso caso, o span HTTP é o pai, o span do DB é o
+filho. A regra de ouro: <strong>todo span aberto tem que ser fechado</strong>, idiomaticamente com
+<code>defer span.End()</code> na borda — um span aberto e nunca fechado é um bug clássico (vaza memória e
+some do trace).</p>
+
+<h3>Propagação no <code>context.Context</code> (BR-405)</h3>
+<p>Como o span filho "sabe" quem é seu pai? Pelo <code>context.Context</code>. Quando o <code>otelhttp</code> cria o
+span raiz, ele guarda o span <strong>dentro do <code>ctx</code></strong> da requisição. Esse <code>ctx</code> é passado adiante (a
+convenção "<code>ctx</code> é sempre o primeiro parâmetro" do CLAUDE.md). Quando o <code>otelsql</code> vai abrir o
+span do DB, ele lê o span ativo <strong>daquele mesmo <code>ctx</code></strong> e se pendura como filho. É por isso que a
+<strong>BR-405</strong> é "o context carrega o estado do trace, nunca uma global" — o <code>ctx</code> é o fio que costura
+a árvore inteira, sem estado global nem thread-local.</p>
+
+<div class="box tip">
+  <span class="lbl">O <code>routeNamer</code>: como o span fica com o nome da rota</span>
+  O <code>otelhttp</code> está <em>por fora</em> do <code>mux</code> e, no momento em que cria o span, <strong>ainda não sabe qual
+  rota casou</strong> — só tem o caminho cru. Por isso o <code>routeNamer</code> (o middleware mais interno) resolve a
+  rota pelo próprio <code>mux</code> e renomeia o span já existente:
+  <pre><code>func routeNamer(mux *http.ServeMux) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if _, pattern := mux.Handler(r); pattern != "" {   // ex.: "GET /auth/me"
+            span := trace.SpanFromContext(r.Context())
+            span.SetName(pattern)
+            span.SetAttributes(attribute.String("http.route", pattern))
+        }
+        mux.ServeHTTP(w, r)
+    })
+}</code></pre>
+  Num span no-op (telemetria off ou probe filtrada), <code>SetName</code>/<code>SetAttributes</code> são no-ops inofensivos.
+</div>
+
+<h3>O cabeçalho W3C <code>traceparent</code> (FR-404)</h3>
+<p>Como um trace atravessa <strong>serviços diferentes</strong>? Pelo padrão <strong>W3C Trace Context</strong>: um
+cabeçalho HTTP <code>traceparent</code> que carrega o <code>trace_id</code> e o <code>span_id</code> pai. Se uma requisição chega
+<strong>com</strong> esse header, o <code>otelhttp</code> <em>continua</em> o trace existente (o span do nosso servidor vira
+filho do span do chamador); se chega <strong>sem</strong>, começa um trace-raiz novo. É o que o propagador
+instalado no <code>Setup</code> (<code>propagation.TraceContext{}</code>) faz — e por ser um padrão aberto, funciona entre
+serviços de linguagens diferentes.</p>
+
+<h3>Sampling (amostragem)</h3>
+<p>Em produção, gravar <strong>todo</strong> trace é caro e estoura cota de free-tier. O <strong>sampler</strong> decide quais
+traces guardar. Usamos <code>ParentBased(TraceIDRatioBased(ratio))</code>: respeita a decisão do <strong>pai</strong> (se o
+chamador amostrou, a gente também — o trace não fica pela metade) e, na raiz, guarda uma fração
+<code>ratio</code> deles. Em dev o padrão é <code>1.0</code> (guarda tudo); em prod, abaixa-se. Isso é a <strong>BR-406</strong>:
+custo limitado e configurável.</p>
+
+<h3>O seam <code>Tracer()</code>/<code>Meter()</code> (FR-407)</h3>
+<p>O ponto onde o SPEC-004 olha pro futuro. Em vez de cada feature chamar <code>otel.Tracer(...)</code> direto,
+ela pega o <code>Tracer</code>/<code>Meter</code> por esses acessores e instrumenta nas <strong>bordas</strong> (adaptadores/transporte),
+nunca no domínio puro. Quando a telemetria está off, ambos são no-op. O doc-comment do seam já
+documenta as convenções para os próximos:</p>
+<pre><code>// internal/platform/observability/seam.go
+// Conventions for callers (SPEC-004 BR-402/BR-403):
+//   - Span names are low-cardinality (operation, not raw ids/values).
+//   - Never put secrets or PII (passwords, tokens, raw emails, SQL args) on spans.
+//   - Instrument at the edges (adapters/transport) — never inside the pure domain core.
+//   - End spans with defer span.End().
+func Tracer(name string) trace.Tracer { return otel.Tracer(name) }
+func Meter(name string) metric.Meter  { return otel.Meter(name) }</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="engenharia">7. Momentos reais de engenharia 🐛</h2>
+
+<p>Esta é a seção mais didática. Quatro situações concretas desta spec, cada uma ensinando uma lição
+de backend/observabilidade que você não acha num tutorial.</p>
+
+<div class="box warn">
+  <span class="lbl">(decisão) O bump <em>obrigatório</em> pro Go 1.25 — e por que dessa vez não dava pra fugir</span>
+  No SPEC-002, o <code>pgx</code> tinha uma versão antiga compatível com o Go 1.24 que já usávamos — o risco do
+  bump foi <strong>evitável</strong>. Aqui foi diferente: <strong>todo o ecossistema OTel</strong> (SDK + exporters + contrib)
+  e as <code>golang.org/x/*</code> que ele arrasta <strong>exigem Go 1.25</strong>. Não havia versão "velha o suficiente"
+  que cumprisse o SPEC-004. A lição honesta de engenharia de dependências: às vezes o bump é
+  <strong>inevitável</strong>, e a escolha real é "aceitar o bump (e atualizar o <code>Dockerfile</code> builder pra
+  <code>golang:1.25</code>)" <em>vs.</em> "ficar preso a dependências obsoletas e sem suporte". Escolhemos aceitar —
+  mas a regra do PLAN era <strong>sinalizar o bump pra aprovação</strong>, não deixá-lo "vazar" silenciosamente
+  num <code>go mod tidy</code>. Bump consciente, não acidental.
+</div>
+
+<div class="box bug">
+  <span class="lbl">(problema técnico) Nomear o span pela ROTA, mas o <code>otelhttp</code> está por FORA do mux</span>
+  Queríamos o span chamado <code>GET /auth/me</code> (a <strong>rota</strong>). Mas o <code>otelhttp</code> embrulha o handler por
+  fora e, na hora de criar o span, <strong>ainda não sabe qual rota vai casar</strong> — ele só tem o caminho cru
+  da URL. Se nomeássemos pelo caminho cru, uma rota com id (imagine <code>/users/{id}</code>) viraria
+  <strong>milhares de nomes de span distintos</strong> — <code>/users/abc</code>, <code>/users/def</code>, <code>/users/123</code>... Isso é
+  <strong>explosão de cardinalidade</strong>: cada nome único vira uma série temporal nas métricas, estoura a
+  memória do backend e a cota do free-tier, e ainda quebra a agregação ("qual o p95 de <code>/users/{id}</code>?"
+  fica impossível se cada id é um nome). A solução foi o <code>routeNamer</code> (seção 6): ele roda <em>dentro</em>,
+  resolve a rota com <code>mux.Handler(r)</code> e <strong>renomeia</strong> o span pro padrão de rota — baixa
+  cardinalidade, agregação sã. É exatamente a <strong>BR-406</strong> virando código.
+</div>
+
+<div class="box bug">
+  <span class="lbl">(segurança) BR-402: nunca colocar segredo/PII na telemetria</span>
+  Telemetria vai pra um backend externo e fica visível pra quem opera dashboards — é o <strong>último</strong>
+  lugar onde você quer uma senha, um token de sessão, um e-mail cru ou um valor de query. A
+  <strong>BR-402</strong> proíbe isso em spans, atributos e labels de métrica. O risco mais sutil é o span de DB:
+  é tentador gravar a query <em>com os valores</em>. Por isso o <code>otelsql</code> grava só o <strong>statement
+  parametrizado</strong> — <code>WHERE token_hash = $1</code>, e <strong>nunca</strong> o valor do <code>$1</code> (que é justamente o hash da
+  sessão!). O comentário no <code>database.go</code> documenta a garantia explicitamente. A mesma postura de
+  redação dos SPEC-002/003, agora estendida à telemetria.
+</div>
+
+<div class="box bug">
+  <span class="lbl">(convenção) O nome certo dos arquivos de teste: por arquivo, nunca por conceito</span>
+  Um teste do span HTTP nasceu como <code>otel_test.go</code> — nomeado pelo <em>conceito</em> ("isto testa OTel").
+  Errado pela convenção da casa: arquivo de teste leva o nome do <strong>arquivo sob teste</strong>
+  (<code>foo.go</code> → <code>foo_test.go</code>; integração → <code>foo_integration_test.go</code>), <strong>nunca</strong> por tema. O span
+  HTTP mora no <code>router.go</code>, então o teste virou <code>router_test.go</code>. Parece bobo, mas a regra mantém
+  o teste <strong>colado</strong> ao código que ele cobre: quem abre o <code>router.go</code> acha o teste do lado, não
+  precisa caçar um <code>otel_test.go</code> genérico. Convenção mecânica = menos atrito de navegação. (Ficou
+  documentado no CLAUDE.md.)
+</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">8. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>Este projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à
+IA trilhos que <strong>baixam a taxa de erro</strong>. O SPEC-004 foi construído por esse harness; vale ver os
+mecanismos concretos que atuaram.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "faça observabilidade" de uma vez. O PLAN-004 fatiou em 7 fases bottom-up
+(config → providers → HTTP → DB → correlação/seam → testes → docs), e cada fase foi implementada,
+compilada e <strong>revisada por você</strong> antes da próxima. Fatiar encurta a janela de propagação de erro:
+se a Fase 3 (HTTP) estiver errada, você pega ali, não três camadas depois.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado conhece as regras da casa e foi ele que cobrou as duas mais sensíveis aqui:
+a <strong>direção de dependência</strong> (OTel só pode viver em <code>platform/observability</code>, <code>platform/database</code>,
+<code>platform/logging</code> e <code>transport/http</code> — <strong>nenhum core de feature importa OTel</strong>, BR-403) e o
+<strong>no-PII</strong> (BR-402: "este atributo pode vazar um valor de query?"). Foi essa lente que garantiu que
+o <code>otelsql</code> ficasse só com o statement parametrizado, e que o domínio puro continuasse cego ao OTel.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que o core ficou puro</span>
+  A garantia de que <code>internal/auth</code> (o núcleo) <strong>não importa</strong> OTel é mecânica: os repositórios em
+  <code>auth/postgres</code> continuaram <strong>sem nenhuma mudança</strong> — toda a instrumentação de DB foi parar num
+  lugar só, o <code>otelsql.Open</code> dentro de <code>platform/database</code>. Se a IA tivesse "ajudado" colocando um
+  <code>otel.Tracer</code> dentro de um repositório, o revisor barraria. O fato de o diff dos repositórios ser
+  <strong>vazio</strong> é a melhor prova de que a costura ficou na borda certa.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs, a review foca no que importa.</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-004 referencia ADR-0002/0003 (que já abençoam OTel) mas <strong>não os edita</strong> — se a IA tentasse "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar a tarefa, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos <strong>com e sem banco</strong>. Foi esse backstop que garantiu que os testes no-op-safe (rodam sem nenhum backend de telemetria) realmente passassem — provando a BR-401 na prática, não só no papel.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-004</th><th>Por que baixa erro</th></tr>
+  <tr><td>Erros embrulhados com <code>%w</code> + prefixo</td><td><code>fmt.Errorf("build telemetry exporters: %w", err)</code></td><td>Causa rastreável sem perder o tipo do erro.</td></tr>
+  <tr><td><code>ctx</code> é o primeiro parâmetro e propaga</td><td><code>Setup(ctx, ...)</code>; o span viaja no <code>ctx</code> (BR-405)</td><td>Sem o <code>ctx</code> fluindo, a árvore de spans não se forma — a convenção <em>é</em> o mecanismo.</td></tr>
+  <tr><td>Dependência só aponta pra dentro</td><td>OTel confinado em <code>platform/*</code> e <code>transport/http</code></td><td>O domínio fica testável e portável; troca de backend não toca features.</td></tr>
+  <tr><td>Doc-comments citam a BR/FR</td><td><code>// ... (SPEC-004 BR-402)</code> no <code>database.go</code></td><td>Traço direto do documento ao código — a SDD fecha o ciclo.</td></tr>
+  <tr><td>Justifique cada dependência (zero-cost)</td><td>OTLP/<strong>HTTP</strong> escolhido pra evitar a árvore do gRPC</td><td>Superfície de dependência menor = menos CVE, build mais leve.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">9. Conexão com AI Engineering</h2>
+
+<p>O SPEC-004 <strong>não</strong> é uma feature de IA — é a fundação que <strong>torna a IA depurável e
+auditável</strong>. E a IA confiável que o YieldForge promete (explicável, copiloto-não-conselheiro) só é
+possível se cada interação com o LLM for <strong>observável ponta a ponta</strong>. É aqui que os trilhos foram
+postos.</p>
+
+<table>
+  <tr><th>O que construímos agora</th><th>Como serve a IA depois</th></tr>
+  <tr>
+    <td><strong>O seam <code>Tracer()</code>/<code>Meter()</code></strong> (FR-407)</td>
+    <td>O SPEC-005 (port <code>Insighter</code>/LLM) vai registrar, <strong>por chamada</strong>, um span com prompt/modelo/latência e métricas de <strong>custo de tokens</strong> — usando exatamente este <code>Meter</code>. Quando uma resposta da IA demorar ou custar caro, o trace dirá <em>onde</em> e <em>quanto</em>. O SPEC-006 (market data) registra métricas de ingestão pelo mesmo seam. Sem rework.</td>
+  </tr>
+  <tr>
+    <td><strong>Métrica monetária como <code>int64</code></strong></td>
+    <td>O custo de tokens é dinheiro — e o seam já documenta que essa métrica futura segue a convenção <code>int64</code> em unidades menores / basis points, <strong>nunca float</strong>. A disciplina financeira da casa já está reservada na telemetria, antes da primeira chamada de IA existir.</td>
+  </tr>
+  <tr>
+    <td><strong>Correlação log↔trace (<code>trace_id</code>)</strong></td>
+    <td>Quando um insight sair errado, você vai partir da linha de log, pegar o <code>trace_id</code> e ver a cascata inteira: o Fact Builder que computou os números, a chamada ao LLM, a resposta. É a base da <strong>explicabilidade operacional</strong> que dá suporte ao FR-013 ("todo insight carrega explicação") — antes de explicar pro usuário, você precisa conseguir reconstruir o que aconteceu.</td>
+  </tr>
+  <tr>
+    <td><strong>No-PII na telemetria (BR-402)</strong></td>
+    <td>Quando os spans de IA gravarem o prompt/contexto, a mesma regra protege contra vazar dados da carteira do usuário pro backend de observabilidade. A postura de redação que blindou o <code>$1</code> da query é a mesma que vai blindar o conteúdo enviado ao LLM.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA confiável exige <strong>medir tudo o que ela faz</strong>: latência, custo, e o caminho dos fatos até a
+  resposta. O SPEC-004 não chama nenhum LLM — mas instala a régua, o cronômetro e o fio (<code>trace_id</code>)
+  que vão tornar cada decisão da IA <strong>reconstruível</strong>. Sem essa fundação, "explicável" e
+  "auditável" seriam só palavras no PRD.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">10. O que vem a seguir</h2>
+
+<p>Com a observabilidade pronta e inerte-por-padrão, as próximas specs entram em terreno já
+instrumentado. Os <strong>ports de provedores externos</strong> — o LLM e o market data — são os primeiros
+clientes do seam <code>Tracer()</code>/<code>Meter()</code>.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001</td><td>Esqueleto Go (config, logs, HTTP, Docker)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-002</td><td>Persistência &amp; Migrations</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-003</td><td>Autenticação &amp; isolamento por usuário</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-004</td><td>Observabilidade (OpenTelemetry)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> (LLM) — spans + custo de tokens via este Meter</td><td>⬜ A seguir</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> — métricas de ingestão</td><td>⬜</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O que muda concretamente no SPEC-005?</span>
+  Pela primeira vez, um adaptador de feature (o cliente do LLM) vai chamar
+  <code>observability.Tracer("insight")</code> e abrir um span por chamada de IA, com <code>defer span.End()</code> e
+  uma métrica de custo em <code>int64</code>. Como o seam já está pronto e provado, a instrumentação da IA vem
+  quase <strong>de graça</strong> — e o domínio puro do <code>insight</code> continua sem importar uma linha de OTel. O
+  trilho está posto; o SPEC-005 só anda em cima dele.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-004 o YieldForge ganhou olhos por dentro: traces HTTP→DB, métricas de latência que medem o
+  SLO de p95, e logs costurados ao <code>trace_id</code> — tudo vendor-neutro, <strong>desligado por padrão</strong> (custo
+  zero), com o seam <code>Tracer()</code>/<code>Meter()</code> já pronto pra tornar cada decisão da IA reconstruível.
+</div>
+
+<footer>
+  YieldForge · Aula 04 (SPEC-004) · gerada como material de estudo. Veja também a
+  <a href="SPEC-001-aula.html">Aula 01</a>, a <a href="SPEC-002-aula.html">Aula 02</a>, a
+  <a href="SPEC-003-aula.html">Aula 03</a>, o
+  <a href="../02-specs/SPEC-004-observability-baseline.md">SPEC-004</a>
+  e o <a href="../03-plans/PLAN-004-observability-baseline.md">PLAN-004</a>.
+</footer>
+
+</div>
+</body>
+</html>

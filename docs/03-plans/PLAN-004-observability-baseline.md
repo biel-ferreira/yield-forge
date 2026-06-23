@@ -8,7 +8,7 @@
 | Related Feature | Foundational — traces + metrics + log correlation            |
 | Related Spec    | [SPEC-004](../02-specs/SPEC-004-observability-baseline.md)    |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                        |
+| Status          | Done                                                         |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-19                                                   |
 
