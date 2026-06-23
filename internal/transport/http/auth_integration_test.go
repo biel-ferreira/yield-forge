@@ -72,6 +72,43 @@ func authIntegrationEnv(t *testing.T) (http.Handler, *sql.DB) {
 	return router, db
 }
 
+func TestAuth_TraceHasDBChildSpan_Integration(t *testing.T) {
+	exp := spanRecorder(t) // in-memory provider set global BEFORE the otelsql pool is built
+	router, _ := authIntegrationEnv(t)
+
+	body := `{"email":"trace@example.com","password":"supersecret"}`
+	require.Equal(t, http.StatusCreated, doReq(router, http.MethodPost, "/auth/register", body).Code)
+	rr := doReq(router, http.MethodPost, "/auth/login", body)
+	require.Equal(t, http.StatusOK, rr.Code)
+	cookie := sessionCookie(rr, "yf_session")
+	require.NotNil(t, cookie)
+
+	// Capture only the /auth/me request's spans.
+	exp.Reset()
+	require.Equal(t, http.StatusOK, doReq(router, http.MethodGet, "/auth/me", "", cookie).Code)
+
+	spans := exp.GetSpans()
+	var httpSpanID, httpTraceID string
+	for _, s := range spans {
+		if s.Name == "GET /auth/me" {
+			httpSpanID = s.SpanContext.SpanID().String()
+			httpTraceID = s.SpanContext.TraceID().String()
+		}
+	}
+	require.NotEmpty(t, httpSpanID, "expected an HTTP server span for GET /auth/me")
+
+	// The DB query (otelsql) must be a child of the HTTP span, in the same trace —
+	// proving traces flow API → DB (PRD §10).
+	dbChildren := 0
+	for _, s := range spans {
+		if s.Parent.SpanID().String() == httpSpanID {
+			dbChildren++
+			require.Equal(t, httpTraceID, s.SpanContext.TraceID().String(), "child shares the trace")
+		}
+	}
+	require.GreaterOrEqual(t, dbChildren, 1, "expected at least one DB child span under the request")
+}
+
 func TestAuth_FullFlow_Integration(t *testing.T) {
 	router, _ := authIntegrationEnv(t)
 	body := `{"email":"flow@example.com","password":"supersecret"}`
