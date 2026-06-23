@@ -38,6 +38,14 @@ type Config struct {
 	SessionTTL     time.Duration // how long a login session stays valid
 	AuthCookieName string        // name of the session cookie
 
+	// Observability (SPEC-004). Telemetry is never required to run: with kind "none"
+	// (the default when no endpoint is set) the OTel pipeline is a no-op (BR-401).
+	OTELServiceName      string  // resource service.name
+	OTELExporterKind     string  // otlp | stdout | none
+	OTELExporterEndpoint string  // OTLP endpoint URL; empty => kind defaults to none
+	OTELExporterHeaders  string  // OTLP headers (secret), e.g. "authorization=Bearer xyz"
+	OTELTraceSampleRatio float64 // sampling probability 0.0..1.0 (NOT a financial rate)
+
 	// Warnings holds non-fatal configuration notes (e.g. a value that was invalid
 	// and replaced by a default). They should be logged once the logger exists.
 	Warnings []string
@@ -64,7 +72,13 @@ const (
 	// Auth defaults (SPEC-003).
 	defaultSessionTTL     = 168 * time.Hour // 7 days
 	defaultAuthCookieName = "yf_session"
+
+	// Observability defaults (SPEC-004).
+	defaultOTELServiceName      = "yield-forge"
+	defaultOTELTraceSampleRatio = 1.0
 )
+
+var validOTELExporterKinds = map[string]bool{"otlp": true, "stdout": true, "none": true}
 
 var validLogLevels = map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 
@@ -77,6 +91,10 @@ func (c Config) Addr() string { return fmt.Sprintf(":%d", c.Port) }
 // CookieSecure reports whether the session cookie should carry the Secure flag.
 // True everywhere except local development, where plain HTTP is used (SPEC-003 §10).
 func (c Config) CookieSecure() bool { return !c.IsDev() }
+
+// TelemetryEnabled reports whether telemetry is exported. False ("none") means the
+// OTel pipeline is a no-op — the app runs identically with no backend (SPEC-004 BR-401).
+func (c Config) TelemetryEnabled() bool { return c.OTELExporterKind != "none" }
 
 // RedactedDatabaseURL returns the database target with all credentials stripped,
 // safe for logging. It keeps only scheme, host, port and database name — never the
@@ -149,6 +167,34 @@ func Load() (Config, error) {
 	// Session cookie name (SPEC-003).
 	cfg.AuthCookieName = getString("AUTH_COOKIE_NAME", defaultAuthCookieName)
 
+	// Observability (SPEC-004).
+	cfg.OTELServiceName = getString("OTEL_SERVICE_NAME", defaultOTELServiceName)
+	cfg.OTELExporterEndpoint = getString("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	cfg.OTELExporterHeaders = getString("OTEL_EXPORTER_OTLP_HEADERS", "")
+
+	// Exporter kind — defaults to otlp when an endpoint is set, otherwise none (no-op).
+	kind := strings.ToLower(getString("OTEL_EXPORTER_KIND", ""))
+	if kind == "" {
+		if cfg.OTELExporterEndpoint != "" {
+			kind = "otlp"
+		} else {
+			kind = "none"
+		}
+	}
+	if !validOTELExporterKinds[kind] {
+		errs = append(errs, fmt.Sprintf("OTEL_EXPORTER_KIND must be otlp, stdout, or none, got %q", kind))
+	}
+	cfg.OTELExporterKind = kind
+
+	// Sample ratio — fatal if unparseable or out of [0,1].
+	if ratio, err := getFloat("OTEL_TRACE_SAMPLE_RATIO", defaultOTELTraceSampleRatio); err != nil {
+		errs = append(errs, err.Error())
+	} else if ratio < 0 || ratio > 1 {
+		errs = append(errs, fmt.Sprintf("OTEL_TRACE_SAMPLE_RATIO must be between 0 and 1, got %v", ratio))
+	} else {
+		cfg.OTELTraceSampleRatio = ratio
+	}
+
 	// Pool sizes — fatal if non-numeric or negative.
 	for _, p := range []struct {
 		key string
@@ -219,6 +265,20 @@ func getInt(key string, def int) (int, error) {
 		return 0, fmt.Errorf("%s must be an integer, got %q", key, v)
 	}
 	return n, nil
+}
+
+// getFloat returns the float env value for key, or def when unset/empty. A
+// non-numeric value is a fatal error.
+func getFloat(key string, def float64) (float64, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return def, nil
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a number, got %q", key, v)
+	}
+	return f, nil
 }
 
 // getDuration returns the duration env value for key, or def when unset/empty. An

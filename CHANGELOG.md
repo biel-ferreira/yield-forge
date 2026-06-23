@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layering, the explainable AI insight pipeline, and multi-agent / MCP readiness.
 - ADR-0001 (record architecture decisions), ADR-0002 (tech stack & backend
   layering), ADR-0003 (zero-cost infrastructure & pluggable LLM provider).
+- ADR-0004 (frontend repository strategy — mono-repo: Next.js under `web/`,
+  path-scoped CI, OpenAPI contract; *Proposed*).
 - Two-tier SPEC/PLAN structure — foundational (`0xx`) and feature (`1xx`).
 - SPEC-001 — Project Scaffolding & Hexagonal Layering, with a package-oriented
   (by-feature) hybrid layout; FR-008 requires this changelog.

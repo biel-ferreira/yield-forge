@@ -25,6 +25,8 @@ func clearConfigEnv(t *testing.T) {
 		"DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS",
 		"DB_CONN_MAX_LIFETIME", "DB_CONN_MAX_IDLE_TIME", "DB_CONNECT_TIMEOUT",
 		"SESSION_TTL", "AUTH_COOKIE_NAME",
+		"OTEL_SERVICE_NAME", "OTEL_EXPORTER_KIND", "OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_TRACE_SAMPLE_RATIO",
 	} {
 		t.Setenv(k, "")
 	}
@@ -156,6 +158,9 @@ func TestLoad_FatalErrors(t *testing.T) {
 		{"negative max idle conns", "DB_MAX_IDLE_CONNS", "-1", "DB_MAX_IDLE_CONNS"},
 		{"bad conn lifetime", "DB_CONN_MAX_LIFETIME", "nope", "DB_CONN_MAX_LIFETIME"},
 		{"bad connect timeout", "DB_CONNECT_TIMEOUT", "5", "DB_CONNECT_TIMEOUT"},
+		{"invalid otel exporter kind", "OTEL_EXPORTER_KIND", "kafka", "OTEL_EXPORTER_KIND"},
+		{"non-numeric sample ratio", "OTEL_TRACE_SAMPLE_RATIO", "lots", "OTEL_TRACE_SAMPLE_RATIO"},
+		{"sample ratio out of range", "OTEL_TRACE_SAMPLE_RATIO", "1.5", "OTEL_TRACE_SAMPLE_RATIO"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -248,6 +253,44 @@ func TestLoad_AuthDefaults(t *testing.T) {
 	}
 	if !(Config{AppEnv: "prod"}).CookieSecure() {
 		t.Error("CookieSecure() = false in prod, want true")
+	}
+}
+
+func TestLoad_OTELDefaults(t *testing.T) {
+	clearConfigEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OTELServiceName != "yield-forge" {
+		t.Errorf("OTELServiceName = %q, want yield-forge", cfg.OTELServiceName)
+	}
+	// No endpoint => kind "none" => telemetry disabled (no-op).
+	if cfg.OTELExporterKind != "none" {
+		t.Errorf("OTELExporterKind = %q, want none", cfg.OTELExporterKind)
+	}
+	if cfg.TelemetryEnabled() {
+		t.Error("TelemetryEnabled() = true with no endpoint, want false")
+	}
+	if cfg.OTELTraceSampleRatio != 1.0 {
+		t.Errorf("OTELTraceSampleRatio = %v, want 1.0", cfg.OTELTraceSampleRatio)
+	}
+}
+
+func TestLoad_OTELEndpointDefaultsToOTLP(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OTELExporterKind != "otlp" {
+		t.Errorf("OTELExporterKind = %q, want otlp (derived from endpoint)", cfg.OTELExporterKind)
+	}
+	if !cfg.TelemetryEnabled() {
+		t.Error("TelemetryEnabled() = false with an endpoint, want true")
 	}
 }
 

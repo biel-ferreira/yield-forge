@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-# Go 1.24 is the module's minimum (SPEC-002 pulled in pgx and its deps).
-FROM golang:1.24-alpine AS build
+# Go 1.25 is the module's minimum (SPEC-004 pulled in the OpenTelemetry ecosystem,
+# which requires 1.25).
+FROM golang:1.25-alpine AS build
 
 WORKDIR /src
 
