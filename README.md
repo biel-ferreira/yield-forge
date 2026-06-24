@@ -102,6 +102,34 @@ DBeaver) using the credentials in `.env.example`.
 > (point it at a disposable database — the migration round-trip test rolls schema
 > changes back and forth). Without it, they skip cleanly.
 
+## AI insights (Insighter)
+
+AI insights are produced by the **`Insighter` port** (SPEC-005), so the LLM provider is
+config-swappable and the binding product guards are enforced regardless of provider:
+
+- **Explainability (FR-013):** every insight must carry a human-readable explanation, or
+  it is rejected.
+- **Non-advice (FR-014):** output that reads as a buy/sell order (or price target /
+  guaranteed return) is rejected; passing output gets a non-advice disclaimer. The LLM
+  reasons only over **computed facts** — it never invents numbers.
+
+The provider is selected by `INSIGHTER_PROVIDER`:
+
+| Value | Use | Notes |
+| ----- | --- | ----- |
+| `ollama` (default) | Local dev | Talks to a local [Ollama](https://ollama.com) (`INSIGHTER_OLLAMA_BASE_URL`, `INSIGHTER_OLLAMA_MODEL`); facts stay on-device. |
+| `groq` | Hosted | OpenAI-compatible free tier; needs `INSIGHTER_GROQ_API_KEY` (secret). |
+| `fake` | CI / AI-off | Deterministic, no network — used by tests and when AI is disabled. |
+
+Results are cached in-memory (`INSIGHTER_CACHE_SIZE`, `INSIGHTER_CACHE_TTL`) and every
+call is bounded by `INSIGHTER_TIMEOUT`; on any provider failure the Insighter degrades
+gracefully rather than erroring. AI telemetry records only metadata (provider, model,
+outcome, latency, cache hit) — never prompts, facts, or generated text. See
+[`.env.example`](.env.example) for all `INSIGHTER_*` variables.
+
+> The returned `Insighter` isn't wired into an endpoint yet — the AI feature engine
+> (SPEC-104) consumes it with the Fact Builder. SPEC-005 ships the port + guards + adapters.
+
 ## Endpoints
 
 | Method | Path             | Auth | Purpose                                  |

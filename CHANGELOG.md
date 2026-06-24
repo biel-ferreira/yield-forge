@@ -128,6 +128,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filtering, incoming-trace continuation, log correlation; gated integration test
   proving a request produces a parent HTTP span with a child DB span.
 
+#### SPEC-005 implementation (Insighter port & free/local LLM adapter)
+
+- `internal/insight` core (pure — no HTTP/SDK/OTel): the `Insighter` and `Cache` ports,
+  the `Facts`/`Insight`/`InsightRequest`/`InsightResult` domain, sentinel errors, and a
+  provider-neutral prompt layer (`BuildPrompt`/`ParseResult`/`GenerateWithReask`) with an
+  English instruction prompt that emits structured JSON in pt-BR.
+- **The binding-guard gate** (`Gated` decorator) — enforced for every provider via the
+  factory: rejects any insight missing an **explanation** (FR-013) and any output that
+  reads as a **transaction order** (FR-014, bilingual order/price/guaranteed-return
+  detector), fails closed, and attaches the non-advice disclaimer only on the pass path.
+- Two provider adapters behind the port, zero new dependencies (stdlib `net/http`):
+  `ollama` (local/dev, JSON mode — facts stay on-device) and `groq` (hosted,
+  OpenAI-compatible, Bearer key). Both share one re-ask-once-then-degrade policy: a
+  malformed reply is re-asked once; any other failure (incl. a 429) degrades to
+  `ErrInsightsUnavailable` with **no charge-incurring retry**.
+- `internal/insight/factory` composition root — `observed(cached(gated(provider)))`:
+  an in-memory **LRU+TTL cache** (keyed by `sha256(user · task · facts)`, user-scoped,
+  stores only gated results, never caches errors; TTL via the `Clock` port), and an AI
+  **observability** decorator (`insight.generate` span + generation counter by outcome,
+  recording provider/model/outcome/cache_hit/cost only — **never prompt, facts, or
+  generated text**). A deterministic `Fake` provider for CI and the AI-off mode.
+- Configuration `INSIGHTER_PROVIDER` (ollama|groq|fake), `INSIGHTER_OLLAMA_BASE_URL`,
+  `INSIGHTER_OLLAMA_MODEL`, `INSIGHTER_GROQ_BASE_URL`, `INSIGHTER_GROQ_API_KEY` (secret,
+  required iff provider=groq), `INSIGHTER_GROQ_MODEL`, `INSIGHTER_TIMEOUT` (>0),
+  `INSIGHTER_CACHE_TTL` (>0), `INSIGHTER_CACHE_SIZE` (≥1); `.env.example` updated.
+- Tests: a non-advice corpus (order phrasings caught vs holdings/considerations passed),
+  adapter `httptest` suites (success, malformed→re-ask, error/429/401→degrade, key never
+  in errors), cache hit/miss/TTL/per-user/no-cache-on-error, a full `New(fake)` chain
+  test, and an in-memory-exporter assertion that **no facts/content reach a span**
+  (BR-505). Gated live-Ollama integration test skips cleanly without `TEST_OLLAMA_URL`.
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while
@@ -151,6 +182,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `golang.org/x/*` libraries now require it; Dockerfile builder bumped to `golang:1.25`.
 - Test files are named after the file under test (`foo.go` → `foo_test.go` /
   `foo_integration_test.go`), never after a concept; documented in `CLAUDE.md`.
+- **AI governance posture (PRD §6 + SPEC-005) rebalanced from "areas-only" to
+  "intelligent copilot".** The non-advice guard now targets the **transaction-order
+  signature** (imperative buy/sell, quantity, price/entry-exit target, guaranteed
+  return) instead of any asset mention, so the copilot may surface **named candidate
+  assets** as reasoned *considerations*. PRD §6 expanded into a full set of AI
+  Governance Principles (explainability, facts-computed, portfolio-centric,
+  goal-oriented, intelligence-as-duty, full disclosure, user autonomy, no
+  advice/orders/false-certainty); added **FR-019** (suggestion capability),
+  **FR-020** (risk/assumption disclosure), **FR-021** (user autonomy & no-guarantee);
+  tightened **FR-011/FR-013/FR-014** and the Epic 5/6 acceptance criteria. SPEC-005
+  FR-504/BR-506/D3, edge cases, and the test corpus updated to require **true-negative**
+  cases (legitimate candidates must pass) and to fail closed only on the order
+  signature. Added risks for guard over-blocking and CVM personalized-recommendation
+  framing.
 
 ### Fixed
 

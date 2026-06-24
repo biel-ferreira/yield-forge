@@ -22,10 +22,14 @@ YieldForge is an **AI-powered personal investment platform** that helps retail
 investors **understand, monitor and optimize** their portfolio through
 data-driven insights and AI-assisted analysis.
 
-The platform **does not provide financial advice** or direct buy/sell
-recommendations. Instead, it analyzes the user's portfolio, market conditions and
-investment goals to **generate insights, highlight risks, and suggest areas that
-may deserve attention** — always with a clear, human-readable explanation.
+The platform is an **AI copilot, not a financial advisor**: it never issues a
+transaction order or personalized directive (no quantity, no price/entry-exit
+target, no imperative buy/sell, no guaranteed return). Within that line it reasons
+over the user's portfolio, market conditions and investment goals to **generate
+insights, highlight risks, and surface considerations — sectors, asset categories,
+themes, and named candidate assets worth the user's own analysis** — always with a
+clear, human-readable explanation, its risks and assumptions, and the final
+decision left to the user.
 
 It serves a dual purpose:
 
@@ -54,7 +58,9 @@ An **Investment Copilot** that:
 - Periodically ingests market and macroeconomic data.
 - Reasons over the *entire* portfolio against the investor's profile and goals.
 - Produces **explainable** insights, a **Portfolio Health Score**, and a
-  **Rebalancing Assistant** that suggests *areas* (never specific buy orders).
+  **Rebalancing Assistant** that suggests *areas* and *named candidate assets* as
+  considerations (never a transaction order — no quantity, price/entry-exit target,
+  or imperative buy/sell).
 - Is architected from day one to expand into a **multi-agent system** (Macro, Fixed
   Income, FII, Risk, CIO agents) exposed over **MCP** tools.
 
@@ -105,8 +111,11 @@ and extend it.
 - **G3** — Automatically keep market and macroeconomic data fresh.
 - **G4** — Generate **explainable** AI insights about portfolio concentration,
   allocation, and market context.
-- **G5** — Provide a **Rebalancing Assistant** that gives contextual guidance for
-  new money — *areas*, never specific buy orders.
+- **G5** — Provide a **Rebalancing Assistant** that, for new contributions,
+  suggests allocation *areas* and may surface **named candidate assets** that fit
+  them — each with reasoning, risk/trade-off disclosure, and assumptions. It never
+  issues an order (no quantity to transact, no price/entry-exit target, no imperative
+  buy/sell, no guarantee); the final decision stays with the user.
 - **G6** — Produce an explainable **Portfolio Health Score (0–100)**.
 - **G7** — Project **expected passive income** from the current portfolio across
   pessimistic / base / optimistic scenarios.
@@ -132,7 +141,7 @@ and extend it.
 | Insight explainability                   | 100% of insights include a reasoning explanation    |
 | Insight relevance (self-rated)           | ≥ 80% of generated insights rated useful by user    |
 | Health Score reproducibility             | Same inputs → same score + identical explanation    |
-| Rebalancing guidance compliance          | 0 outputs containing a specific buy/sell order      |
+| Rebalancing guidance compliance          | 0 outputs containing a transaction order (quantity, price/entry-exit target, or imperative buy/sell) |
 | Income projection scenarios              | 3 scenarios (pessimistic/base/optimistic) per run   |
 | Net-worth projection                     | Recomputes on contribution change; assumptions shown |
 | Backend API p95 latency (non-AI reads)   | < 300 ms                                             |
@@ -163,7 +172,9 @@ and extend it.
 ### Out of Scope (MVP)
 
 - Direct buy/sell execution or brokerage integration (order routing).
-- Specific buy/sell **advice** or price targets (forbidden by design — see §6).
+- Transaction **orders**, price/entry-exit targets, transaction quantities, and any
+  guaranteed-return claim (forbidden by design — see §6). Naming sectors or assets
+  as reasoned *considerations* is in scope — that is copilot intelligence, not advice.
 - Stocks and ETFs as *fully managed* asset classes (allocation buckets exist in
   the model, but ingestion/analysis is deferred). 
 - Automated import from brokerage statements / B3 (manual entry first).
@@ -177,18 +188,36 @@ and extend it.
 
 ## 6. Core Principles (Product Constraints)
 
-These are **binding constraints** that flow down into every SPEC and PLAN.
+These are **binding constraints** that flow down into every SPEC and PLAN. Together
+they are the product's **AI Governance Principles** — deliberately balancing
+explainability, user autonomy, transparency, risk disclosure, portfolio
+intelligence, and regulatory safety, without reducing usefulness.
 
 1. **Explainability First** — every AI-generated insight, score, or suggestion
-   **must** include a clear, human-readable explanation. No black-box outputs.
-2. **Portfolio-Centric** — the system reasons about the *entire* portfolio, not
+   **must** include a clear, human-readable explanation. No explanation → not shown
+   (hard fail-closed). No black-box outputs.
+2. **Facts are Computed, not Generated** — the LLM reasons *over* deterministic,
+   computed portfolio/market facts (the Fact Builder); it never invents figures.
+3. **Portfolio-Centric** — the system reasons about the *entire* portfolio, not
    assets in isolation.
-3. **Goal-Oriented** — analysis always considers investor profile, risk tolerance,
+4. **Goal-Oriented** — analysis always considers investor profile, risk tolerance,
    time horizon, and financial objectives.
-4. **AI as Copilot, not Advisor** — the platform **assists** decisions. It
-   **never** provides financial advice or specific buy/sell recommendations. All
-   user-facing AI output is framed as *areas/considerations*, with an explicit
-   non-advice disclaimer.
+5. **Intelligence is a Duty, not just a Permission** — the copilot **must** identify
+   imbalances and surface under-represented sectors, asset categories, themes, and
+   **named candidate assets** compatible with the user's profile, goals, and
+   portfolio — each framed as a *consideration for the user's own analysis*. A
+   passive dashboard is a failure mode, not a safe default.
+6. **Full Disclosure per Suggestion** — every suggestion states **why** it was
+   surfaced, its **risks and trade-offs**, and its **assumptions**.
+7. **User Autonomy** — the final investment decision is always the user's; every
+   suggestion affirms this and is framed as a consideration, never a directive.
+8. **No Advice, No Orders, No False Certainty** — the platform is an **AI copilot,
+   not a financial advisor**. It **never** issues a transaction order or personalized
+   directive — no transaction **quantity**, no **price/entry-exit target**, no
+   **imperative buy/sell**, no **guaranteed or certain-future return** — and never
+   presents speculation as fact. The non-advice gate fails closed on this **order
+   signature** only, *not* on the mere naming of an asset. A non-advice disclaimer
+   accompanies all AI output.
 
 ---
 
@@ -330,8 +359,12 @@ spot concentration, imbalance, and risk without manual analysis**.
       single-sector exposure, high single-asset concentration).
 - [ ] Generates **Market Context Insights** (high-interest environment,
       inflationary environment, favorable scenario for fixed income).
-- [ ] **Every** insight includes a clear explanation of *why* it was raised.
-- [ ] No insight contains a specific buy/sell recommendation.
+- [ ] **Every** insight includes a clear explanation of *why* it was raised, plus
+      its risks/trade-offs and assumptions.
+- [ ] Insights may name and reason about specific sectors or assets as
+      *considerations for the user's own analysis*; no insight issues a transaction
+      order or personalized directive (no quantity, price/entry-exit target,
+      imperative buy/sell, or guaranteed outcome).
 
 ---
 
@@ -340,16 +373,20 @@ spot concentration, imbalance, and risk without manual analysis**.
 #### User Story
 
 As an investor, I want to say **"I have R$X to invest this month"** and receive
-**contextual guidance on where to focus** so that **I can allocate new money
-thoughtfully — without being told exactly what to buy**.
+**contextual guidance on where to focus — including candidate assets worth a look**
+so that **I can allocate new money thoughtfully — without being handed a transaction
+order**.
 
 #### Acceptance Criteria
 
 - [ ] Accepts a contribution amount as input.
 - [ ] Analyzes current portfolio, diversification, goals, and market conditions.
 - [ ] Outputs **suggested areas** (e.g. Fixed Income, Logistics FIIs,
-      International Exposure) plus **reasoning**.
-- [ ] **Never** outputs a specific buy order (no ticker + quantity to purchase).
+      International Exposure) and may surface **named candidate assets** that fit
+      them, each with **reasoning, risks/trade-offs, and assumptions**.
+- [ ] **Never** issues a transaction order — no quantity to transact, no
+      price/entry-exit target, no imperative buy/sell, no guaranteed return; the
+      final decision stays with the user.
 - [ ] Output explicitly carries a non-advice disclaimer.
 
 ---
@@ -437,16 +474,24 @@ that **I can see the long-term trajectory toward my goals**.
   target-vs-actual allocation and single-sector/single-asset concentration.
 - **FR-010 — Market Context Insights:** Generate explainable insights tying macro
   conditions to the portfolio (e.g. high-rate environment).
-- **FR-011 — Rebalancing Assistant:** Given a contribution amount, output
-  suggested allocation *areas* with reasoning and no specific buy order.
+- **FR-011 — Rebalancing Assistant:** Given a contribution amount, output suggested
+  allocation *areas* and optional **named candidate assets** that fit them, each with
+  reasoning, risks/trade-offs, and assumptions — and **no transaction order** (no
+  quantity, price/entry-exit target, imperative buy/sell, or guarantee).
 - **FR-012 — Portfolio Health Score:** Compute a 0–100 score from diversification,
   concentration, liquidity, goal alignment, and risk exposure, with a detailed
   explanation.
 - **FR-013 — Explainability Guarantee:** Every AI output (insight, suggestion,
-  score) carries a structured explanation. Outputs without an explanation are
+  score) carries a structured explanation — including, for suggestions, its
+  **risks/trade-offs and assumptions** (FR-020). Outputs without an explanation are
   rejected before reaching the user.
-- **FR-014 — Non-Advice Guardrail:** All AI outputs are validated to exclude
-  specific buy/sell instructions and carry a non-advice disclaimer.
+- **FR-014 — Non-Advice Guardrail:** AI outputs are validated to exclude
+  **transaction orders and personalized directives** — defined as an **imperative
+  buy/sell** of a named asset, a **transaction quantity**, a **price/entry-exit
+  target**, or a **guaranteed/certain-return** claim. Naming a sector or asset as a
+  reasoned *candidate/consideration* is permitted and is **not** an order. The
+  validator fails closed **only on this order signature**, not on the mere mention
+  of a ticker. Every output carries a non-advice disclaimer.
 - **FR-015 — Authentication:** Users authenticate; all portfolio data is isolated
   per user.
 - **FR-016 — Passive Income Projection:** Estimate monthly and annual passive
@@ -461,6 +506,25 @@ that **I can see the long-term trajectory toward my goals**.
   internal port (`Insighter`) so the provider is swappable via configuration. The
   MVP uses a **free-tier or local LLM**; paid providers are drop-in upgrades with
   no domain/application changes (see ADR-0003).
+- **FR-019 — Portfolio Intelligence (Suggestion) Capability:** The system shall be
+  able to surface under-represented sectors, asset categories, themes, and **named
+  candidate assets** judged compatible with the user's profile, goals, and current
+  portfolio — each as a *consideration for the user's own analysis*, never an order.
+- **FR-020 — Risk & Assumption Disclosure:** Every suggestion shall state its
+  supporting reasoning, its **risks/trade-offs**, and its **assumptions**. A
+  suggestion lacking risk disclosure is rejected by the explainability gate (FR-013).
+- **FR-021 — User Autonomy & No-Guarantee:** Every suggestion shall affirm that the
+  **final decision remains with the user**, and shall not guarantee returns, predict
+  performance as certain, or present speculation as fact.
+- **FR-022 — AI Interaction History (Bounded, Clearable Memory):** Persist a per-user,
+  time-ordered history of AI interactions (the **input context/request** and the
+  generated, gated **output**) so the user can review past insights. Storage is
+  **bounded by a configurable per-user cap** (zero-cost posture): once the cap is
+  reached, the **oldest entries are evicted** as new ones are stored (rolling window),
+  and the user can **clear** their history on demand. History is per-user isolated
+  (FR-015), distinct from the internal result cache (a performance optimization), and is
+  never treated as financial advice (FR-014). *(Owned by the AI feature phase, SPEC-104,
+  not the `Insighter` port spec.)*
 
 ---
 
@@ -560,8 +624,10 @@ that **I can see the long-term trajectory toward my goals**.
 
 ### Business Constraints
 
-- **Must never** provide financial advice or specific buy/sell recommendations
-  (legal/ethical and product-defining constraint).
+- **Must never** issue a transaction order or personalized directive — an imperative
+  buy/sell, a quantity, a price/entry-exit target, or a guaranteed return (legal/ethical
+  and product-defining constraint, §6). Reasoned *considerations* — including named
+  candidate assets for the user's own analysis — are permitted and expected (FR-019).
 - **Zero budget** — the MVP must run entirely on free tiers / free-forever
   services / local execution (G12, ADR-0003).
 - Solo developer — scope must stay achievable incrementally.
@@ -600,7 +666,9 @@ that **I can see the long-term trajectory toward my goals**.
 | Risk                                                              | Impact | Mitigation                                                                                       |
 | ----------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
 | No reliable/free FII data source (price, DY, P/VP, sector)        | High   | Evaluate sources early; abstract behind a `MarketDataProvider` port; allow manual override.       |
-| AI output crosses into financial advice                          | High   | Hard guardrail (FR-014): output validation, non-advice prompt design, disclaimer, tests.          |
+| AI output crosses into financial advice (a transaction order)    | High   | Hard guardrail (FR-014): order-signature validation, non-advice prompt design, disclaimer, tests. |
+| Non-advice guard over-blocks legitimate suggestions (named candidates) | Medium | Gate targets the **order signature** only (FR-014); a true-negative corpus of valid candidate phrasings must **pass** (SPEC-005). |
+| Named-asset suggestion read as a personalized recommendation (CVM) | Medium | Frame as non-personalized *research candidates* for the user's own analysis; disclaimer + autonomy affirmation (FR-021); no quantity/price/timing; verify framing against current CVM guidance if served beyond the author. |
 | Free LLM rate limits / latency too low for usable insights       | Medium | Cache insights per portfolio state; throttle; pick model per task; local Ollama fallback; degrade gracefully (FR-013, Cost NFR). |
 | Hallucinated or non-explainable insights                         | High   | Explainability gate (FR-013); ground insights in computed portfolio facts, not free generation.   |
 | Free tier discontinued / host's free plan changes                | Medium | Provider behind a port (FR-018) / config; keep ≥1 alternative free option per layer; local Ollama always available. |
@@ -670,8 +738,9 @@ The product is considered successful when:
 - [ ] Market data is automatically and reliably updated.
 - [ ] AI generates **explainable** insights (no black-box output).
 - [ ] AI can identify portfolio imbalances (concentration, sector, allocation).
-- [ ] Rebalancing assistant provides contextual guidance with **no** specific buy
-      recommendation.
+- [ ] Rebalancing assistant provides contextual guidance — areas and named candidate
+      assets with reasoning, risks, and assumptions — with **no** transaction order
+      (quantity, price/entry-exit target, or imperative buy/sell).
 - [ ] Portfolio Health Score (0–100) is produced with a detailed explanation.
 - [ ] Passive income is projected across pessimistic/base/optimistic scenarios.
 - [ ] Net worth is projected over time from a configurable monthly contribution.
