@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"strconv"
@@ -135,6 +136,38 @@ func (c Config) RedactedDatabaseURL() string {
 	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
 }
 
+// LogValue implements slog.LogValuer so that logging a Config — even by accident, e.g.
+// logger.Info("config", "cfg", cfg) — never leaks a secret: the DSN is redacted and the
+// Groq API key and OTLP headers are masked. Defense-in-depth (SPEC-005 security
+// hardening); the loader already avoids logging secrets directly.
+func (c Config) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("app_env", c.AppEnv),
+		slog.Int("port", c.Port),
+		slog.String("log_level", c.LogLevel),
+		slog.String("log_format", c.LogFormat),
+		slog.String("database_url", c.RedactedDatabaseURL()),
+		slog.String("otel_exporter_kind", c.OTELExporterKind),
+		slog.String("otel_exporter_endpoint", c.OTELExporterEndpoint),
+		slog.String("otel_exporter_headers", maskSecret(c.OTELExporterHeaders)),
+		slog.String("insighter_provider", c.InsighterProvider),
+		slog.String("insighter_ollama_base_url", c.InsighterOllamaBaseURL),
+		slog.String("insighter_ollama_model", c.InsighterOllamaModel),
+		slog.String("insighter_groq_base_url", c.InsighterGroqBaseURL),
+		slog.String("insighter_groq_api_key", maskSecret(c.InsighterGroqAPIKey)),
+		slog.String("insighter_groq_model", c.InsighterGroqModel),
+	)
+}
+
+// maskSecret renders a secret for logging — distinguishing unset from set without ever
+// revealing the value.
+func maskSecret(s string) string {
+	if s == "" {
+		return ""
+	}
+	return "[REDACTED]"
+}
+
 // Load resolves configuration from the environment, applying defaults and
 // validation. A local .env file (if present) seeds variables that are not already
 // set in the real environment — real environment variables always win.
@@ -231,6 +264,26 @@ func Load() (Config, error) {
 	cfg.InsighterGroqModel = getString("INSIGHTER_GROQ_MODEL", defaultInsighterGroqModel)
 	if cfg.InsighterProvider == "groq" && cfg.InsighterGroqAPIKey == "" {
 		errs = append(errs, "INSIGHTER_GROQ_API_KEY is required when INSIGHTER_PROVIDER=groq")
+	}
+	// Insighter base URLs must be valid http(s) (a typo'd or non-http endpoint silently
+	// fails at call time). A hosted (Groq) cleartext endpoint would send portfolio facts
+	// over the wire unencrypted, so the active provider is warned about that (SPEC-005 §10).
+	for _, u := range []struct {
+		key, val string
+		groq     bool
+	}{
+		{"INSIGHTER_OLLAMA_BASE_URL", cfg.InsighterOllamaBaseURL, false},
+		{"INSIGHTER_GROQ_BASE_URL", cfg.InsighterGroqBaseURL, true},
+	} {
+		parsed, err := url.Parse(u.val)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			errs = append(errs, fmt.Sprintf("%s must be a valid http(s) URL, got %q", u.key, u.val))
+			continue
+		}
+		if u.groq && cfg.InsighterProvider == "groq" && parsed.Scheme != "https" {
+			cfg.Warnings = append(cfg.Warnings,
+				fmt.Sprintf("%s is not https — portfolio facts would be sent in cleartext", u.key))
+		}
 	}
 	// Cache size — fatal if non-numeric or < 1.
 	if n, err := getInt("INSIGHTER_CACHE_SIZE", defaultInsighterCacheSize); err != nil {
