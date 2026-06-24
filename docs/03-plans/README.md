@@ -26,6 +26,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-002 | SPEC-002 | [Persistence Baseline & Migrations](PLAN-002-persistence-baseline-and-migrations.md) | ✅ Done |
 | PLAN-003 | SPEC-003 | [Authentication & Per-User Isolation](PLAN-003-authentication-and-per-user-isolation.md) | ✅ Done |
 | PLAN-004 | SPEC-004 | [Observability Baseline (OpenTelemetry)](PLAN-004-observability-baseline.md) | ✅ Done |
+| PLAN-005 | SPEC-005 | [`Insighter` Port & Free/Local LLM Adapter](PLAN-005-insighter-port-and-llm-adapter.md) | 📝 Draft |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
 
