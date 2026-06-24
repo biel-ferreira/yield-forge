@@ -8,7 +8,7 @@
 | Related Feature | Foundational — the AI seam + binding-guard gates             |
 | Related Spec    | [SPEC-005](../02-specs/SPEC-005-insighter-port-and-llm-adapter.md) |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                        |
+| Status          | Done                                                         |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-23                                                   |
 

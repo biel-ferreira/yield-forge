@@ -9,8 +9,8 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — FR-018, FR-013, FR-014, §6 Principles, §12 LLM strategy |
 | Related ADRs | [ADR-0003](../04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md) (free/local LLM), [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md) |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
-| Plan         | PLAN-005 (authored next via /plan-new 005)             |
+| Status       | Done                                                   |
+| Plan         | [PLAN-005](../03-plans/PLAN-005-insighter-port-and-llm-adapter.md) |
 
 ---
 
