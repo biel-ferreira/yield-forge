@@ -1,7 +1,9 @@
 package insight
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -47,6 +49,33 @@ func BuildPrompt(req InsightRequest) (system, user string, err error) {
 	}
 	user = fmt.Sprintf("Tarefa: %s\n\nFatos da carteira (JSON):\n%s", req.Task, factsJSON)
 	return systemPrompt, user, nil
+}
+
+// GenerateWithReask runs an adapter's single-call closure, re-asking once on a
+// malformed reply, then degrading to ErrInsightsUnavailable (cause preserved). It
+// centralises the re-ask + graceful-degradation policy (SPEC-005 FR-506) so every
+// adapter behaves identically — call performs one provider round-trip + parse.
+//
+// A non-malformed failure (HTTP error, rate-limit) degrades immediately, with no
+// re-ask, so a rate-limited free tier is never retried into a charge (BR-504).
+func GenerateWithReask(ctx context.Context, req InsightRequest, call func(ctx context.Context, system, user string) (InsightResult, error)) (InsightResult, error) {
+	system, user, err := BuildPrompt(req)
+	if err != nil {
+		return InsightResult{}, err // ErrInsufficientFacts
+	}
+
+	result, genErr := call(ctx, system, user)
+	if genErr == nil {
+		return result, nil
+	}
+	if errors.Is(genErr, ErrMalformedResponse) {
+		result, retryErr := call(ctx, system, user+ReAskSuffix)
+		if retryErr == nil {
+			return result, nil
+		}
+		genErr = retryErr
+	}
+	return InsightResult{}, fmt.Errorf("%w: %v", ErrInsightsUnavailable, genErr)
 }
 
 // llmResponse is the JSON shape adapters request from the model.

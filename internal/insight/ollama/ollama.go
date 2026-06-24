@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -55,27 +54,10 @@ type chatResponse struct {
 	} `json:"message"`
 }
 
-// Generate prompts the local model and returns parsed insights. On a malformed reply it
-// re-asks once; any other failure (or a second malformed reply) degrades to
-// ErrInsightsUnavailable, preserving the cause for debugging (SPEC-005 FR-506).
+// Generate prompts the local model and returns parsed insights, with the shared re-ask
+// + graceful-degradation policy (SPEC-005 FR-506).
 func (a *Adapter) Generate(ctx context.Context, req insight.InsightRequest) (insight.InsightResult, error) {
-	system, user, err := insight.BuildPrompt(req)
-	if err != nil {
-		return insight.InsightResult{}, err // ErrInsufficientFacts
-	}
-
-	result, genErr := a.callOnce(ctx, system, user)
-	if genErr == nil {
-		return result, nil
-	}
-	if errors.Is(genErr, insight.ErrMalformedResponse) {
-		result, retryErr := a.callOnce(ctx, system, user+insight.ReAskSuffix)
-		if retryErr == nil {
-			return result, nil
-		}
-		genErr = retryErr
-	}
-	return insight.InsightResult{}, fmt.Errorf("%w: %v", insight.ErrInsightsUnavailable, genErr)
+	return insight.GenerateWithReask(ctx, req, a.callOnce)
 }
 
 func (a *Adapter) callOnce(ctx context.Context, system, user string) (insight.InsightResult, error) {
