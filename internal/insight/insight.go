@@ -13,6 +13,9 @@ var (
 	ErrAdviceDetected      = errors.New("output contains a transaction order")
 	ErrInsightsUnavailable = errors.New("insights temporarily unavailable")
 	ErrInsufficientFacts   = errors.New("insufficient facts to generate insights")
+	// ErrMalformedResponse marks an LLM reply that could not be parsed as the expected
+	// JSON; an adapter re-asks once before degrading to ErrInsightsUnavailable.
+	ErrMalformedResponse = errors.New("malformed LLM response")
 )
 
 // Facts is the deterministic, structured snapshot the LLM reasons over (BR-502 — facts
