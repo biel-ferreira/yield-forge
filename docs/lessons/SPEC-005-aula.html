@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 05 — SPEC-005: Port Insighter & Adaptador de LLM | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 05 · Spec de Fundação</span>
+    <h1>SPEC-005 — Port <code>Insighter</code> &amp; Adaptador de LLM</h1>
+    <p>A <strong>costura única por onde toda IA passa</strong>: um port que esconde o LLM atrás de uma interface, dois adaptadores (Ollama local, Groq hospedado), e os <strong>dois portões inegociáveis</strong> — explicabilidade e "copiloto, nunca conselheiro" — que se tornam <strong>impossíveis de burlar</strong>.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: por que um <em>port</em> de LLM, e o que o SPEC-005 entregou</a></li>
+    <li><a href="#problema">O problema: IA copiloto + custo zero + provedor trocável = esconder o LLM atrás de uma interface</a></li>
+    <li><a href="#guardas">Os dois portões binding: explicabilidade (FR-013) e não-aconselhamento (FR-014)</a></li>
+    <li><a href="#fatos">"Fatos são computados, não gerados" — o LLM raciocina <em>sobre</em> fatos determinísticos</a></li>
+    <li><a href="#cadeia">A cadeia de decorators: <code>observed(cached(gated(provider)))</code></a></li>
+    <li><a href="#decisoes">As 5 decisões (D1–D5) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#conceitos">Conceitos-chave de Go: port &amp; adapter, decorator, core puro, fake determinístico</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: por que um <em>port</em> de LLM, e o que mudou</h2>
+
+<p>As quatro aulas anteriores construíram a fundação <strong>não-IA</strong>: esqueleto (SPEC-001),
+banco (SPEC-002), identidade (SPEC-003) e observabilidade (SPEC-004). O SPEC-005 é a
+<strong>primeira pedra do lado de IA</strong> — mas, atenção, ele <strong>não</strong> entrega nenhuma feature de IA
+que o usuário veja. Ele entrega a <strong>infraestrutura</strong> por onde toda IA futura vai passar: o
+port <code>Insighter</code>, dois adaptadores de LLM, e os dois portões de segurança que tornam o produto
+honesto com suas promessas.</p>
+
+<p>A ideia central é <strong>uma costura só</strong>. Em vez de espalhar chamadas a um SDK de LLM por todo o
+código, todo acesso ao modelo passa por <strong>uma única interface</strong> — o <code>Insighter</code>. Isso é a
+arquitetura hexagonal aplicada ao mais volátil dos recursos externos: um LLM. O provedor vira
+detalhe de configuração; as regras de negócio vivem no centro.</p>
+
+<div class="diagram">ANTES (SPEC-004)                          DEPOIS (SPEC-005)
+  nenhum acesso a LLM                     1 port Insighter — a costura única de IA
+  "explicável / não-conselheiro"          gate decorator: portões INESCAPÁVEIS por construção
+    eram só texto no PRD                   (todo provider herda os dois guards)
+  provedor de IA = decisão futura          troca por config: INSIGHTER_PROVIDER=ollama|groq|fake
+  nada protege contra "compre HGLG11"      validador de ordem determinístico (PT-BR + EN), fail-closed
+  risco de custo silencioso                cache em memória + degradação graciosa (zero charge)</div>
+
+<p>Concretamente, o SPEC-005 entregou o pacote <code>internal/insight</code> com: o port
+<code>Insighter</code> e o port <code>Cache</code>; os tipos de domínio (<code>Insight</code>, <code>InsightRequest</code>,
+<code>InsightResult</code>) e os erros-sentinela; o <strong>gate decorator</strong> (os dois portões) com seu
+validador de ordens; o <strong>prompt</strong> compartilhado (system prompt estável); um <strong>fake</strong>
+determinístico; dois adaptadores (<code>ollama/</code> e <code>groq/</code>); e o subpacote <code>factory/</code> que
+compõe tudo — cache em memória (LRU+TTL) e observabilidade de IA. <strong>Nenhuma migration, nenhum
+endpoint HTTP novo</strong> — é pura fundação. Nada chama <code>Generate</code> ainda: o primeiro consumidor é o
+SPEC-104 (o motor de insights).</p>
+
+<div class="box why">
+  <span class="lbl">Por que construir a costura <em>antes</em> de qualquer feature de IA?</span>
+  Porque as duas restrições <strong>#1 e #2</strong> do PRD — "explicabilidade primeiro" e "copiloto, nunca
+  conselheiro" — só são confiáveis se forem <strong>impossíveis de esquecer</strong>. Se cada feature de IA
+  tivesse que se lembrar de validar a saída, uma hora alguém esqueceria. Implementando os portões
+  <strong>uma vez</strong>, num decorator que embrulha <em>qualquer</em> provider, toda feature futura (Insights,
+  Rebalanceamento, Health Score) os herda <strong>de graça e por construção</strong>. As promessas do PRD
+  viram código estrutural, não disciplina humana.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="problema">2. O problema: copiloto de IA + custo zero + provedor trocável</h2>
+
+<p>O YieldForge promete uma IA <strong>copiloto</strong> para o investidor pessoa física brasileiro. Isso cria
+três tensões que o SPEC-005 resolve de uma vez:</p>
+
+<table>
+  <tr><th>Tensão</th><th>Restrição binding (PRD)</th><th>Solução do SPEC-005</th></tr>
+  <tr>
+    <td>Precisamos de um LLM, mas <strong>sem gastar dinheiro</strong></td>
+    <td>Custo zero (ADR-0003): só free/local</td>
+    <td><strong>Ollama</strong> local (R$ 0, sem chave) é o default de dev; <strong>Groq</strong> (free tier generoso) é o caminho hospedado. Cache + degradação garantem <strong>nenhuma cobrança silenciosa</strong>.</td>
+  </tr>
+  <tr>
+    <td>Hoje é Ollama/Groq; amanhã pode ser Claude/OpenAI</td>
+    <td>LLM plugável (FR-018)</td>
+    <td>O LLM vive atrás de um <strong>port</strong> (<code>Insighter</code>). Trocar de provedor é uma linha no <code>.env</code> (<code>INSIGHTER_PROVIDER</code>), nunca uma mudança de código.</td>
+  </tr>
+  <tr>
+    <td>Os dados da carteira são <strong>PII financeira sensível</strong></td>
+    <td>Privacidade + custo zero</td>
+    <td>O default de dev é o <strong>Ollama local</strong>: os fatos da carteira <strong>nunca saem da máquina</strong>. E a telemetria nunca grava prompt/fatos (BR-505).</td>
+  </tr>
+</table>
+
+<p>A peça-chave é o <strong>port</strong>. Olhe como ele é minúsculo — uma interface de um método só, no
+<strong>core</strong> da feature, sem importar nenhum SDK de LLM nem tipo de HTTP:</p>
+
+<pre><code>// internal/insight/ports.go
+// Insighter is the single seam through which the application invokes an LLM
+// (SPEC-005 FR-501 / FR-018). Implemented by provider adapters (ollama/, groq/), the
+// deterministic fake, and the gate/cache/observability decorators — all behind this one
+// interface, so the provider is swappable by config and the guards are inescapable.
+type Insighter interface {
+    Generate(ctx context.Context, req InsightRequest) (InsightResult, error)
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Ollama (local) vs. Groq (hospedado) — e por que os dois</span>
+  <strong>Ollama</strong> roda um modelo <em>na sua máquina</em> (loopback, sem chave, R$ 0): perfeito para
+  desenvolver e — crucial — os fatos da carteira <strong>nunca trafegam pela rede</strong>. <strong>Groq</strong> é um
+  serviço hospedado com free tier generoso e, de propósito, uma API <strong>compatível com a da OpenAI</strong>.
+  Por que isso importa? Porque o adaptador do Groq, construído na forma OpenAI, deixa o
+  <strong>OpenAI (pago) a um passo de virar um drop-in futuro</strong> — mesmo formato de requisição. Um é o
+  caminho de dev (privacidade), o outro o caminho hospedado (deploy); ambos atrás do mesmo port.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="guardas">3. Os dois portões binding: explicabilidade &amp; não-aconselhamento</h2>
+
+<p>Esta é a alma do SPEC-005. As duas restrições inegociáveis do produto deixam de ser texto no PRD
+e viram um <strong>decorator</strong> que embrulha <em>qualquer</em> <code>Insighter</code>. Toda saída de IA passa por
+ele — não há caminho que escape (BR-501). E ele falha <strong>fechado</strong> (fail-closed): na dúvida sobre
+uma ordem, ele <strong>rejeita</strong>, porque deixar passar uma ordem é pior do que descartar um insight.</p>
+
+<h3>Portão 1 — Explicabilidade (FR-013)</h3>
+<p>Todo insight <strong>tem que carregar uma explicação</strong> ("por que isto foi levantado?"). Sem
+explicação, a saída é rejeitada antes de chegar no chamador — nunca passa em silêncio.</p>
+
+<h3>Portão 2 — Não-aconselhamento (FR-014)</h3>
+<p>A saída <strong>não pode conter uma ordem de transação</strong>: nenhum "compre/venda" imperativo de um
+ativo, nenhuma quantidade transacionada, nenhum preço-alvo ou ponto de entrada/saída, nenhuma
+promessa de retorno garantido. <strong>Mas</strong> — e este "mas" é o pulo do gato — nomear um setor ou ativo
+como <strong>candidato a pesquisar</strong> é <em>permitido</em>. A diferença é entre um <strong>fato/consideração</strong> e
+uma <strong>ordem</strong>.</p>
+
+<p>O gate é um decorator. Repare como ele é simples e por que isso é uma virtude:</p>
+
+<pre><code>// internal/insight/gate.go
+func (g gated) Generate(ctx context.Context, req InsightRequest) (InsightResult, error) {
+    result, err := g.next.Generate(ctx, req)
+    if err != nil {
+        return InsightResult{}, err
+    }
+    for _, in := range result.Insights {
+        if strings.TrimSpace(in.Explanation) == "" {
+            g.reject(ctx, "insight rejected: missing explanation", req.Task)
+            return InsightResult{}, fmt.Errorf("gate: %w", ErrMissingExplanation)
+        }
+        if containsOrder(insightText(in)) {
+            g.reject(ctx, "insight rejected: order signature", req.Task)
+            return InsightResult{}, fmt.Errorf("gate: %w", ErrAdviceDetected)
+        }
+    }
+    result.Disclaimer = Disclaimer  // sempre anexa o disclaimer de não-aconselhamento
+    return result, nil
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que detectar a "assinatura de ordem", e não "ação + ticker por perto"?</span>
+  Um detector ingênuo barraria qualquer frase com um verbo de ação perto de um ticker — e
+  comeria insights legítimos. O insight <em>"<code>HGLG11</code> é um FII de logística que vale analisar"</em> é
+  exatamente o tipo de inteligência que o produto deve entregar (PRD FR-019). A solução é mirar na
+  <strong>assinatura de uma ordem</strong>: um verbo imperativo de compra/venda <strong>perto</strong> de uma
+  quantidade/ticker/preço, um preço-alvo, ou uma promessa de retorno garantido. O validador é
+  <strong>bilíngue</strong> (PT-BR + EN) porque o LLM pode responder em qualquer língua:
+  <pre><code>// internal/insight/advice.go (trecho)
+var orderPatterns = []*regexp.Regexp{
+    // Imperativo de compra/venda perto de quantidade, ticker B3, ou cotas/ações.
+    regexp.MustCompile(`(?i)\b(compre|venda|vende|buy|sell)\b[^.!?\n]{0,30}?(\b\d+\b|\b[a-z]{4}\d{1,2}\b|ações|açao|cotas?|shares?)`),
+    // Compra/venda a um preço: "compre a R$ 160", "buy at $100".
+    regexp.MustCompile(`(?i)\b(compre|venda|vende|buy|sell)\b[^.!?\n]{0,20}?\b(a|por|at|@)\b\s*(r\$|us\$|\$)?\s*\d`),
+    // Preço-alvo / ponto de entrada-saída.
+    regexp.MustCompile(`(?i)(pre[çc]o[- ]?alvo|target\s+price|ponto\s+de\s+(entrada|sa[íi]da)|(entry|exit)\s+(point|price))`),
+    // ...promessas de retorno garantido (nas duas ordens de palavras).
+}</code></pre>
+  Detalhe sutil documentado no código: um "<code>100 cotas</code>" <strong>sozinho</strong> NÃO é ordem — lê-se igual a
+  um saldo ("você tem 100 cotas"). É o <strong>verbo de transação</strong> que distingue uma ordem de um fato.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Normalizar, não mutilar (BR-506)</span>
+  O gate é <strong>fail-closed na assinatura de ordem</strong> (rejeita) e na falta de explicação (rejeita).
+  Mas para a moldura — quando a única dúvida é se um candidato nomeado foi <em>frasiado</em> como
+  consideração ou como diretiva — a postura é <strong>normalizar</strong> para uma consideração (e garantir o
+  disclaimer), não deletar o insight. Um default conservador demais que apagasse toda menção a
+  ativos <strong>neutraria a inteligência legítima</strong> que o produto promete. O disclaimer, aliás, é uma
+  string PT-BR deliberada (o público é o investidor brasileiro): <em>"Estas são considerações
+  educacionais para a sua própria análise — não são recomendações de compra ou venda..."</em>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="fatos">4. "Fatos são computados, não gerados" (BR-502)</h2>
+
+<p>Esta é a terceira restrição binding e a que evita a alucinação financeira. <strong>O LLM nunca inventa
+números.</strong> Ele raciocina <em>sobre</em> fatos determinísticos passados na requisição — saldos,
+percentuais, yields — que foram <strong>computados</strong> a montante. Quem produz esses fatos é o
+<strong>Fact Builder</strong>, que pertence ao SPEC-104; o SPEC-005 trata os fatos de forma <strong>opaca</strong>:</p>
+
+<pre><code>// internal/insight/insight.go
+// Facts is the deterministic, structured snapshot the LLM reasons over (BR-502 — facts
+// are computed, not generated). Its concrete shape is owned by the Fact Builder
+// (SPEC-104); this port treats it opaquely: it is serialized into the prompt and hashed
+// into the cache key.
+type Facts map[string]any</code></pre>
+
+<p>O <strong>system prompt</strong> é o guarda-corpo estável: ele instrui o modelo a raciocinar <strong>só sobre os
+fatos dados</strong>, a nunca emitir ordens, e a responder em <strong>JSON estruturado</strong> com um campo
+<code>explanation</code> obrigatório. Há uma sutileza de engenharia de IA aqui que vale destacar:</p>
+
+<pre><code>// internal/insight/prompt.go (trecho do systemPrompt)
+const systemPrompt = `You are a portfolio-analysis assistant for a Brazilian retail investor.
+
+Hard rules (never violate):
+- Reason ONLY over the facts given in the user message. NEVER invent numbers, prices, or percentages...
+- Produce explainable observations framed as AREAS / CONSIDERATIONS for the user's own analysis.
+- NEVER issue a transaction order: no imperative buy/sell of an asset, no quantities, no price...
+- You MAY name a sector or asset as a candidate to research.
+- Write all user-facing text (title, detail, explanation) in Brazilian Portuguese (pt-BR).
+
+Respond with ONLY valid JSON in exactly this shape (no text outside the JSON):
+{"insights":[{"category":"...","title":"...","detail":"...","explanation":"..."}]}
+Every insight MUST include "explanation" (why it was raised).`</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que o prompt é em INGLÊS, mas a saída é em pt-BR?</span>
+  Por uma razão empírica de engenharia de IA: LLMs (sobretudo os modelos locais menores que o Ollama
+  roda) <strong>seguem instruções em inglês com mais confiabilidade</strong>. Então as <em>instruções</em> são em
+  inglês, mas o modelo é mandado escrever o <strong>texto que o usuário vê</strong> (título, detalhe,
+  explicação) em <strong>português</strong>. E note o que esse prompt <strong>não</strong> é: ele é <strong>mínimo e
+  task-agnóstico</strong> — só carrega o contrato de <em>segurança + formato</em>. A inteligência por tarefa
+  (o prompt rico montado a partir do perfil + carteira + mercado) é o Fact Builder + os prompts de
+  tarefa do <strong>SPEC-104</strong>. O system prompt é o <strong>guarda-corpo</strong>, não a inteligência.
+</div>
+
+<p>E o prompt é a <strong>primeira linha de defesa</strong>; o gate determinístico (seção 3) é o
+<strong>backstop</strong>. Se um modelo for ludibriado e mesmo assim emitir uma ordem, o gate ainda rejeita.
+É <strong>defesa em profundidade</strong>: prompt + validador determinístico, dois mecanismos independentes
+para a mesma garantia.</p>
+
+<!-- ============================================================ -->
+<h2 id="cadeia">5. A cadeia de decorators: <code>observed(cached(gated(provider)))</code></h2>
+
+<p>Aqui mora o aprendizado de arquitetura mais bonito da spec. Como toda saída é <code>Insighter</code> ⇒
+<code>InsightResult</code>, podemos <strong>empilhar comportamentos</strong> embrulhando um <code>Insighter</code> em outro
+<code>Insighter</code> — o <strong>padrão Decorator</strong>. O <code>factory.New</code> monta a cebola:</p>
+
+<pre><code>// internal/insight/factory/factory.go
+func New(cfg config.Config, logger *slog.Logger, clk clock.Clock) insight.Insighter {
+    provider, model := newProvider(cfg)              // ollama | groq | fake (por config)
+
+    chain := insight.Gated(provider, logger)         // 1. PORTÕES (FR-013/FR-014)
+    chain = cached{next: chain, cache: newMemCache(  // 2. CACHE (guarda resultados JÁ gateados)
+        cfg.InsighterCacheSize, cfg.InsighterCacheTTL, clk)}
+    return newObserved(chain, cfg.InsighterProvider, model) // 3. OBSERVABILIDADE (span + métrica)
+}</code></pre>
+
+<div class="diagram">UMA chamada a Generate desce a cebola e volta:
+
+  observed   ┌─ abre span "insight.generate" (provider, model, task, cost=0)
+  (mais       │  ┌─ cache_hit? devolve o resultado JÁ gateado, ZERO chamada de LLM
+   externo)   │  │  cached
+              │  │      ┌─ valida explicação + ordem, anexa disclaimer (FAIL-CLOSED)
+              │  │      │  gated
+              │  │      │      ┌─ monta prompt dos FATOS, chama o LLM, parseia JSON
+              │  │      │      │  provider (ollama / groq / fake)
+              │  │      │      └─ re-ask 1x se malformado, senão DEGRADA
+              │  │      └─ rejeita ordem/sem-explicação OU deixa passar + disclaimer
+              │  └─ guarda o resultado gateado no cache (NUNCA guarda erro)
+              └─ classifica o outcome, conta a métrica, fecha o span</div>
+
+<p><strong>A ordem da cebola é deliberada</strong> e cada camada tem uma razão de estar onde está:</p>
+
+<table>
+  <tr><th>Camada</th><th>Por que nesta posição</th></tr>
+  <tr>
+    <td><strong><code>gated</code></strong> (mais interno, junto do provider)</td>
+    <td>Tem que rodar <strong>logo após</strong> a saída crua do LLM — é o que torna o resultado seguro. Tudo acima dela só lida com resultados <strong>já gateados</strong>.</td>
+  </tr>
+  <tr>
+    <td><strong><code>cached</code></strong> (meio)</td>
+    <td>Embrulha o <em>gated</em>, então o que ele guarda já é explicado + sem-ordem. Um <strong>cache hit é seguro por construção</strong>. E ele <strong>nunca guarda erros</strong> (degradações, rejeições) — só sucessos.</td>
+  </tr>
+  <tr>
+    <td><strong><code>observed</code></strong> (mais externo)</td>
+    <td>Precisa <strong>cronometrar tudo</strong>, inclusive o cache hit e o resultado do gate. Por isso abre o span por fora; o <code>cached</code> grava o atributo <code>cache_hit</code> <strong>no mesmo span</strong> que o <code>observed</code> criou.</td>
+  </tr>
+</table>
+
+<h4>O cache: LRU + TTL, escopado por usuário, via o <code>Clock</code></h4>
+<p>O cache é <strong>em memória</strong> (LRU com TTL), atrás do port <code>Cache</code> trocável. A chave é um
+<code>sha256</code> de <em>usuário + tarefa + fatos</em> — o usuário entra na chave para que <strong>o cache de um
+usuário nunca sirva outro</strong> (SPEC-003 BR-304). E o TTL é avaliado contra o <code>Clock</code> injetado
+(não <code>time.Now()</code>), para que a expiração seja <strong>determinística nos testes</strong>:</p>
+
+<pre><code>// internal/insight/factory/cached.go
+func (c cached) Generate(ctx context.Context, req insight.InsightRequest) (insight.InsightResult, error) {
+    key := cacheKey(req)
+    if res, ok := c.cache.Get(ctx, key); ok {
+        trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("insight.cache_hit", true))
+        return res, nil                              // HIT: zero chamada de LLM, zero custo
+    }
+    trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("insight.cache_hit", false))
+    res, err := c.next.Generate(ctx, req)
+    if err != nil {
+        return insight.InsightResult{}, err          // NUNCA cacheia erro/degradação/rejeição
+    }
+    c.cache.Set(ctx, key, res)
+    return res, nil
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Degradação graciosa + um re-ask <em>limitado</em> (e por que não há retry que cobra)</span>
+  Se o LLM devolve um JSON malformado, o adaptador <strong>re-pergunta exatamente uma vez</strong> (com um
+  sufixo reforçando "só JSON"); se ainda falhar, <strong>degrada</strong> para <code>ErrInsightsUnavailable</code>. Mas
+  uma falha que <strong>não</strong> é malformação — um erro HTTP, um <code>429</code> de rate-limit — degrada
+  <strong>imediatamente, sem re-ask</strong>. Por quê? Porque re-tentar um free tier estourado é justamente o
+  que <strong>incorreria em cobrança</strong> (BR-504). A política mora num lugar só, compartilhada por todos
+  os adaptadores:
+  <pre><code>// internal/insight/prompt.go — GenerateWithReask
+result, genErr := call(ctx, system, user)
+if genErr == nil { return result, nil }
+if errors.Is(genErr, ErrMalformedResponse) {          // SÓ malformação ganha o re-ask
+    result, retryErr := call(ctx, system, user+ReAskSuffix)
+    if retryErr == nil { return result, nil }
+    genErr = retryErr
+}
+return InsightResult{}, fmt.Errorf("%w: %v", ErrInsightsUnavailable, genErr)  // degrada</code></pre>
+</div>
+
+<h4>Observabilidade de IA: <strong>só metadados</strong>, nunca conteúdo (BR-505)</h4>
+<p>O decorator <code>observed</code> usa o <strong>seam do SPEC-004</strong> (<code>observability.Tracer/Meter</code>) para
+abrir um span por <code>Generate</code> e contar gerações por desfecho. Ele grava <strong>provider, model, task,
+outcome, custo</strong> — e <strong>jamais</strong> prompt, fatos ou texto gerado. Dados de carteira são PII
+financeira; não podem vazar para um backend de observabilidade.</p>
+
+<pre><code>// internal/insight/factory/observed.go
+span.SetAttributes(
+    attribute.String("insight.provider", o.provider),
+    attribute.String("insight.model", o.model),
+    attribute.String("insight.task", string(req.Task)),
+    attribute.Int64("insight.cost_centavos", 0),  // free providers; custo por modelo é §15
+)
+// ... depois da chamada:
+outcome := classifyOutcome(err)   // success | insufficient_facts | rejected_advice | unavailable | ...
+span.SetAttributes(attribute.String("insight.outcome", outcome))</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que o custo é <code>int64 cost_centavos = 0</code> agora, se ainda não há custo?</span>
+  Duas decisões deliberadas. Primeiro, o custo de tokens <strong>é dinheiro</strong> — então segue a convenção
+  da casa: <code>int64</code> em unidades menores (centavos), <strong>nunca <code>float64</code></strong> (CLAUDE.md). Fixar a
+  <em>forma</em> da métrica agora evita refatorar quando um provedor pago chegar. Segundo, a contagem de
+  <strong>tokens foi deliberadamente adiada</strong>: ambos os provedores do MVP são gratuitos, logo o custo é
+  literalmente 0. Não vale instrumentar tokens hoje; vale <strong>reservar o atributo</strong> com o tipo
+  certo. É a postura "faça o mínimo correto agora, deixe o seam pronto" (Open Question §15).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">6. As 5 decisões (D1–D5) e por quê</h2>
+
+<p>Toda spec tem bifurcações. Aqui foram cinco, confirmadas antes do PLAN e agora <em>binding</em>. O
+trade-off de cada uma é o aprendizado.</p>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Quais adaptadores?</td>
+    <td><strong>Ollama (local/dev) + Groq (hospedado) + fake</strong></td>
+    <td>Ollama é R$ 0, sem chave, e mantém os fatos na máquina (privacidade); Groq é o caminho de deploy com free tier e API <strong>OpenAI-compatível</strong> (OpenAI vira drop-in futuro). O fake cobre o CI. Gemini ficou em segundo; Claude/OpenAI são adaptadores pagos futuros.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Formato da resposta?</td>
+    <td><strong>JSON estruturado</strong> (cada insight tem <code>explanation</code>), parseado + validado</td>
+    <td>Torna o portão de explicabilidade <strong>determinístico</strong> (campo obrigatório). Um re-ask limitado em caso de JSON malformado. Texto livre + heurísticas foi recusado.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Como barrar aconselhamento?</td>
+    <td><strong>Validador determinístico da assinatura de ordem</strong> + system prompt não-conselheiro</td>
+    <td>Belt-and-suspenders: prompt (1ª linha) + validador (backstop). Fail-closed na ordem; candidatos nomeados como consideração <strong>passam</strong> (corpus true-negative). Só-prompt e "limpar no lugar" foram recusados.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Como cachear?</td>
+    <td><strong>Cache em memória</strong> (LRU+TTL) atrás do port <code>Cache</code></td>
+    <td>Para um MVP single-user em free tiers, o cache economiza <strong>latência/cota</strong> (não dinheiro — os provedores são grátis), e o in-memory captura quase tudo com <strong>zero infra</strong>. Um cache em DB foi adiado atrás do mesmo port — e, quando valer, deve <strong>reusar a tabela de histórico do SPEC-104</strong> (FR-022), não criar uma redundante.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Onde ficam os portões?</td>
+    <td><strong>Gate decorator</strong> embrulhando qualquer <code>Insighter</code></td>
+    <td><code>gated(insighter)</code> torna os guards <strong>estruturais, agnósticos de provedor, impossíveis de esquecer</strong> — e compõe com o cache. Portões "dentro de cada adaptador" foram recusados (fácil de esquecer num provedor novo).</td>
+  </tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">A reversão honesta na D4 (cache em DB → cache em memória)</span>
+  Houve uma decisão breve de fazer o cache em banco. Ela foi <strong>revertida</strong> quando ficou claro o
+  <strong>overlap entre "cache" e "histórico"</strong>: o SPEC-104 vai ter uma tabela de histórico de insights
+  (FR-022). Uma linha de histórico recente com o mesmo facts-hash dentro do TTL <strong>já é</strong> um cache
+  hit. Criar uma tabela <code>insight_cache</code> separada duplicaria isso. Então: in-memory agora (zero
+  migration), e o cache persistente fica <strong>adiado atrás do port</strong>, para reusar a tabela do SPEC-104
+  quando valer a pena. É a disciplina de "não construa infra antes de a dor existir".
+</div>
+
+<!-- ============================================================ -->
+<h2 id="fases">7. As 7 fases, uma a uma</h2>
+
+<p>Como nas specs anteriores, bottom-up — cada fase compilando e revisável sozinha. A novidade de
+ordenação: os <strong>portões foram puxados para a Fase 2</strong>, antes de qualquer adaptador real, porque
+são as restrições binding e tudo o mais compõe em torno deles.</p>
+
+<h3>Fase 1 — Domínio, ports &amp; config</h3>
+<p>Os tipos (<code>Insight</code>, <code>InsightRequest</code>, <code>InsightResult</code>), os sentinelas
+(<code>ErrMissingExplanation</code>, <code>ErrAdviceDetected</code>, <code>ErrInsightsUnavailable</code>,
+<code>ErrInsufficientFacts</code>), as interfaces <code>Insighter</code>/<code>Cache</code>, e os campos
+<code>INSIGHTER_*</code> na <code>Config</code> com validação (provider inválido = fatal; chave Groq exigida
+<em>iff</em> <code>provider=groq</code>).</p>
+<pre><code>// internal/platform/config/config.go (trechos)
+InsighterProvider      string        // ollama | groq | fake   (default ollama)
+InsighterOllamaBaseURL string        // http://localhost:11434
+InsighterGroqAPIKey    string        // segredo — exigido iff provider=groq
+InsighterTimeout       time.Duration // timeout por geração (default 30s)
+InsighterCacheTTL      time.Duration // TTL do cache (default 30m)
+InsighterCacheSize     int           // máx. de entradas (LRU, default 256)</code></pre>
+
+<h3>Fase 2 — Os portões (as restrições binding)</h3>
+<p>O <code>advice.go</code> (validador da assinatura de ordem) e o <code>gate.go</code> (o decorator). É a
+<strong>peça central</strong> da spec, e a revisada mais duramente — testada contra um <strong>corpus PT-BR + EN</strong>
+com <strong>true-negatives</strong> explícitos (candidatos nomeados que <em>devem passar</em>) ao lado de frases de
+ordem (que <em>devem rejeitar</em>).</p>
+
+<h3>Fase 3 — Adaptador Ollama (local/dev)</h3>
+<p>O <code>prompt.go</code> (mensagens neutras de provedor + system prompt) e o <code>ollama/</code>: um cliente
+<code>net/http</code> para <code>/api/chat</code> (modo JSON), limitado por <code>ctx</code>/timeout, com a política
+compartilhada de re-ask + degradação. <strong>Todo o detalhe HTTP fica confinado no subpacote.</strong></p>
+
+<h3>Fase 4 — Adaptador Groq (hospedado, OpenAI-compatível)</h3>
+<p>O <code>groq/</code>: cliente <code>net/http</code> para o <code>/chat/completions</code> OpenAI-compatível
+(Bearer key, <code>response_format: json_object</code>, modelo via config), reusando o <code>prompt.go</code>.
+Auth/rate-limit (429)/5xx mapeiam para <code>ErrInsightsUnavailable</code> — degrada, <strong>sem retry que
+cobra</strong>, e nunca loga a chave ou o prompt.</p>
+
+<h3>Fase 5 — Cache, degradação, observabilidade &amp; factory</h3>
+<p>O <code>memcache.go</code> (LRU+TTL via <code>Clock</code>), o <code>cached.go</code> (decorator que guarda
+resultados gateados), o <code>observed.go</code> (span + contador via o seam do SPEC-004, só metadados) e o
+<code>factory.go</code> que compõe <code>observed(cached(gated(provider)))</code> e seleciona o provider por config.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários, <strong>sem modelo nem rede</strong>: o corpus dos portões; os adaptadores com
+<code>httptest</code> (sucesso, malformado→re-ask, erro/429/401→degrada); o cache (miss chama uma vez, hit
+não chama, chave muda com os fatos, TTL expira = miss); o fake determinístico; e a asserção de que
+<strong>nenhum conteúdo</strong> vaza para os spans. Mais um teste de integração <strong>opcional</strong> contra um
+Ollama local (env-gated como o <code>TEST_DATABASE_URL</code>, pula limpo no CI).</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>CHANGELOG.md</code>, <code>README.md</code> (o port, as duas garantias, como rodar o Ollama, as
+<code>INSIGHTER_*</code>), <code>.env.example</code>, SPEC-005 e PLAN-005 marcados <strong>Done</strong>, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="conceitos">8. Conceitos-chave de Go &amp; arquitetura</h2>
+
+<h3>Port &amp; Adapter (hexagonal aplicado a um LLM)</h3>
+<p>O <strong>port</strong> é a interface no <strong>core</strong> da feature (<code>Insighter</code> em <code>internal/insight</code>).
+Os <strong>adapters</strong> são as implementações na <strong>borda</strong> (<code>ollama/</code>, <code>groq/</code>) que falam o
+protocolo do provedor. A regra de ouro: <strong>a dependência aponta para dentro</strong>. O core importa
+zero SDK de LLM e zero tipo de HTTP — só o adaptador conhece <code>net/http</code>. É por isso que trocar
+de provedor não toca o domínio.</p>
+
+<h3>O padrão Decorator</h3>
+<p>Como tudo é <code>Insighter</code> ⇒ <code>Insighter</code>, comportamentos viram <strong>camadas empilháveis</strong>:
+gate, cache, observabilidade. Cada decorator faz <strong>uma coisa</strong> e delega o resto ao
+<code>next</code>. O resultado é testável isoladamente (você embrulha um fake) e a composição é uma linha no
+factory. Compare com a alternativa — um método gigante com <code>if cache then... if gate then...</code> —
+e veja como o decorator deixa cada responsabilidade <strong>independente</strong>.</p>
+
+<h3>O core puro vs. o composition root (a <code>factory</code>)</h3>
+<p>Olhe o doc-comment do pacote <code>factory</code> — ele declara a fronteira explicitamente:</p>
+<pre><code>// internal/insight/factory/memcache.go
+// Package factory is the insight composition root (SPEC-005): it wires the provider
+// adapters, the guard gates, the cache, and the AI observability into a single
+// Insighter from config. It is the only part of the insight area that imports the
+// adapters and OpenTelemetry — the insight core and the adapters stay pure.</code></pre>
+<p>O <strong>core</strong> (<code>insight.go</code>, <code>gate.go</code>, <code>prompt.go</code>) não importa OTel nem os
+adaptadores. Os <strong>adaptadores</strong> não importam OTel. Só a <strong>factory</strong> — o composition root —
+amarra tudo. Essa é a fronteira que mantém o domínio testável e portável.</p>
+
+<h3>Stdlib-only (zero dependência nova)</h3>
+<p>Os dois adaptadores usam <code>net/http</code> + <code>encoding/json</code>; o cache usa
+<code>container/list</code> + <code>sync</code>; a facts-hash usa <code>crypto/sha256</code>. <strong>Nenhuma
+dependência nova.</strong> A API do Groq é JSON puro OpenAI-compatível — não precisa de SDK. É a postura
+"stdlib-first / justifique cada dependência" (ADR-0003) aplicada ao recurso mais propenso a arrastar
+SDKs pesados: um cliente de LLM.</p>
+
+<h3>O fake determinístico</h3>
+<p>O <code>Fake</code> é um <code>Insighter</code> sem modelo, sem rede, sem custo: devolve um insight fixo,
+explicável e sem-ordem (passa pelo gate), ou <code>ErrInsufficientFacts</code> quando não há fatos — para
+o caller exercitar o <strong>mesmo caminho de fatos-vazios</strong> dos adaptadores reais. É o que faz o CI
+rodar a feature de IA inteira <strong>offline e de graça</strong>, e é o modo "IA desligada" do app
+(<code>INSIGHTER_PROVIDER=fake</code>). Note: hand-written fake, não <code>gomock</code> — a convenção da casa.</p>
+
+<!-- ============================================================ -->
+<h2 id="harness">9. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>Este projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à
+IA trilhos que <strong>baixam a taxa de erro</strong>. O SPEC-005, sendo a própria spec de IA-segura, é onde o
+harness mais se prova.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "construa o Insighter" de uma vez. O PLAN-005 fatiou em 7 fases bottom-up, e a
+ordem foi <strong>deliberadamente reordenada</strong>: os portões vieram na <strong>Fase 2</strong>, antes de qualquer
+adaptador real. Construir e testar a restrição binding <em>primeiro</em> significa que todo o resto
+(adaptadores, cache) já nasce <strong>compondo em torno dela</strong> — o erro de "esquecer de gatear um
+provedor novo" fica estruturalmente impossível.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado conhece as regras da casa e cobrou as mais sensíveis aqui: a
+<strong>direção de dependência</strong> (BR-503 — o core do <code>insight</code> e os adaptadores <strong>não</strong> importam SDK
+de LLM nem OTel; só a <code>factory</code> os amarra), os <strong>portões como middleware central</strong> (BR-501 — não
+gateados-dentro-de-cada-adaptador), e o <strong>no-PII</strong> (BR-505 — "este atributo de span pode vazar um
+fato da carteira?"). Foi essa lente que garantiu que o <code>observed.go</code> gravasse só metadados, e que
+o <code>prompt.go</code> ficasse no core neutro de provedor.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que o core ficou puro</span>
+  É mecânica: o pacote <code>internal/insight</code> (core) e os subpacotes <code>ollama/</code>/<code>groq/</code>
+  <strong>não têm um único import de OpenTelemetry</strong>. Todo o OTel mora em <code>internal/insight/factory</code>.
+  Se a IA tivesse "ajudado" colocando um <code>span</code> dentro do adaptador do Groq, o revisor barraria.
+  A fronteira está documentada no próprio doc-comment do pacote <code>factory</code> — doc e código contam a
+  mesma história.
+</div>
+
+<h3><code>/security-review</code> nos guardrails de IA</h3>
+<p>O PLAN-005 sinalizou que esta spec é <strong>security-sensitive</strong> (são guardrails de IA) e sugeriu um
+<code>/security-review</code> antes de fechar. O foco: o validador de ordem não tem <strong>false-negatives</strong>
+(deixar uma ordem passar) nem <strong>false-positives</strong> demais (comer candidatos legítimos). A
+mitigação virou código: matching só na <strong>assinatura de ordem</strong> (não "ação + ticker por perto"),
+um corpus grande com <strong>true-negatives</strong>, e fail-closed só na assinatura.</p>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-005 referencia ADR-0002/0003 (que já abençoam o LLM plugável) mas <strong>não os edita</strong> — se a IA tentasse "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos — e, crucialmente, os testes têm que passar <strong>sem modelo e sem rede</strong>. Foi esse backstop que provou, na prática, que o fake determinístico cobre o CI e que a feature de IA inteira roda offline.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-005</th><th>Por que baixa erro</th></tr>
+  <tr><td>Dinheiro nunca é <code>float64</code></td><td><code>attribute.Int64("insight.cost_centavos", 0)</code></td><td>Custo de token é dinheiro; <code>int64</code> centavos fixa a forma sem float impreciso.</td></tr>
+  <tr><td>Erros são sentinelas, checados com <code>errors.Is</code></td><td><code>ErrAdviceDetected</code>, <code>ErrInsightsUnavailable</code>; <code>classifyOutcome</code></td><td>O caller distingue "degradou" de "rejeitou" sem comparar strings de erro.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>Insighter</code> de 1 método; <code>Cache</code> de 2</td><td>Fakes triviais; o port é o seam mínimo do multi-agente futuro.</td></tr>
+  <tr><td>Tempo vem do <code>Clock</code>, nunca <code>time.Now()</code></td><td>O TTL do <code>memCache</code> usa <code>c.clock.Now()</code></td><td>Expiração determinística nos testes — sem <code>sleep</code> frágil.</td></tr>
+  <tr><td>Doc-comments citam a BR/FR</td><td><code>// ... (SPEC-005 BR-502)</code> no <code>prompt.go</code></td><td>Traço direto do documento ao código — a SDD fecha o ciclo.</td></tr>
+  <tr><td>Identidade vem do contexto</td><td><code>cacheKey</code> inclui <code>req.UserID</code> (BR-304)</td><td>O cache de um usuário nunca serve outro — isolamento por construção.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">10. Conexão com AI Engineering</h2>
+
+<p>Diferente do SPEC-004 (que era fundação <em>para</em> a IA), o SPEC-005 <strong>é</strong> a fundação <em>da</em> IA — e
+exercita, em código real, vários conceitos centrais de engenharia de IA confiável. Vale nomear cada
+um, porque eles vão se repetir em toda feature de IA daqui pra frente.</p>
+
+<table>
+  <tr><th>Conceito de AI Engineering</th><th>Como o SPEC-005 o materializa</th></tr>
+  <tr>
+    <td><strong>Grounding / Fact Builder</strong></td>
+    <td>O LLM raciocina <strong>sobre fatos determinísticos</strong> serializados no prompt — nunca inventa números (BR-502). O contrato <code>Facts</code> torna "fatos de entrada" explícito; fatos vazios = <code>ErrInsufficientFacts</code>, não uma resposta fabricada. (O Fact Builder em si é o SPEC-104.)</td>
+  </tr>
+  <tr>
+    <td><strong>Saídas estruturadas (structured outputs)</strong></td>
+    <td>O prompt pede <strong>JSON estrito</strong> com <code>explanation</code> obrigatório (D2); o <code>ParseResult</code> tolera o modelo embrulhar em prosa/code-fences extraindo o <code>{...}</code> externo. JSON estruturado é o que torna o portão de explicabilidade <strong>determinístico</strong>.</td>
+  </tr>
+  <tr>
+    <td><strong>Verification middleware (os gates)</strong></td>
+    <td>FR-013 e FR-014 são <strong>middleware de verificação</strong>: a saída do LLM não é confiável até passar pelos portões. O gate é fail-closed — descartar uma ordem é mais seguro do que vazá-la. É a ideia de "nunca confie cegamente na saída do modelo", virada decorator.</td>
+  </tr>
+  <tr>
+    <td><strong>Defesa contra prompt-injection</strong></td>
+    <td>Defesa em profundidade: os fatos são <strong>estruturados/escapados</strong> (não texto livre do usuário), o system prompt é o guarda-corpo, e o <strong>gate determinístico é o backstop</strong> — um modelo ludibriado a "aconselhar" ainda é rejeitado. Dois mecanismos independentes para a mesma garantia.</td>
+  </tr>
+  <tr>
+    <td><strong>Caching de LLM</strong></td>
+    <td>Cache por <strong>hash dos fatos</strong> (+ tarefa + usuário): entradas idênticas → resposta cacheada, <strong>zero chamada de modelo</strong>. Economiza latência e cota de free-tier; o cache guarda só resultados <strong>já gateados</strong>, então um hit é seguro.</td>
+  </tr>
+  <tr>
+    <td><strong>Observabilidade de IA</strong></td>
+    <td>Span por <code>Generate</code> com provider/model/latência/cache-hit/outcome/custo — via o seam do SPEC-004 — e <strong>nunca</strong> prompt/fatos/PII (BR-505). Habilita as métricas do PRD: latência/custo de IA e taxa de sucesso de geração de insights.</td>
+  </tr>
+  <tr>
+    <td><strong>Evals (a semente)</strong></td>
+    <td>O corpus PT-BR + EN de testes do gate — com <strong>true-negatives</strong> explícitos (candidatos que devem passar) e ordens que devem rejeitar — é a semente de um conjunto de <strong>avaliação</strong> dos guardrails. Cada frase de borda que surgir vira um caso novo, e o gate é re-testado contra todo o corpus.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA confiável não é "o modelo é bom"; é "<strong>a saída do modelo é verificada antes de virar
+  produto</strong>". O SPEC-005 instala essa disciplina como arquitetura: fatos determinísticos de entrada,
+  saída estruturada, dois portões fail-closed como middleware, cache seguro e telemetria sem PII —
+  tudo atrás de <strong>uma costura só</strong>. Antes de qualquer insight existir, as garantias do PRD já são
+  código inescapável.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">11. O que vem a seguir</h2>
+
+<p>Com a costura de IA pronta e os portões inescapáveis, as features de IA agora têm onde se apoiar.
+O primeiro consumidor real do <code>Insighter</code> é o SPEC-104 — o motor de insights — que vai
+<strong>preencher</strong> a parte que o SPEC-005 deixou aberta: o Fact Builder e os prompts por tarefa.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001</td><td>Esqueleto Go (config, logs, HTTP, Docker)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-002</td><td>Persistência &amp; Migrations</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-003</td><td>Autenticação &amp; isolamento por usuário</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-004</td><td>Observabilidade (OpenTelemetry)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptador de LLM (+ guard gates)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-104</td><td>Motor de Insights: Fact Builder + prompts por tarefa + histórico — <em>usa</em> este port</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O <code>Insighter</code> como seam do multi-agente CIO + MCP</span>
+  Olhando longe: o port <code>Insighter</code> é a <strong>fronteira por onde o futuro sistema multi-agente
+  (o "CIO") e as ferramentas MCP vão se plugar</strong> (PRD G9/G10). Hoje há um provedor atrás do port;
+  amanhã pode haver um <strong>orquestrador de agentes</strong> raciocinando sobre os mesmos fatos, ainda
+  atrás da mesma interface, ainda passando pelos mesmos dois portões fail-closed. Porque os guards
+  são um decorator agnóstico de provedor, <strong>um agente do CIO herda explicabilidade e
+  não-aconselhamento de graça</strong>, como qualquer outro <code>Insighter</code>. O seam foi mantido intacto
+  desde o dia um — exatamente para isso.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-005 o YieldForge ganhou sua <strong>costura única de IA</strong>: o port <code>Insighter</code> com Ollama
+  (local/privado) e Groq (hospedado) trocáveis por config, fatos determinísticos de entrada, saída
+  JSON estruturada, e os dois portões binding — explicabilidade + não-aconselhamento — como um
+  decorator <strong>fail-closed e inescapável</strong>, com cache em memória e telemetria sem PII, na cadeia
+  <code>observed(cached(gated(provider)))</code>.
+</div>
+
+<footer>
+  YieldForge · Aula 05 (SPEC-005) · gerada como material de estudo. Veja também a
+  <a href="SPEC-001-aula.html">Aula 01</a>, a <a href="SPEC-002-aula.html">Aula 02</a>, a
+  <a href="SPEC-003-aula.html">Aula 03</a>, a <a href="SPEC-004-aula.html">Aula 04</a>, o
+  <a href="../02-specs/SPEC-005-insighter-port-and-llm-adapter.md">SPEC-005</a>
+  e o <a href="../03-plans/PLAN-005-insighter-port-and-llm-adapter.md">PLAN-005</a>.
+</footer>
+
+</div>
+</body>
+</html>
