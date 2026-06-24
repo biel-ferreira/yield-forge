@@ -37,7 +37,9 @@ func containsOrder(text string) bool {
 	return false
 }
 
-// insightText concatenates an insight's user-facing fields for validation.
+// insightText concatenates an insight's user-facing fields for validation. Category is
+// included too, so an order can't slip through a field that isn't an enum yet (the
+// allow-list lands with SPEC-104).
 func insightText(in Insight) string {
-	return strings.Join([]string{in.Title, in.Detail, in.Explanation}, "\n")
+	return strings.Join([]string{in.Category, in.Title, in.Detail, in.Explanation}, "\n")
 }

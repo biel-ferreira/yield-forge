@@ -286,6 +286,14 @@ func Load() (Config, error) {
 		}
 		*t.dst = d
 	}
+	// The Insighter timeout and cache TTL must be positive: a non-positive timeout drops
+	// the FR-506 bound, and a non-positive TTL silently disables the cache (SPEC-005).
+	if cfg.InsighterTimeout <= 0 {
+		errs = append(errs, fmt.Sprintf("INSIGHTER_TIMEOUT must be > 0, got %s", cfg.InsighterTimeout))
+	}
+	if cfg.InsighterCacheTTL <= 0 {
+		errs = append(errs, fmt.Sprintf("INSIGHTER_CACHE_TTL must be > 0, got %s", cfg.InsighterCacheTTL))
+	}
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid configuration: %s", strings.Join(errs, "; "))

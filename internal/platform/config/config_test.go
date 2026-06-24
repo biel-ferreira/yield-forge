@@ -338,6 +338,23 @@ func TestLoad_GroqRequiresAPIKey(t *testing.T) {
 	}
 }
 
+func TestLoad_InsighterDurationsMustBePositive(t *testing.T) {
+	for _, key := range []string{"INSIGHTER_TIMEOUT", "INSIGHTER_CACHE_TTL"} {
+		t.Run(key, func(t *testing.T) {
+			clearConfigEnv(t)
+			t.Setenv(key, "0s")
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("expected an error when %s=0s", key)
+			}
+			if !strings.Contains(err.Error(), key) {
+				t.Errorf("error %q should mention %s", err.Error(), key)
+			}
+		})
+	}
+}
+
 func TestLoad_DatabaseURLRequired(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("DATABASE_URL", "") // explicitly unset the required secret
