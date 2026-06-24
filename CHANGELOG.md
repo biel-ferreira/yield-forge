@@ -206,4 +206,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they share one database, and the migration round-trip drops every table, so package
   test binaries must not run concurrently.
 
+### Security
+
+- SPEC-005 security review hardening (the non-advice guard FR-014 is a binding control):
+  - Widened the order-signature detector to catch advisory/infinitive phrasings
+    ("recomendo aumentar a posição em HGLG11", "you should add 100 shares", "venda tudo",
+    "sell half"), fair-value price anchors, and orders split onto their own line — while
+    still letting asset-class/diversification considerations through (FR-019). Expanded
+    the must-detect / must-pass corpus accordingly.
+  - Capped LLM response bodies with `io.LimitReader` (4 MiB) in both adapters, so a
+    malfunctioning or hostile endpoint can't exhaust memory.
+  - Validate `INSIGHTER_*_BASE_URL` as http(s) at load; warn when the active Groq
+    endpoint is cleartext (portfolio facts would be sent unencrypted).
+  - `Config` now implements `slog.LogValuer`, masking the Groq API key and OTLP headers
+    and redacting the DSN, so an accidental whole-struct log can't leak a secret.
+
 [Unreleased]: https://github.com/biel-ferreira/yield-forge/commits/main

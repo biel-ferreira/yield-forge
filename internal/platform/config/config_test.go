@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -352,6 +354,44 @@ func TestLoad_InsighterDurationsMustBePositive(t *testing.T) {
 				t.Errorf("error %q should mention %s", err.Error(), key)
 			}
 		})
+	}
+}
+
+func TestLoad_InsighterBaseURLMustBeValid(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("INSIGHTER_OLLAMA_BASE_URL", "not-a-valid-url")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected an error for an invalid INSIGHTER_OLLAMA_BASE_URL")
+	}
+	if !strings.Contains(err.Error(), "INSIGHTER_OLLAMA_BASE_URL") {
+		t.Errorf("error %q should mention INSIGHTER_OLLAMA_BASE_URL", err.Error())
+	}
+}
+
+func TestConfig_LogValueMasksSecrets(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("INSIGHTER_PROVIDER", "groq")
+	t.Setenv("INSIGHTER_GROQ_API_KEY", "gsk_supersecret")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer topsecret")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	slog.New(slog.NewTextHandler(&buf, nil)).Info("config", "cfg", cfg)
+	out := buf.String()
+
+	for _, secret := range []string{"gsk_supersecret", "topsecret"} {
+		if strings.Contains(out, secret) {
+			t.Errorf("logged config leaked a secret %q: %s", secret, out)
+		}
+	}
+	if !strings.Contains(out, "[REDACTED]") {
+		t.Errorf("logged config should mask secrets with [REDACTED]: %s", out)
 	}
 }
 

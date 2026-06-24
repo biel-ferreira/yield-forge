@@ -10,12 +10,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/biel-ferreira/yield-forge/internal/insight"
 )
+
+// maxResponseBytes caps the response body read so a malfunctioning or hostile endpoint
+// can't exhaust memory; an insight reply is small JSON, well under this (SPEC-005 FR-506).
+const maxResponseBytes = 4 << 20 // 4 MiB
 
 // Adapter is an insight.Insighter backed by Groq's /chat/completions endpoint.
 type Adapter struct {
@@ -103,7 +108,7 @@ func (a *Adapter) callOnce(ctx context.Context, system, user string) (insight.In
 	}
 
 	var cr chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&cr); err != nil {
 		return insight.InsightResult{}, fmt.Errorf("groq decode: %w", err)
 	}
 	if len(cr.Choices) == 0 {
