@@ -46,6 +46,18 @@ type Config struct {
 	OTELExporterHeaders  string  // OTLP headers (secret), e.g. "authorization=Bearer xyz"
 	OTELTraceSampleRatio float64 // sampling probability 0.0..1.0 (NOT a financial rate)
 
+	// AI / Insighter (SPEC-005). The LLM provider is swappable by config; nothing
+	// invokes it until the AI feature engine (SPEC-104) wires it in.
+	InsighterProvider      string        // ollama | groq | fake
+	InsighterOllamaBaseURL string        // local Ollama base URL
+	InsighterOllamaModel   string        // Ollama model name
+	InsighterGroqBaseURL   string        // Groq OpenAI-compatible base URL
+	InsighterGroqAPIKey    string        // Groq API key (secret) — required iff provider=groq
+	InsighterGroqModel     string        // Groq model name
+	InsighterTimeout       time.Duration // per-generation request timeout
+	InsighterCacheTTL      time.Duration // result-cache entry TTL
+	InsighterCacheSize     int           // max cached entries (in-memory LRU)
+
 	// Warnings holds non-fatal configuration notes (e.g. a value that was invalid
 	// and replaced by a default). They should be logged once the logger exists.
 	Warnings []string
@@ -76,9 +88,21 @@ const (
 	// Observability defaults (SPEC-004).
 	defaultOTELServiceName      = "yield-forge"
 	defaultOTELTraceSampleRatio = 1.0
+
+	// AI / Insighter defaults (SPEC-005).
+	defaultInsighterProvider      = "ollama"
+	defaultInsighterOllamaBaseURL = "http://localhost:11434"
+	defaultInsighterOllamaModel   = "llama3.1"
+	defaultInsighterGroqBaseURL   = "https://api.groq.com/openai/v1"
+	defaultInsighterGroqModel     = "llama-3.1-8b-instant"
+	defaultInsighterTimeout       = 30 * time.Second
+	defaultInsighterCacheTTL      = 30 * time.Minute
+	defaultInsighterCacheSize     = 256
 )
 
 var validOTELExporterKinds = map[string]bool{"otlp": true, "stdout": true, "none": true}
+
+var validInsighterProviders = map[string]bool{"ollama": true, "groq": true, "fake": true}
 
 var validLogLevels = map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 
@@ -195,6 +219,28 @@ func Load() (Config, error) {
 		cfg.OTELTraceSampleRatio = ratio
 	}
 
+	// AI / Insighter (SPEC-005).
+	cfg.InsighterProvider = strings.ToLower(getString("INSIGHTER_PROVIDER", defaultInsighterProvider))
+	if !validInsighterProviders[cfg.InsighterProvider] {
+		errs = append(errs, fmt.Sprintf("INSIGHTER_PROVIDER must be ollama, groq, or fake, got %q", cfg.InsighterProvider))
+	}
+	cfg.InsighterOllamaBaseURL = getString("INSIGHTER_OLLAMA_BASE_URL", defaultInsighterOllamaBaseURL)
+	cfg.InsighterOllamaModel = getString("INSIGHTER_OLLAMA_MODEL", defaultInsighterOllamaModel)
+	cfg.InsighterGroqBaseURL = getString("INSIGHTER_GROQ_BASE_URL", defaultInsighterGroqBaseURL)
+	cfg.InsighterGroqAPIKey = getString("INSIGHTER_GROQ_API_KEY", "")
+	cfg.InsighterGroqModel = getString("INSIGHTER_GROQ_MODEL", defaultInsighterGroqModel)
+	if cfg.InsighterProvider == "groq" && cfg.InsighterGroqAPIKey == "" {
+		errs = append(errs, "INSIGHTER_GROQ_API_KEY is required when INSIGHTER_PROVIDER=groq")
+	}
+	// Cache size — fatal if non-numeric or < 1.
+	if n, err := getInt("INSIGHTER_CACHE_SIZE", defaultInsighterCacheSize); err != nil {
+		errs = append(errs, err.Error())
+	} else if n < 1 {
+		errs = append(errs, fmt.Sprintf("INSIGHTER_CACHE_SIZE must be >= 1, got %d", n))
+	} else {
+		cfg.InsighterCacheSize = n
+	}
+
 	// Pool sizes — fatal if non-numeric or negative.
 	for _, p := range []struct {
 		key string
@@ -230,6 +276,8 @@ func Load() (Config, error) {
 		{"DB_CONN_MAX_IDLE_TIME", defaultDBConnMaxIdleTime, &cfg.DBConnMaxIdleTime},
 		{"DB_CONNECT_TIMEOUT", defaultDBConnectTimeout, &cfg.DBConnectTimeout},
 		{"SESSION_TTL", defaultSessionTTL, &cfg.SessionTTL},
+		{"INSIGHTER_TIMEOUT", defaultInsighterTimeout, &cfg.InsighterTimeout},
+		{"INSIGHTER_CACHE_TTL", defaultInsighterCacheTTL, &cfg.InsighterCacheTTL},
 	} {
 		d, err := getDuration(t.key, t.def)
 		if err != nil {

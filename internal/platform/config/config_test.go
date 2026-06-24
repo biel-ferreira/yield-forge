@@ -27,6 +27,9 @@ func clearConfigEnv(t *testing.T) {
 		"SESSION_TTL", "AUTH_COOKIE_NAME",
 		"OTEL_SERVICE_NAME", "OTEL_EXPORTER_KIND", "OTEL_EXPORTER_OTLP_ENDPOINT",
 		"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_TRACE_SAMPLE_RATIO",
+		"INSIGHTER_PROVIDER", "INSIGHTER_OLLAMA_BASE_URL", "INSIGHTER_OLLAMA_MODEL",
+		"INSIGHTER_GROQ_BASE_URL", "INSIGHTER_GROQ_API_KEY", "INSIGHTER_GROQ_MODEL",
+		"INSIGHTER_TIMEOUT", "INSIGHTER_CACHE_TTL", "INSIGHTER_CACHE_SIZE",
 	} {
 		t.Setenv(k, "")
 	}
@@ -161,6 +164,10 @@ func TestLoad_FatalErrors(t *testing.T) {
 		{"invalid otel exporter kind", "OTEL_EXPORTER_KIND", "kafka", "OTEL_EXPORTER_KIND"},
 		{"non-numeric sample ratio", "OTEL_TRACE_SAMPLE_RATIO", "lots", "OTEL_TRACE_SAMPLE_RATIO"},
 		{"sample ratio out of range", "OTEL_TRACE_SAMPLE_RATIO", "1.5", "OTEL_TRACE_SAMPLE_RATIO"},
+		{"invalid insighter provider", "INSIGHTER_PROVIDER", "claude", "INSIGHTER_PROVIDER"},
+		{"non-numeric cache size", "INSIGHTER_CACHE_SIZE", "lots", "INSIGHTER_CACHE_SIZE"},
+		{"cache size below one", "INSIGHTER_CACHE_SIZE", "0", "INSIGHTER_CACHE_SIZE"},
+		{"bad insighter timeout", "INSIGHTER_TIMEOUT", "30", "INSIGHTER_TIMEOUT"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -291,6 +298,43 @@ func TestLoad_OTELEndpointDefaultsToOTLP(t *testing.T) {
 	}
 	if !cfg.TelemetryEnabled() {
 		t.Error("TelemetryEnabled() = false with an endpoint, want true")
+	}
+}
+
+func TestLoad_InsighterDefaults(t *testing.T) {
+	clearConfigEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.InsighterProvider != "ollama" {
+		t.Errorf("InsighterProvider = %q, want ollama", cfg.InsighterProvider)
+	}
+	if cfg.InsighterOllamaBaseURL != "http://localhost:11434" {
+		t.Errorf("InsighterOllamaBaseURL = %q, want http://localhost:11434", cfg.InsighterOllamaBaseURL)
+	}
+	if cfg.InsighterTimeout != 30*time.Second {
+		t.Errorf("InsighterTimeout = %v, want 30s", cfg.InsighterTimeout)
+	}
+	if cfg.InsighterCacheTTL != 30*time.Minute {
+		t.Errorf("InsighterCacheTTL = %v, want 30m", cfg.InsighterCacheTTL)
+	}
+	if cfg.InsighterCacheSize != 256 {
+		t.Errorf("InsighterCacheSize = %d, want 256", cfg.InsighterCacheSize)
+	}
+}
+
+func TestLoad_GroqRequiresAPIKey(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("INSIGHTER_PROVIDER", "groq") // no key set
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected an error when provider=groq without an API key")
+	}
+	if !strings.Contains(err.Error(), "INSIGHTER_GROQ_API_KEY") {
+		t.Errorf("error %q should mention INSIGHTER_GROQ_API_KEY", err.Error())
 	}
 }
 
