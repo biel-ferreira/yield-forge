@@ -32,6 +32,9 @@ func clearConfigEnv(t *testing.T) {
 		"INSIGHTER_PROVIDER", "INSIGHTER_OLLAMA_BASE_URL", "INSIGHTER_OLLAMA_MODEL",
 		"INSIGHTER_GROQ_BASE_URL", "INSIGHTER_GROQ_API_KEY", "INSIGHTER_GROQ_MODEL",
 		"INSIGHTER_TIMEOUT", "INSIGHTER_CACHE_TTL", "INSIGHTER_CACHE_SIZE",
+		"MARKETDATA_PROVIDER", "MARKETDATA_FUNDAMENTUS_BASE_URL", "MARKETDATA_YAHOO_BASE_URL",
+		"MARKETDATA_BCB_BASE_URL", "MARKETDATA_WATCHLIST", "MARKETDATA_REFRESH_INTERVAL",
+		"MARKETDATA_TIMEOUT", "MARKETDATA_SCHEDULER_ENABLED",
 	} {
 		t.Setenv(k, "")
 	}
@@ -337,6 +340,62 @@ func TestLoad_GroqRequiresAPIKey(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "INSIGHTER_GROQ_API_KEY") {
 		t.Errorf("error %q should mention INSIGHTER_GROQ_API_KEY", err.Error())
+	}
+}
+
+func TestLoad_MarketDataDefaults(t *testing.T) {
+	clearConfigEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MarketDataProvider != "fake" {
+		t.Errorf("MarketDataProvider = %q, want fake", cfg.MarketDataProvider)
+	}
+	if cfg.MarketDataFundamentusBaseURL != "https://www.fundamentus.com.br" {
+		t.Errorf("MarketDataFundamentusBaseURL = %q", cfg.MarketDataFundamentusBaseURL)
+	}
+	if cfg.MarketDataRefreshInterval != 24*time.Hour {
+		t.Errorf("MarketDataRefreshInterval = %v, want 24h", cfg.MarketDataRefreshInterval)
+	}
+	if cfg.MarketDataTimeout != 15*time.Second {
+		t.Errorf("MarketDataTimeout = %v, want 15s", cfg.MarketDataTimeout)
+	}
+	if !cfg.MarketDataSchedulerEnabled {
+		t.Errorf("MarketDataSchedulerEnabled = false, want true (default)")
+	}
+	if len(cfg.MarketDataWatchlist) != 0 {
+		t.Errorf("MarketDataWatchlist = %v, want empty", cfg.MarketDataWatchlist)
+	}
+}
+
+func TestLoad_MarketDataWatchlistParsed(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("MARKETDATA_WATCHLIST", " HGLG11 , KNRI11 ,, MXRF11 ")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"HGLG11", "KNRI11", "MXRF11"}
+	if len(cfg.MarketDataWatchlist) != len(want) {
+		t.Fatalf("watchlist = %v, want %v", cfg.MarketDataWatchlist, want)
+	}
+	for i, w := range want {
+		if cfg.MarketDataWatchlist[i] != w {
+			t.Errorf("watchlist[%d] = %q, want %q", i, cfg.MarketDataWatchlist[i], w)
+		}
+	}
+}
+
+func TestLoad_MarketDataInvalidProvider(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("MARKETDATA_PROVIDER", "brapi")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "MARKETDATA_PROVIDER") {
+		t.Fatalf("expected a MARKETDATA_PROVIDER error, got %v", err)
 	}
 }
 

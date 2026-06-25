@@ -59,6 +59,18 @@ type Config struct {
 	InsighterCacheTTL      time.Duration // result-cache entry TTL
 	InsighterCacheSize     int           // max cached entries (in-memory LRU)
 
+	// Market data (SPEC-006). FII quotes + macro indicators ingested by a background
+	// worker; the provider is swappable and the MVP sources (Fundamentus/Yahoo/BCB) need
+	// no API key. Market data is global — none of this is per-user.
+	MarketDataProvider           string        // fake | live
+	MarketDataFundamentusBaseURL string        // FII fundamentals (price/DY/P-VP/segment)
+	MarketDataYahooBaseURL       string        // FII last dividend (.SA)
+	MarketDataBCBBaseURL         string        // BCB-SGS macro series (SELIC/CDI/IPCA)
+	MarketDataWatchlist          []string      // FII tickers to refresh (MVP; holdings-backed later)
+	MarketDataRefreshInterval    time.Duration // scheduler cadence (freshness ≤ 24h target)
+	MarketDataTimeout            time.Duration // per provider request timeout
+	MarketDataSchedulerEnabled   bool          // run the in-process scheduler (off for multi-replica)
+
 	// Warnings holds non-fatal configuration notes (e.g. a value that was invalid
 	// and replaced by a default). They should be logged once the logger exists.
 	Warnings []string
@@ -99,11 +111,23 @@ const (
 	defaultInsighterTimeout       = 30 * time.Second
 	defaultInsighterCacheTTL      = 30 * time.Minute
 	defaultInsighterCacheSize     = 256
+
+	// Market data defaults (SPEC-006). Default provider is the deterministic Fake so the
+	// zero-config app and CI never hit the network.
+	defaultMarketDataProvider           = "fake"
+	defaultMarketDataFundamentusBaseURL = "https://www.fundamentus.com.br"
+	defaultMarketDataYahooBaseURL       = "https://query1.finance.yahoo.com"
+	defaultMarketDataBCBBaseURL         = "https://api.bcb.gov.br/dados/serie"
+	defaultMarketDataRefreshInterval    = 24 * time.Hour
+	defaultMarketDataTimeout            = 15 * time.Second
+	defaultMarketDataSchedulerEnabled   = true
 )
 
 var validOTELExporterKinds = map[string]bool{"otlp": true, "stdout": true, "none": true}
 
 var validInsighterProviders = map[string]bool{"ollama": true, "groq": true, "fake": true}
+
+var validMarketDataProviders = map[string]bool{"fake": true, "live": true}
 
 var validLogLevels = map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 
@@ -156,6 +180,9 @@ func (c Config) LogValue() slog.Value {
 		slog.String("insighter_groq_base_url", c.InsighterGroqBaseURL),
 		slog.String("insighter_groq_api_key", maskSecret(c.InsighterGroqAPIKey)),
 		slog.String("insighter_groq_model", c.InsighterGroqModel),
+		slog.String("marketdata_provider", c.MarketDataProvider),
+		slog.Bool("marketdata_scheduler_enabled", c.MarketDataSchedulerEnabled),
+		slog.Int("marketdata_watchlist_size", len(c.MarketDataWatchlist)),
 	)
 }
 
@@ -294,6 +321,32 @@ func Load() (Config, error) {
 		cfg.InsighterCacheSize = n
 	}
 
+	// Market data (SPEC-006).
+	cfg.MarketDataProvider = strings.ToLower(getString("MARKETDATA_PROVIDER", defaultMarketDataProvider))
+	if !validMarketDataProviders[cfg.MarketDataProvider] {
+		errs = append(errs, fmt.Sprintf("MARKETDATA_PROVIDER must be fake or live, got %q", cfg.MarketDataProvider))
+	}
+	cfg.MarketDataFundamentusBaseURL = getString("MARKETDATA_FUNDAMENTUS_BASE_URL", defaultMarketDataFundamentusBaseURL)
+	cfg.MarketDataYahooBaseURL = getString("MARKETDATA_YAHOO_BASE_URL", defaultMarketDataYahooBaseURL)
+	cfg.MarketDataBCBBaseURL = getString("MARKETDATA_BCB_BASE_URL", defaultMarketDataBCBBaseURL)
+	cfg.MarketDataWatchlist = splitAndTrim(getString("MARKETDATA_WATCHLIST", ""))
+	// Provider base URLs must be valid http(s) (a typo fails silently at call time). Ticker
+	// validation is the marketdata package's job, not config's (keeps platform free of feature imports).
+	for _, u := range []struct{ key, val string }{
+		{"MARKETDATA_FUNDAMENTUS_BASE_URL", cfg.MarketDataFundamentusBaseURL},
+		{"MARKETDATA_YAHOO_BASE_URL", cfg.MarketDataYahooBaseURL},
+		{"MARKETDATA_BCB_BASE_URL", cfg.MarketDataBCBBaseURL},
+	} {
+		if parsed, err := url.Parse(u.val); err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			errs = append(errs, fmt.Sprintf("%s must be a valid http(s) URL, got %q", u.key, u.val))
+		}
+	}
+	if b, err := getBool("MARKETDATA_SCHEDULER_ENABLED", defaultMarketDataSchedulerEnabled); err != nil {
+		errs = append(errs, err.Error())
+	} else {
+		cfg.MarketDataSchedulerEnabled = b
+	}
+
 	// Pool sizes — fatal if non-numeric or negative.
 	for _, p := range []struct {
 		key string
@@ -331,6 +384,8 @@ func Load() (Config, error) {
 		{"SESSION_TTL", defaultSessionTTL, &cfg.SessionTTL},
 		{"INSIGHTER_TIMEOUT", defaultInsighterTimeout, &cfg.InsighterTimeout},
 		{"INSIGHTER_CACHE_TTL", defaultInsighterCacheTTL, &cfg.InsighterCacheTTL},
+		{"MARKETDATA_REFRESH_INTERVAL", defaultMarketDataRefreshInterval, &cfg.MarketDataRefreshInterval},
+		{"MARKETDATA_TIMEOUT", defaultMarketDataTimeout, &cfg.MarketDataTimeout},
 	} {
 		d, err := getDuration(t.key, t.def)
 		if err != nil {
@@ -346,6 +401,14 @@ func Load() (Config, error) {
 	}
 	if cfg.InsighterCacheTTL <= 0 {
 		errs = append(errs, fmt.Sprintf("INSIGHTER_CACHE_TTL must be > 0, got %s", cfg.InsighterCacheTTL))
+	}
+	// The market-data interval and timeout must be positive (SPEC-006 FR-608): a non-positive
+	// timeout drops the request bound and a non-positive interval would busy-loop the scheduler.
+	if cfg.MarketDataRefreshInterval <= 0 {
+		errs = append(errs, fmt.Sprintf("MARKETDATA_REFRESH_INTERVAL must be > 0, got %s", cfg.MarketDataRefreshInterval))
+	}
+	if cfg.MarketDataTimeout <= 0 {
+		errs = append(errs, fmt.Sprintf("MARKETDATA_TIMEOUT must be > 0, got %s", cfg.MarketDataTimeout))
 	}
 
 	if len(errs) > 0 {
@@ -388,6 +451,36 @@ func getFloat(key string, def float64) (float64, error) {
 		return 0, fmt.Errorf("%s must be a number, got %q", key, v)
 	}
 	return f, nil
+}
+
+// getBool returns the boolean env value for key, or def when unset/empty. Accepts the
+// strconv.ParseBool forms (1, t, true, 0, f, false, …); anything else is a fatal error.
+func getBool(key string, def bool) (bool, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return def, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean (true/false), got %q", key, v)
+	}
+	return b, nil
+}
+
+// splitAndTrim splits a comma-separated env value into trimmed, non-empty items. An empty
+// or all-whitespace input yields nil.
+func splitAndTrim(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // getDuration returns the duration env value for key, or def when unset/empty. An
