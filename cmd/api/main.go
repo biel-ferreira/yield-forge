@@ -12,6 +12,7 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/auth"
 	authbcrypt "github.com/biel-ferreira/yield-forge/internal/auth/bcrypt"
 	authpostgres "github.com/biel-ferreira/yield-forge/internal/auth/postgres"
+	"github.com/biel-ferreira/yield-forge/internal/marketdata/ingest"
 	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 	"github.com/biel-ferreira/yield-forge/internal/platform/clock"
 	"github.com/biel-ferreira/yield-forge/internal/platform/config"
@@ -115,9 +116,41 @@ func run() error {
 		SessionTTL:   cfg.SessionTTL,
 	})
 
-	if err := httpserver.Run(ctx, cfg, router, logger); err != nil {
-		logger.Error("server error", slog.String("error", err.Error()))
+	// Market data ingestion (SPEC-006): build the worker and, when enabled, run the
+	// in-process scheduler alongside the server. It is stopped and drained explicitly
+	// below — before the deferred DB pool close — so an in-flight run never hits a closed
+	// pool. Multi-replica deployments set MARKETDATA_SCHEDULER_ENABLED=false and use
+	// cmd/ingest via cron instead, to avoid duplicate ingestion.
+	mdWorker, err := ingest.New(cfg, db, logger, clock.System{})
+	if err != nil {
+		logger.Error("market data ingestion setup failed", slog.String("error", err.Error()))
 		return err
+	}
+	schedulerCtx, stopScheduler := context.WithCancel(ctx)
+	schedulerDone := make(chan struct{})
+	if cfg.MarketDataSchedulerEnabled {
+		scheduler := ingest.NewScheduler(mdWorker, cfg.MarketDataRefreshInterval, logger)
+		go func() {
+			defer close(schedulerDone)
+			scheduler.Run(schedulerCtx)
+		}()
+		logger.Info("market data scheduler started",
+			slog.String("provider", cfg.MarketDataProvider),
+			slog.Duration("interval", cfg.MarketDataRefreshInterval))
+	} else {
+		close(schedulerDone)
+		logger.Info("market data scheduler disabled (use cmd/ingest)")
+	}
+
+	serveErr := httpserver.Run(ctx, cfg, router, logger)
+
+	// Stop the scheduler and wait for any in-flight run before the deferred DB close runs.
+	stopScheduler()
+	<-schedulerDone
+
+	if serveErr != nil {
+		logger.Error("server error", slog.String("error", serveErr.Error()))
+		return serveErr
 	}
 	return nil
 }

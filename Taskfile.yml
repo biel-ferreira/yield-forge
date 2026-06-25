@@ -23,6 +23,11 @@ tasks:
     cmds:
       - go run ./cmd/api
 
+  ingest:
+    desc: 'Run one market-data ingestion pass (needs DATABASE_URL; SPEC-006)'
+    cmds:
+      - go run ./cmd/ingest
+
   build:
     desc: Build the API binary into bin/
     cmds:
