@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula Conceitual — Arquitetura Hexagonal (Ports &amp; Adapters) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula Conceitual · Arquitetura</span>
+    <h1>Arquitetura Hexagonal — <em>Ports &amp; Adapters</em></h1>
+    <p>Você já domina <strong>handler → DTO → service → repository</strong>. Esta aula é a <strong>ponte</strong>: o hexagonal não é um mundo novo — é a <em>mesma</em> ideia com a <strong>direção das dependências invertida</strong> e as <strong>interfaces (ports) pertencendo ao núcleo</strong>. Vamos chegar nesse "aha" usando o código real do YieldForge.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#start">Ponto de partida: o que você já sabe (camadas) e onde trava</a></li>
+    <li><a href="#hexagono">A metáfora do hexágono: dentro vs. fora, e a regra de ouro</a></li>
+    <li><a href="#vocab">O vocabulário: domain, port, adapter, service — definições limpas</a></li>
+    <li><a href="#lados">Os dois lados: <em>driving</em> (esquerda) vs. <em>driven</em> (direita)</a></li>
+    <li><a href="#ponte">A PONTE: tabela de-para camadas → hexagonal (a virada)</a></li>
+    <li><a href="#yieldforge">Como o YieldForge faz isso — código real do <code>marketdata</code></a></li>
+    <li><a href="#porque">Por que vale a pena: swappability, testes, domínio puro, o futuro</a></li>
+    <li><a href="#armadilhas">Armadilhas comuns (e o erro de tradução que todo mundo comete)</a></li>
+    <li><a href="#harness">Harness Engineering: como as regras viram trilhos</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="start">1. Ponto de partida: o que você já sabe</h2>
+
+<p>Você já construiu dezenas de aplicações em <strong>camadas</strong>. O fluxo é familiar e bom:</p>
+
+<div class="diagram">ARQUITETURA EM CAMADAS (o que você já domina)
+
+   HTTP request
+       │
+       ▼
+  ┌──────────┐   recebe o request, lê o DTO,
+  │ Handler  │   chama o service, devolve a resposta
+  └────┬─────┘
+       │ depende de
+       ▼
+  ┌──────────┐   regra de negócio / caso de uso
+  │ Service  │   orquestra; chama o repositório
+  └────┬─────┘
+       │ depende de
+       ▼
+  ┌──────────┐   fala com o Postgres
+  │Repository│   (struct concreta, com *sql.DB dentro)
+  └────┬─────┘
+       │
+       ▼
+    Banco de dados
+
+  A SETA SEMPRE APONTA PARA BAIXO: cada camada
+  IMPORTA a camada de baixo. O Service IMPORTA o
+  Repository concreto. Tudo flui em direção ao banco.</div>
+
+<p>Isso funciona. Mas em algum momento você sente um incômodo: o <code>Service</code> — onde mora a
+<strong>regra de negócio</strong>, a parte mais valiosa e mais testável do sistema — <strong>importa o repositório
+concreto</strong>, que por sua vez importa <code>database/sql</code>, drivers, e detalhes do Postgres. Para testar
+a regra, você precisa de um banco (ou de um mock pesado). Para trocar o Postgres por outra coisa,
+você mexe no que o service importa. O <strong>centro</strong> da sua aplicação depende das <strong>bordas</strong>.</p>
+
+<div class="box why">
+  <span class="lbl">O incômodo em uma frase</span>
+  Na arquitetura em camadas, a <strong>dependência aponta para fora</strong>: o núcleo (regra de negócio)
+  conhece e importa os detalhes externos (SQL, HTTP, SDKs). A arquitetura hexagonal faz <strong>uma única
+  cirurgia</strong>: ela <em>inverte essa seta</em>. O núcleo passa a não conhecer ninguém de fora — são as
+  bordas que conhecem o núcleo. Guarde essa frase; é o aha desta aula inteira.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="hexagono">2. A metáfora do hexágono</h2>
+
+<p>"Hexagonal" é só um desenho — o número de lados não importa (são seis por tradição, para caber
+vários adaptadores em volta). O que importa é a divisão <strong>dentro vs. fora</strong>:</p>
+
+<div class="diagram">        MUNDO EXTERNO (bordas, adapters)
+   ┌─────────────────────────────────────────────┐
+   │                                             │
+   │   HTTP    ┌───────────────────────┐  Postgres│
+   │  handler ─┤                       ├─ adapter  │
+   │  (driving)│      NÚCLEO PURO       │ (driven) │
+   │           │   domínio + service   │          │
+   │   CLI    ─┤   + PORTS (interfaces)├─ Yahoo    │
+   │  worker   │                       │  adapter  │
+   │  (driving)└───────────────────────┘ (driven) │
+   │              ▲ a dependência              ▲   │
+   │              │ APONTA PARA DENTRO         │   │
+   │       quem CHAMA a app          a app CHAMA    │
+   │       (lado esquerdo)           (lado direito) │
+   └─────────────────────────────────────────────┘
+
+   REGRA DE OURO: tudo de fora depende do núcleo;
+   o núcleo NÃO depende de nada de fora.
+   (no YieldForge: o domínio não importa SQL, HTTP nem SDK)</div>
+
+<p>Dentro do hexágono vive a <strong>lógica que é a razão de o software existir</strong>: as regras de negócio,
+os tipos de domínio, os casos de uso. Fora vivem os <strong>detalhes substituíveis</strong>: qual banco, qual
+protocolo HTTP, qual provedor de dados de mercado, qual LLM. A fronteira entre os dois é desenhada
+por <strong>interfaces que pertencem ao núcleo</strong> — os <em>ports</em>.</p>
+
+<div class="box tip">
+  <span class="lbl">A regra de ouro, no CLAUDE.md do projeto</span>
+  Não é uma escolha de estilo — é uma regra <em>binding</em> de arquitetura do YieldForge:
+  <em>"Dependency direction: domain core imports NO SQL, HTTP, or framework types. Ports (interfaces)
+  live with the feature; adapters implement them at the edge."</em> A seta aponta para dentro, sempre.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="vocab">3. O vocabulário: quatro palavras, definições limpas</h2>
+
+<p>Antes da ponte, vamos fixar quatro termos separadamente. Os exemplos vêm do pacote
+<code>internal/marketdata</code> (dados de mercado: cotações de FIIs + indicadores macro), porque é o
+código mais recente do projeto.</p>
+
+<h3>Domain — o núcleo puro</h3>
+<p>São os <strong>tipos e regras que representam o problema</strong>, sem nenhuma tecnologia. Um value object
+como <code>Ticker</code> que se valida no construtor (<em>parse, don't validate</em>): um <code>Ticker</code> inválido
+<strong>não pode existir</strong>. Repare: zero import de SQL, HTTP ou rede.</p>
+<pre><code>// internal/marketdata/ticker.go
+// Ticker is a validated B3 ticker (parse-don't-validate: an invalid Ticker cannot exist).
+type Ticker struct{ value string }
+
+func ParseTicker(s string) (Ticker, error) {
+    v := strings.ToUpper(strings.TrimSpace(s))
+    if !tickerPattern.MatchString(v) {
+        return Ticker{}, fmt.Errorf("parse ticker %q: %w", s, ErrInvalidTicker)
+    }
+    return Ticker{value: v}, nil
+}</code></pre>
+
+<h3>Port — a interface (o "contrato")</h3>
+<p>Um <strong>port é uma interface Go</strong> que o núcleo <strong>define</strong> e da qual ele <strong>depende</strong> — mas que
+ele <strong>não implementa</strong>. É o "buraco" no hexágono por onde o mundo externo se conecta. No
+YieldForge, o port de leitura de dados de mercado é:</p>
+<pre><code>// internal/marketdata/ports.go
+// MarketDataProvider reads current data from an external source — the FR-018 seam that keeps
+// the provider swappable by config (BR-601).
+type MarketDataProvider interface {
+    FetchFIIQuotes(ctx context.Context, tickers []Ticker) (map[Ticker]FIIQuote, error)
+    FetchMacroIndicator(ctx context.Context, ind Indicator) (MacroIndicator, error)
+}</code></pre>
+<p>Note que <code>MarketDataProvider</code> mora <strong>no mesmo pacote do domínio</strong> (<code>package marketdata</code>),
+fala só a <strong>linguagem do domínio</strong> (<code>Ticker</code>, <code>FIIQuote</code>) e não menciona Fundamentus, Yahoo
+ou HTTP. É um contrato escrito pelo cliente, não pelo fornecedor.</p>
+
+<h3>Adapter — a implementação na borda</h3>
+<p>Um <strong>adapter é uma struct concreta</strong> que <strong>satisfaz</strong> um port e que <em>conhece</em> uma
+tecnologia específica. Aqui é onde o <code>net/http</code>, o parsing de HTML e a URL do Fundamentus vivem
+— <strong>confinados</strong>. O adapter importa o domínio; o domínio jamais importa o adapter.</p>
+<pre><code>// internal/marketdata/fundamentus/fundamentus.go
+// HTTP/parsing live here only; the core stays pure (BR-601).
+type Adapter struct {
+    baseURL string
+    client  *http.Client    // ← o detalhe HTTP fica AQUI, na borda
+    clock   clock.Clock
+}
+
+func (a *Adapter) FetchFIIQuotes(ctx context.Context, tickers []marketdata.Ticker)
+    (map[marketdata.Ticker]marketdata.FIIQuote, error) { /* ...scrape, parse... */ }</code></pre>
+
+<h3>Service / use-case — o orquestrador (também no núcleo)</h3>
+<p>O <strong>service continua existindo</strong> e continua sendo o orquestrador da regra de negócio — mas agora
+ele vive <strong>dentro</strong> do hexágono e depende <strong>só de ports</strong>, nunca de implementações concretas.
+Veja o service de autenticação: seus campos são todos interfaces (<code>UserRepository</code>,
+<code>PasswordHasher</code>) e o <code>Clock</code>:</p>
+<pre><code>// internal/auth/service.go
+// Service ... depends only on ports (repositories, the password hasher) and the Clock, so it is
+// pure application logic — unit-testable with hand-written fakes, no DB or HTTP.
+type Service struct {
+    users    UserRepository    // ← port (interface), não a struct do Postgres
+    sessions SessionRepository // ← port
+    hasher   PasswordHasher    // ← port
+    clock    clock.Clock       // ← port
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">"Accept interfaces, return structs"</span>
+  É a convenção da casa, e ela <em>é</em> o hexagonal em uma frase. O construtor do service
+  <strong>aceita interfaces</strong> (ports) — então não sabe (nem se importa) se por trás está o Postgres
+  real ou um fake de teste. E os adapters <strong>retornam structs</strong> concretas (ex.
+  <code>fundamentus.New(...)</code> devolve um <code>*Adapter</code>). O ponto onde interface e struct se
+  encontram é o <em>seam</em> — a costura — onde você troca implementações sem tocar no núcleo.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="lados">4. Os dois lados: <em>driving</em> vs. <em>driven</em></h2>
+
+<p>Nem todo port é igual. Há dois lados no hexágono, e confundi-los é a fonte de metade da confusão
+inicial. A pergunta que decide o lado é simples: <strong>quem chama quem?</strong></p>
+
+<table>
+  <tr><th>&nbsp;</th><th>Driving (lado esquerdo)</th><th>Driven (lado direito)</th></tr>
+  <tr>
+    <td><strong>Quem chama?</strong></td>
+    <td>O mundo externo chama a aplicação ("me dê as cotações").</td>
+    <td>A aplicação chama o mundo externo ("Postgres, salve isto").</td>
+  </tr>
+  <tr>
+    <td><strong>Sinônimo</strong></td>
+    <td><em>primary</em> / inbound / "quem dirige"</td>
+    <td><em>secondary</em> / outbound / "o que é dirigido"</td>
+  </tr>
+  <tr>
+    <td><strong>Adapter típico</strong></td>
+    <td>Handler HTTP, comando CLI, <strong>worker agendado</strong>, consumidor de fila.</td>
+    <td>Repositório (DB), provedor externo, cache, relógio, e-mail.</td>
+  </tr>
+  <tr>
+    <td><strong>No YieldForge</strong></td>
+    <td>O <code>apiHandler</code> em <code>internal/transport/http</code>; o <strong>worker de ingestão</strong> que dispara <code>FetchFIIQuotes</code>.</td>
+    <td><code>MarketDataProvider</code> (Fundamentus/Yahoo), <code>FIIQuoteRepository</code> (Postgres), <code>Clock</code>, <code>Insighter</code> (LLM).</td>
+  </tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que o handler HTTP é só um adapter (e não "o topo do mundo")</span>
+  Na cabeça de camadas, o handler é o <strong>topo</strong> da pilha — onde tudo começa. No hexagonal, o
+  handler é só <strong>um</strong> dos vários adaptadores de entrada possíveis, do <strong>lado de fora</strong>, igualzinho
+  ao Postgres está do outro lado. O HTTP é um <em>detalhe</em>: amanhã o mesmo caso de uso pode ser
+  disparado por um worker agendado (é exatamente o caso da ingestão de mercado) ou por um CLI, sem o
+  núcleo perceber. O núcleo não sabe — e não deve saber — como foi chamado.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="ponte">5. A PONTE: de-para camadas → hexagonal</h2>
+
+<p>Aqui está o coração da aula. <strong>Quase tudo que você conhece continua existindo</strong>; muda a
+<strong>posição</strong> de cada peça em relação à fronteira e a <strong>direção da seta</strong>.</p>
+
+<table>
+  <tr><th>Em camadas (o que você sabe)</th><th>No hexagonal (o equivalente)</th><th>O que de fato muda</th></tr>
+  <tr>
+    <td><strong>Handler / Controller</strong></td>
+    <td><strong>Driving adapter</strong> (adaptador de entrada)</td>
+    <td>Praticamente nada de código — muda o <em>papel</em>: deixa de ser "o topo" e vira "um adaptador da borda esquerda". Vive em <code>internal/transport/http</code>, fora do núcleo.</td>
+  </tr>
+  <tr>
+    <td><strong>DTO</strong> (request/response)</td>
+    <td><strong>Continua sendo DTO</strong>, na borda</td>
+    <td>Nada muda: o DTO segue traduzindo JSON da rede ↔ value objects do domínio (<code>ParseTicker</code>). DTO é detalhe de transporte; nunca entra no núcleo.</td>
+  </tr>
+  <tr>
+    <td><strong>Service</strong> (regra de negócio)</td>
+    <td><strong>Service / use-case</strong>, agora <em>no núcleo</em></td>
+    <td>O método e a lógica são os mesmos. A virada: ele passa a depender de <strong>ports (interfaces)</strong>, não de structs concretas. Era <code>users *PostgresUserRepo</code>; vira <code>users UserRepository</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>Repository</strong> (1 struct concreta com <code>*sql.DB</code>)</td>
+    <td><strong>Port (interface no núcleo) + Adapter (struct na borda)</strong></td>
+    <td>A peça se <em>parte em duas</em>. A <strong>interface</strong> (<code>FIIQuoteRepository</code>) sobe para o núcleo, escrita na linguagem do domínio. A <strong>implementação Postgres</strong> desce para a borda (<code>marketdata/postgres</code>).</td>
+  </tr>
+  <tr>
+    <td><strong>Cliente de API externa</strong> (struct concreta)</td>
+    <td><strong>Driven port + adapter</strong></td>
+    <td>Idem: interface no núcleo (<code>MarketDataProvider</code>), implementação concreta na borda (Fundamentus, Yahoo). Trocar de provedor = trocar o adapter, sem tocar no núcleo.</td>
+  </tr>
+  <tr>
+    <td><strong><code>main</code> / DI container</strong></td>
+    <td><strong>Composition root</strong> (a fiação)</td>
+    <td>O lugar — e o <em>único</em> lugar — que importa os adaptadores concretos e os injeta nos services. No YieldForge é o <code>cmd/api</code> + as <code>factory</code>.</td>
+  </tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">A grande virada, isolada (leia duas vezes)</span>
+  Em <strong>camadas</strong>: o <code>Service</code> <strong>importa</strong> o repositório concreto. Seta: núcleo → fora.<br>
+  No <strong>hexagonal</strong>: o <code>Service</code> <strong>define a interface</strong> e o adaptador a <strong>implementa</strong>.
+  Seta: fora → núcleo.<br>
+  É literalmente a <strong>mesma</strong> chamada <code>repo.GetFIIQuoteByTicker(...)</code> no service. A diferença é
+  <em>quem possui o tipo</em> de <code>repo</code>: antes era o pacote do banco (e o service o importava); agora é
+  o pacote do domínio (e o banco o implementa). Isso é a <strong>Inversão de Dependência</strong> — o "D" do SOLID
+  — e é tudo que o hexagonal faz de novo.
+</div>
+
+<p>Os mesmos dois fluxos, lado a lado, para o "salvar uma cotação":</p>
+
+<div class="diagram">EM CAMADAS                          HEXAGONAL
+─────────                          ─────────
+Service ──importa──▶ PgRepo        Service ──usa──▶ FIIQuoteRepository  (PORT, no núcleo)
+   │   (struct concreta)              │                    ▲
+   │                                  │                    │ implementa
+   ▼                                  ▼                    │
+ Postgres                       (em runtime)        postgres.FIIQuoteRepository (ADAPTER, borda)
+                                                            │
+seta núcleo → banco                                         ▼
+(núcleo conhece o banco)                                 Postgres
+
+                              seta banco → núcleo (banco conhece o núcleo;
+                              o núcleo só conhece a interface que ele mesmo definiu)</div>
+
+<!-- ============================================================ -->
+<h2 id="yieldforge">6. Como o YieldForge faz isso — o caso <code>marketdata</code></h2>
+
+<p>Vamos ver os quatro conceitos juntos, num exemplo real e bonito: a montagem do
+<code>MarketDataProvider</code> de FIIs. O dado de uma cotação de FII vem de <strong>duas</strong> fontes gratuitas
+diferentes — fundamentos (preço, DY, P/VP, segmento) do <strong>Fundamentus</strong>, e o último dividendo do
+<strong>Yahoo</strong>. O projeto <strong>compõe</strong> as duas atrás do mesmo port.</p>
+
+<h4>Layout físico: a feature dona do port, os adaptadores ao lado</h4>
+<pre><code>internal/marketdata/            ← NÚCLEO PURO (package marketdata)
+├── ticker.go  quote.go  macro.go  sector.go   domínio (value objects)
+├── ports.go                                   PORTS: MarketDataProvider, *Repository, TickerSource
+├── errors.go                                  sentinelas (ErrProviderUnavailable, ...NotFound)
+├── fake.go                                    Fake provider determinístico (CI/dev)
+├── fii/composite.go           ← ADAPTER: compõe duas fontes num provider
+├── fundamentus/fundamentus.go ← ADAPTER: scrape HTML do Fundamentus (net/http)
+├── yahoo/yahoo.go             ← ADAPTER: API do Yahoo (último dividendo)
+├── bcb/bcb.go                 ← ADAPTER: SGS do Banco Central (macro)
+└── postgres/postgres.go       ← ADAPTER: repositórios sobre PostgreSQL</code></pre>
+
+<p>Repare na física: <strong>o port mora com a feature</strong> (<code>ports.go</code>, dentro do pacote do domínio) e
+<strong>cada adaptador mora num subpacote ao lado</strong>, na borda. É a regra de arquitetura do projeto
+tornada estrutura de diretórios.</p>
+
+<h4>O port "Composite": interfaces minúsculas, definidas pelo consumidor</h4>
+<p>O <code>fii.Composite</code> precisa de duas coisas — fundamentos e dividendos. Mas ele <strong>não importa
+os adaptadores concretos</strong>; ele declara <strong>dois ports minúsculos</strong>, do tamanho exato do que
+consome, e depende deles:</p>
+<pre><code>// internal/marketdata/fii/composite.go
+// It depends on small consumer-defined interfaces, not the concrete adapters, so
+// either source can be swapped behind the marketdata port (BR-601).
+
+type Fundamentals interface {  // ← port de 1 método, definido por quem CONSOME
+    FetchFIIQuotes(ctx context.Context, tickers []marketdata.Ticker)
+        (map[marketdata.Ticker]marketdata.FIIQuote, error)
+}
+type LastDividends interface { // ← idem, e "best-effort"
+    FetchLastDividend(ctx context.Context, t marketdata.Ticker)
+        (centavos int64, date *time.Time, err error)
+}
+
+type Composite struct {
+    fundamentals Fundamentals  // ← guarda interfaces, não *fundamentus.Adapter
+    dividends    LastDividends
+}</code></pre>
+
+<p>Esse é o princípio <em>"interfaces small + consumer-defined"</em> do CLAUDE.md em ação: o
+<code>Composite</code> não diz "me dê o adaptador do Yahoo"; ele diz "me dê <em>qualquer coisa</em> que saiba
+buscar o último dividendo". Em produção, é o Yahoo; num teste, é um fake de três linhas.</p>
+
+<h4>A prova de que o adapter implementa o port: a checagem em tempo de compilação</h4>
+<p>Como o Go satisfaz interfaces <strong>estruturalmente</strong> (sem <code>implements</code>), o projeto usa um truque
+para garantir, <em>na compilação</em>, que cada adaptador honra seu port:</p>
+<pre><code>// internal/marketdata/postgres/postgres.go
+// Compile-time checks that the adapters satisfy the marketdata ports.
+var (
+    _ marketdata.FIIQuoteRepository = FIIQuoteRepository{}
+    _ marketdata.MacroRepository    = MacroRepository{}
+)</code></pre>
+<p>Se alguém mudar a assinatura do port e esquecer de atualizar o adaptador, o <strong>build quebra</strong> —
+não um teste em runtime, o build. A direção da dependência aqui é explícita: o pacote
+<code>postgres</code> (borda) <strong>importa</strong> <code>marketdata</code> (núcleo). Nunca o contrário.</p>
+
+<h4>O Fake: o que ports tornam quase grátis</h4>
+<p>Porque <code>MarketDataProvider</code> é uma interface pequena, escrever uma implementação
+determinística para testes e dev é trivial — e ela é o <strong>provedor default</strong>, para a app rodar sem
+rede nem configuração:</p>
+<pre><code>// internal/marketdata/fake.go
+// Fake is a deterministic MarketDataProvider for tests, CI, and offline/dev — it is the
+// default MARKETDATA_PROVIDER so the zero-config app never hits the network (FR-611).
+type Fake struct{ At time.Time }
+
+var _ MarketDataProvider = Fake{}   // ← também provado em compile-time</code></pre>
+
+<h4>Onde tudo se amarra: o composition root</h4>
+<p>O núcleo e os adaptadores nunca se conhecem diretamente. Quem os apresenta é a <strong>fiação</strong> — o
+único lugar que importa os concretos e escolhe o adaptador por <strong>configuração</strong>:</p>
+<pre><code>// pseudo-fiação (composition root, em cmd/api / factory) — escolhe por config
+var provider marketdata.MarketDataProvider
+switch cfg.MarketDataProvider {
+case "fake":
+    provider = marketdata.Fake{}
+default: // "live"
+    fund := fundamentus.New(cfg.FundamentusBaseURL, cfg.Timeout, clk)
+    yh   := yahoo.New(cfg.YahooBaseURL, cfg.Timeout, clk)
+    provider = fii.New(fund, yh)   // ← compõe os dois adaptadores num só port
+}
+// daqui pra baixo, o worker só conhece `provider marketdata.MarketDataProvider`</code></pre>
+
+<div class="box tip">
+  <span class="lbl">O ecossistema de ports do YieldForge (todos os provedores externos)</span>
+  O <code>marketdata</code> não é exceção — é a regra. O CLAUDE.md lista os <em>seams</em> que <strong>devem</strong>
+  permanecer atrás de ports: <code>Insighter</code> (o LLM, SPEC-005), <code>MarketDataProvider</code>
+  (SPEC-006), os <strong>repositórios</strong>, e o <code>Clock</code>. Cada um é uma interface no núcleo de sua
+  feature, com adaptadores trocáveis por config. Você verá o <strong>mesmo padrão</strong> em
+  <code>auth</code> (<code>UserRepository</code>, <code>PasswordHasher</code>) e nas features futuras
+  (<code>portfolio/</code>, <code>profile/</code>, <code>projection/</code>).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="porque">7. Por que vale a pena (no contexto deste projeto)</h2>
+
+<p>Inverter a seta dá trabalho — um arquivo de interface a mais, um pouco de cerimônia na fiação.
+Para um produto com as restrições <em>binding</em> do YieldForge, o retorno é direto:</p>
+
+<table>
+  <tr><th>Benefício</th><th>O que ele resolve</th><th>Exemplo concreto no YieldForge</th></tr>
+  <tr>
+    <td><strong>Swappability por config (custo zero)</strong></td>
+    <td>Restrição #4 do PRD: tudo free/local, todo provedor trocável por <code>.env</code>.</td>
+    <td>Trocar o LLM (<code>INSIGHTER_PROVIDER=ollama|groq|fake</code>) ou o dado de mercado (<code>MARKETDATA_PROVIDER</code>) é <strong>uma linha de config</strong>, nunca uma mudança de código.</td>
+  </tr>
+  <tr>
+    <td><strong>Testabilidade</strong></td>
+    <td>Testar a regra de negócio sem banco, sem rede, sem LLM.</td>
+    <td>O <code>Fake</code> (3 dezenas de linhas) entra no lugar do adaptador real; o CI roda a feature inteira <strong>offline e de graça</strong>. Fakes escritos à mão — sem <code>gomock</code> (convenção da casa).</td>
+  </tr>
+  <tr>
+    <td><strong>Domínio puro e determinístico</strong></td>
+    <td>Mesmos inputs → mesmo resultado (PRD: mesmo Health Score reproduzível).</td>
+    <td>Tempo vem do <code>Clock</code> (não <code>time.Now()</code>); dinheiro é <code>int64</code> centavos. A staleness de uma cotação (<code>StaleAfter</code>) é testável sem <code>sleep</code> frágil.</td>
+  </tr>
+  <tr>
+    <td><strong>Confinamento do "feio"</strong></td>
+    <td>Scraping de HTML, drivers, SDKs — coisas frágeis — não contaminam o núcleo.</td>
+    <td>O parsing defensivo do Fundamentus (colunas achadas por palavra-chave, degradação para <code>ErrProviderUnavailable</code>) fica <strong>todo</strong> dentro de <code>fundamentus/</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>O seam do futuro</strong></td>
+    <td>Multi-agente CIO + ferramentas MCP (PRD G9/G10) sem reescrever o núcleo.</td>
+    <td>O <code>Insighter</code> é a fronteira onde, amanhã, um orquestrador de agentes se pluga — atrás da mesma interface, herdando os mesmos guardrails. "Keep it intact" é regra de arquitetura.</td>
+  </tr>
+</table>
+
+<div class="box warn">
+  <span class="lbl">Quando NÃO vale a cerimônia</span>
+  Hexagonal não é gratuito, e o YieldForge não o aplica cegamente. Código <strong>cross-cutting</strong> que
+  não é regra de negócio — config, logging, o servidor HTTP, <code>buildinfo</code> — vive em
+  <code>internal/platform/</code> sem o ritual de port+adapter completo. A pergunta é sempre: <em>"este
+  detalhe é substituível e eu quero proteger o núcleo dele?"</em>. Se sim (banco, LLM, dado de mercado),
+  vira port. Se é mera infra de plataforma, fica simples.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="armadilhas">8. Armadilhas comuns na tradução</h2>
+
+<div class="box bug">
+  <span class="lbl">Erro nº 1: colocar a interface do lado do adaptador</span>
+  Vindo de camadas, é tentador criar <code>package postgres</code> e definir <em>ali</em> a interface
+  <code>Repository</code>, e o service importar <code>postgres.Repository</code>. Isso é <strong>camadas com um
+  nome chique</strong> — a seta ainda aponta para fora. O port tem que morar <strong>no núcleo</strong>, no pacote da
+  feature (<code>package marketdata</code>), escrito na linguagem do <em>domínio</em>. Quem implementa é que
+  importa o núcleo, não o contrário.
+</div>
+
+<div class="box bug">
+  <span class="lbl">Erro nº 2: vazar tipos da borda para o núcleo</span>
+  Se o seu port retorna <code>*sql.Rows</code>, ou recebe um <code>*http.Request</code>, ou devolve o JSON cru
+  do provedor, você furou a fronteira — o detalhe externo entrou no núcleo. O port do YieldForge fala
+  <strong>só domínio</strong>: <code>FetchFIIQuotes(ctx, []Ticker) (map[Ticker]FIIQuote, error)</code>. Nenhum
+  <code>Ticker</code>, <code>FIIQuote</code> ou erro aqui sabe que o Postgres ou o Fundamentus existem.
+</div>
+
+<div class="box bug">
+  <span class="lbl">Erro nº 3: confiar em <code>user_id</code> que veio do payload</span>
+  Específico do projeto, mas crucial: a identidade vem <strong>do contexto autenticado</strong>, nunca do DTO de
+  request (CLAUDE.md). O adaptador HTTP (driving) extrai o usuário da sessão e o passa adiante; o
+  núcleo escopa com <code>WHERE user_id = $1</code> usando o ID do contexto. Um port que aceitasse
+  <code>userID</code> vindo do cliente seria um buraco de segurança disfarçado de boa arquitetura.
+  (No <code>marketdata</code>, aliás, <strong>não há</strong> escopo por usuário — dado de mercado é global, BR-603 — e
+  isso também é uma decisão de domínio que o port reflete.)
+</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">9. Harness Engineering: como as regras viram trilhos</h2>
+
+<p>Este projeto tem propósito duplo: aprender Go/backend <em>e</em> aprender <strong>engenharia de harness</strong> —
+dar à IA (e aos humanos) trilhos que <strong>baixam a taxa de erro</strong>. A arquitetura hexagonal só se
+mantém honesta se algo a <strong>impede de erodir</strong> a cada commit. No YieldForge, várias dessas defesas
+agiram nas specs que você já viu.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>É um revisor especializado que conhece a regra de ouro e <strong>cobra a direção da dependência</strong>. A
+pergunta que ele faz a cada PR: <em>"algum pacote de núcleo importou SQL, HTTP ou um SDK?"</em>. Foi essa
+lente que garantiu, na SPEC-005, que o core de <code>insight</code> e os adaptadores não importassem
+OpenTelemetry (só a <code>factory</code> amarra), e que mantém o <code>marketdata</code> core sem nenhum
+<code>net/http</code>.</p>
+
+<h3>A checagem em tempo de compilação como trilho</h3>
+<p>Aquele <code>var _ marketdata.FIIQuoteRepository = FIIQuoteRepository{}</code> não é decoração — é um
+<strong>hard rule</strong> barata. Ele transforma "esqueci de implementar um método do port" de um bug de
+runtime num <strong>erro de compilação</strong>. O harness prefere sempre o trilho mais barato e mais cedo: o
+compilador pega antes do teste, que pega antes do review, que pega antes da produção.</p>
+
+<h3>O doc-comment que cita a BR/FR</h3>
+<p>Toda peça desta aula tem um comentário citando o SPEC/BR que ela implementa —
+<code>(SPEC-006 BR-601)</code> no <code>ports.go</code>, <code>(BR-603)</code> no <code>quote.go</code>. Isso fecha o
+ciclo da SDD: do documento ao código há um <strong>traço direto e auditável</strong>. Quando o revisor lê
+"the core stays pure (BR-601)" no topo do <code>fundamentus.go</code>, doc e código contam a <strong>mesma
+história</strong> — e qualquer divergência salta aos olhos.</p>
+
+<h3>Os hooks que agem ao fechar</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — diffs sem ruído de estilo.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao encerrar uma tarefa, o gate exige <code>build</code> /
+  <code>vet</code> / <code>test -short</code> / <code>gofmt</code> limpos. É o que prova, mecanicamente, que o
+  núcleo ainda compila sem os adaptadores e que os fakes cobrem o CI <strong>sem banco e sem rede</strong>.</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: ADRs aceitos (como o ADR-0003, custo-zero, que <em>abençoa</em>
+  os provedores trocáveis) não podem ser editados — só superados. A arquitetura tem memória.</li>
+</ul>
+
+<div class="box why">
+  <span class="lbl">Por que cada trilho baixa o erro</span>
+  A arquitetura hexagonal é uma <strong>disciplina</strong>, e disciplinas humanas falham sob pressão. O harness
+  converte cada regra de "lembre-se de não importar SQL no núcleo" em algo <strong>estrutural</strong>: um
+  revisor que cobra, um compilador que quebra, um doc-comment que denuncia, um hook que barra. Quanto
+  mais a regra de ouro vira <em>hard rule</em> verificável, menos ela depende de alguém lembrar.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="ai">10. Conexão com AI Engineering</h2>
+
+<p>A arquitetura hexagonal não é só boa engenharia de software — no YieldForge ela é o que torna a
+<strong>IA confiável possível</strong>. Os dois recursos mais voláteis e perigosos do produto — o <strong>LLM</strong> e o
+<strong>dado de mercado externo</strong> — são exatamente os que ficam atrás de ports.</p>
+
+<table>
+  <tr><th>Conceito de AI Engineering</th><th>Como o hexagonal o viabiliza</th></tr>
+  <tr>
+    <td><strong>O LLM como detalhe trocável</strong></td>
+    <td>O <code>Insighter</code> (SPEC-005) é um port de um método. Ollama local, Groq hospedado ou um fake determinístico entram pela mesma costura. O modelo — a parte mais cara e instável — vira <strong>configuração</strong>, não acoplamento.</td>
+  </tr>
+  <tr>
+    <td><strong>Verification middleware (os gates)</strong></td>
+    <td>Como tudo é <code>Insighter ⇒ Insighter</code>, os portões de explicabilidade (FR-013) e não-aconselhamento (FR-014) viram um <strong>decorator</strong> que embrulha <em>qualquer</em> provider. Nenhuma saída de IA escapa da verificação — e isso só é possível porque o LLM está atrás de uma interface uniforme.</td>
+  </tr>
+  <tr>
+    <td><strong>Grounding / Fact Builder</strong></td>
+    <td>"Fatos são computados, não gerados": o LLM raciocina <em>sobre</em> dados determinísticos. Esses fatos vêm, em parte, do <code>marketdata</code> desta aula — cotações e indicadores que o <strong>domínio puro</strong> produz, com dinheiro em centavos e tempo do <code>Clock</code>. O núcleo determinístico é o que ancora a IA na realidade.</td>
+  </tr>
+  <tr>
+    <td><strong>O seam do multi-agente (CIO + MCP)</strong></td>
+    <td>Hoje há um provedor atrás do <code>Insighter</code>; amanhã pode haver um <strong>orquestrador de agentes</strong> raciocinando sobre os mesmos fatos, ainda atrás da mesma interface, ainda passando pelos mesmos gates. O port é a fronteira de extensão — mantida intacta desde o dia um, de propósito.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  A arquitetura hexagonal é a <strong>mesma</strong> arquitetura em camadas que você já domina — com a
+  <strong>direção das dependências invertida</strong> e os <strong>ports (interfaces) pertencendo ao núcleo</strong>.
+  Handler vira driving adapter, repositório vira port + adapter, o service continua o orquestrador mas
+  agora depende só de contratos. No YieldForge isso é o que torna LLM e dado de mercado trocáveis por
+  config, o domínio puro e testável, e a IA verificável por construção.
+</div>
+
+<footer>
+  YieldForge · Aula Conceitual (Arquitetura Hexagonal) · material de estudo. Veja também a
+  <a href="SPEC-001-aula.html">Aula 01 (esqueleto &amp; camadas)</a>, a
+  <a href="SPEC-003-aula.html">Aula 03 (auth: ports &amp; isolamento)</a>, a
+  <a href="SPEC-005-aula.html">Aula 05 (o port <code>Insighter</code>)</a>, a
+  <a href="harness-engineering-aula.html">Aula Especial de Harness Engineering</a>, e o
+  <a href="../04-architecture/architecture-overview.md">architecture-overview</a>.
+</footer>
+
+</div>
+</body>
+</html>

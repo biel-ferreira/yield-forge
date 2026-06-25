@@ -130,6 +130,43 @@ outcome, latency, cache hit) — never prompts, facts, or generated text. See
 > The returned `Insighter` isn't wired into an endpoint yet — the AI feature engine
 > (SPEC-104) consumes it with the Fact Builder. SPEC-005 ships the port + guards + adapters.
 
+## Market data (ingestion)
+
+Market data is ingested by a background **worker** behind the **`MarketDataProvider` port**
+(SPEC-006) and stored as **global, last-known-good reference data** (no per-user scoping):
+
+- **FII quotes** (FR-006) — price, dividend yield, P/VP, sector, last dividend.
+- **Macro indicators** (FR-007) — SELIC, CDI, IPCA (IFIX is a documented gap; see below).
+
+All money is `int64` **centavos** and all rates integer **basis points** — never `float64`
+(via `internal/platform/money`, half-up). A failed/malformed fetch **never overwrites** good
+data; upserts are idempotent.
+
+The provider is selected by `MARKETDATA_PROVIDER`:
+
+| Value | Use | Sources |
+| ----- | --- | ------- |
+| `fake` (default) | Dev / CI | Deterministic, no network |
+| `live` | Real data | **Fundamentus** (FII fundamentals, one bulk request) + **Yahoo** `.SA` (last dividend) + **BCB-SGS** (macro) — all free, no API key |
+
+Run it two ways (both call the same pass):
+
+```bash
+task ingest                          # one-shot (cron-friendly); raw: go run ./cmd/ingest
+# or: the in-process scheduler runs inside the API when MARKETDATA_SCHEDULER_ENABLED=true
+```
+
+Set `MARKETDATA_SCHEDULER_ENABLED=false` for multi-replica deploys and drive `cmd/ingest`
+from cron, to avoid duplicate ingestion. See [`.env.example`](.env.example) for all
+`MARKETDATA_*` variables. Ingestion telemetry records only metadata (provider, outcome,
+counts, freshness) — no payloads.
+
+> **Known gaps:** the FII source is **scraped** (no official free API), so it is treated
+> defensively (header-keyed parsing, degrade-to-last-known-good) and is config-swappable to
+> a licensed source later. **IFIX** has no free source yet, so it degrades gracefully and is
+> a tracked follow-up. The stored data isn't surfaced in an endpoint yet — the dashboard
+> (SPEC-103) and Fact Builder (SPEC-104) consume it.
+
 ## Endpoints
 
 | Method | Path             | Auth | Purpose                                  |
