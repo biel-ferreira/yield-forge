@@ -399,6 +399,26 @@ func TestLoad_MarketDataInvalidProvider(t *testing.T) {
 	}
 }
 
+func TestLoad_MarketDataInvalidBaseURL(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("MARKETDATA_BCB_BASE_URL", "not-a-url")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "MARKETDATA_BCB_BASE_URL") {
+		t.Fatalf("expected a MARKETDATA_BCB_BASE_URL error, got %v", err)
+	}
+}
+
+func TestLoad_MarketDataIntervalMustBePositive(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("MARKETDATA_REFRESH_INTERVAL", "0s")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "MARKETDATA_REFRESH_INTERVAL") {
+		t.Fatalf("expected a MARKETDATA_REFRESH_INTERVAL error, got %v", err)
+	}
+}
+
 func TestLoad_InsighterDurationsMustBePositive(t *testing.T) {
 	for _, key := range []string{"INSIGHTER_TIMEOUT", "INSIGHTER_CACHE_TTL"} {
 		t.Run(key, func(t *testing.T) {
