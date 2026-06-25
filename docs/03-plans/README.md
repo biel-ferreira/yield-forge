@@ -27,7 +27,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-003 | SPEC-003 | [Authentication & Per-User Isolation](PLAN-003-authentication-and-per-user-isolation.md) | ✅ Done |
 | PLAN-004 | SPEC-004 | [Observability Baseline (OpenTelemetry)](PLAN-004-observability-baseline.md) | ✅ Done |
 | PLAN-005 | SPEC-005 | [`Insighter` Port & Free/Local LLM Adapter](PLAN-005-insighter-port-and-llm-adapter.md) | ✅ Done |
-| PLAN-006 | SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](PLAN-006-marketdata-port-and-ingestion-worker.md) | 📋 Approved |
+| PLAN-006 | SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](PLAN-006-marketdata-port-and-ingestion-worker.md) | ✅ Done |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
 

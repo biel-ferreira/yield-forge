@@ -26,6 +26,7 @@ func New(cfg config.Config, db *sql.DB, logger *slog.Logger, clk clock.Clock) (*
 	}
 	return newWorker(
 		buildProvider(cfg, clk),
+		cfg.MarketDataProvider,
 		mdpostgres.NewFIIQuoteRepository(db),
 		mdpostgres.NewMacroRepository(db),
 		watchlist,

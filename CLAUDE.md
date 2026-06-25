@@ -123,6 +123,6 @@ Task runner is [`Task`](https://taskfile.dev) (`Taskfile.yml`); raw `go` fallbac
 ## Status
 
 Done: SPEC-001 (skeleton), SPEC-002 (persistence), SPEC-003 (auth), SPEC-004
-(observability), SPEC-005 (Insighter port + LLM adapters). Next: SPEC-006
-(MarketDataProvider) / SPEC-101 (profile). See
+(observability), SPEC-005 (Insighter port + LLM adapters), SPEC-006 (MarketDataProvider
+port + ingestion worker). Next: SPEC-101 (profile) / SPEC-102 (portfolio). See
 [docs/02-specs/README.md](docs/02-specs/README.md) for the live index.

@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 06 — SPEC-006: Port MarketDataProvider &amp; Worker de Ingestão | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 06 · Spec de Fundação</span>
+    <h1>SPEC-006 — Port <code>MarketDataProvider</code> &amp; Worker de Ingestão</h1>
+    <p>A <strong>segunda costura de provedor externo</strong> do YieldForge: um port que esconde a fonte de dados de mercado atrás de uma interface, adaptadores compostos (Fundamentus + Yahoo + BCB) na borda, e um <strong>worker de ingestão</strong> que enche o banco com a <strong>fonte determinística de verdade</strong> sobre a qual o Insighter (SPEC-005) vai raciocinar — sem nunca corromper o último dado bom.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: por que um <em>port</em> de dados de mercado, e o que o SPEC-006 entregou</a></li>
+    <li><a href="#problema">O problema: copiloto precisa de dados de FII + macro, mas é custo zero e a fonte é trocável</a></li>
+    <li><a href="#d4">A história da decisão D4: não existe uma API grátis única — então compomos fontes</a></li>
+    <li><a href="#dinheiro">Disciplina de dinheiro: <code>int64</code> centavos + basis points, nunca <code>float</code></a></li>
+    <li><a href="#lkg">Integridade do "último dado bom" (BR-602): upsert idempotente + isolamento por item</a></li>
+    <li><a href="#worker">O worker de ingestão e o agendamento: <em>ingestion</em> e <em>worker</em>, em português claro</a></li>
+    <li><a href="#decisoes">As 6 decisões (D1–D6) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: por que um <em>port</em> de dados de mercado</h2>
+
+<p>O SPEC-005 entregou a costura por onde a IA fala (o port <code>Insighter</code>). Mas um LLM não pode
+raciocinar no vácuo: a regra binding nº 3 do PRD diz que <strong>"fatos são computados, não gerados"</strong> —
+o modelo raciocina <em>sobre</em> números determinísticos, nunca os inventa. Faltava, então, a <strong>fonte
+desses números</strong>: o preço atual de cada FII, seu dividend yield, P/VP, setor e último dividendo
+(FR-006), mais os indicadores macro brasileiros — SELIC, CDI, IPCA, IFIX (FR-007).</p>
+
+<p>O SPEC-006 é a <strong>segunda pedra de provedor externo</strong>. Como o <code>Insighter</code>, ele <strong>não</strong>
+entrega nenhuma tela nem feature que o usuário veja. Entrega a <strong>infraestrutura de dados</strong>: o port
+<code>MarketDataProvider</code>, os adaptadores que falam com as fontes grátis, as tabelas, os repositórios,
+e um <strong>worker de ingestão</strong> que periodicamente busca e guarda esses dados como referência
+<strong>último-dado-bom</strong>. Nada consome ainda — o dashboard (SPEC-103), o Fact Builder (SPEC-104) e as
+projeções (SPEC-107) leem isto depois, pelos ports de repositório.</p>
+
+<div class="diagram">ANTES (SPEC-005)                          DEPOIS (SPEC-006)
+  IA tem onde falar (Insighter)           IA tem o que ler: dados de FII + macro determinísticos
+  nenhum dado de mercado                  port MarketDataProvider — a 2ª costura de provedor externo
+  fonte de dados = decisão futura         troca por config: MARKETDATA_PROVIDER=fake|live
+  nada busca preço/DY/P-VP/setor          worker de ingestão (off do request path, via Clock)
+  nada protege o "último dado bom"        upsert idempotente: fetch ruim NUNCA sobrescreve dado bom
+  sem tabelas de mercado                  migration 0003: fii_quotes (snapshot) + macro_indicators (série)</div>
+
+<p>Concretamente, o SPEC-006 entregou o pacote <code>internal/marketdata</code> com: o core puro
+(value objects <code>Ticker</code>/<code>Sector</code>/<code>Indicator</code>/<code>Unit</code>, as entidades
+<code>FIIQuote</code>/<code>MacroIndicator</code>, os ports e os sentinelas); os adaptadores de borda
+(<code>fundamentus/</code>, <code>yahoo/</code>, <code>bcb/</code>, mais o <code>fii/</code> que compõe os dois primeiros);
+o repositório <code>postgres/</code>; o subpacote <code>ingest/</code> (worker + scheduler + factory); a
+migration <code>0003_market_data</code>; o comando <code>cmd/ingest</code>; e a configuração <code>MARKETDATA_*</code>.</p>
+
+<div class="box why">
+  <span class="lbl">Por que esconder a fonte de dados atrás de um port, igual ao LLM?</span>
+  Porque o maior risco do produto (PRD §14) é <strong>"não existe fonte de dados de FII confiável e
+  gratuita"</strong>. Se o código chamasse uma API específica diretamente, espalhada por todo lado, trocar
+  de fonte seria uma reescrita. Colocando a ingestão atrás do <code>MarketDataProvider</code> — exatamente
+  como o <code>Insighter</code> esconde o LLM — a fonte vira <strong>detalhe de configuração</strong>. Hoje raspamos
+  uma tabela HTML grátis; amanhã, se ela quebrar, basta plugar uma fonte licenciada (brapi Pro) <strong>sem
+  tocar no domínio</strong>. O port é o seguro contra o risco nº 1.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="problema">2. O problema: dados de mercado + custo zero + fonte trocável</h2>
+
+<p>Três tensões, resolvidas de uma vez — e elas rimam com as do SPEC-005, de propósito:</p>
+
+<table>
+  <tr><th>Tensão</th><th>Restrição binding (PRD)</th><th>Solução do SPEC-006</th></tr>
+  <tr>
+    <td>Precisamos de preço/DY/P-VP/setor + macro, mas <strong>sem gastar dinheiro</strong></td>
+    <td>Custo zero (ADR-0003): só fontes free/públicas</td>
+    <td><strong>Fundamentus</strong> (HTML grátis, sem chave) + <strong>Yahoo</strong> (<code>.SA</code>, grátis) para FIIs; <strong>BCB SGS</strong> (público, sem chave) para macro. Default é o <code>Fake</code> — zero rede no CI e no app sem config.</td>
+  </tr>
+  <tr>
+    <td>Hoje Fundamentus; amanhã pode ser brapi Pro / outra</td>
+    <td>Provedor plugável (FR-018)</td>
+    <td>Tudo atrás do <strong>port</strong> <code>MarketDataProvider</code>. Trocar de fonte é <code>MARKETDATA_PROVIDER</code> no <code>.env</code>, nunca mudança de código (BR-601).</td>
+  </tr>
+  <tr>
+    <td>Os dados são a <strong>fonte de verdade</strong> sobre a qual a IA raciocina</td>
+    <td>Fatos computados/ingeridos, não gerados (BR-605)</td>
+    <td>Os números são <strong>ingeridos e guardados</strong> de forma determinística; o LLM nunca os inventa (sustenta o SPEC-005 BR-502 a montante). Mesmos inputs → mesmo Health Score.</td>
+  </tr>
+</table>
+
+<p>A peça-chave, de novo, é o <strong>port</strong> — uma interface no <strong>core</strong> da feature, sem importar
+nenhum HTTP nem SQL. Repare que ele tem dois métodos e que a leitura de FII é <strong>em lote</strong>:</p>
+
+<pre><code>// internal/marketdata/ports.go
+// MarketDataProvider reads current data from an external source — the FR-018 seam that keeps
+// the provider swappable by config (BR-601). FII reads are batched because the MVP source
+// (Fundamentus) returns every FII in one request; a ticker absent from the returned map is
+// a per-item miss the worker treats as "keep last-known-good" (BR-602).
+type MarketDataProvider interface {
+    FetchFIIQuotes(ctx context.Context, tickers []Ticker) (map[Ticker]FIIQuote, error)
+    FetchMacroIndicator(ctx context.Context, ind Indicator) (MacroIndicator, error)
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que a leitura de FII é em lote (<code>[]Ticker → map</code>) e a de macro é uma por vez?</span>
+  A forma do método segue a <strong>forma da fonte</strong>. O Fundamentus devolve a tabela inteira de ~1500
+  FIIs em <strong>uma única requisição</strong> — então pedir ticker por ticker seria desperdício (e abuso da
+  fonte raspada). Já o BCB SGS é uma série por código; cada indicador é uma chamada separada. O port
+  espelha o que é eficiente em cada caso. Um ticker <strong>ausente</strong> do mapa não é um erro: é um "miss"
+  que o worker trata mantendo o último dado bom.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="d4">3. A história da decisão D4: compor fontes grátis</h2>
+
+<p>Esta é a decisão mais cara e mais honesta da spec. <strong>Não existe uma única API oficial e gratuita
+com todos os campos de FII que precisamos.</strong> A brapi (a candidata óbvia) <strong>moveu P/VP e segmento
+para o plano pago</strong> — o tier grátis dela não os expõe mais. O Yahoo, sozinho, dá preço e dividendos,
+mas não dá P/VP nem setor. A única forma de obter <strong>tudo a custo zero</strong> é <strong>compor</strong>:</p>
+
+<table>
+  <tr><th>Fonte</th><th>O que ela dá</th><th>Como falamos com ela</th></tr>
+  <tr><td><strong>Fundamentus</strong> (FII)</td><td>Preço, dividend yield, P/VP, segmento — para <em>todos</em> os FIIs, em <strong>1 requisição</strong></td><td>Raspagem de uma <strong>tabela HTML</strong> (não há API oficial)</td></tr>
+  <tr><td><strong>Yahoo Finance</strong> (FII)</td><td>Último dividendo (valor + data) por ticker</td><td>API de chart JSON, sufixo <code>.SA</code>, <strong>melhor-esforço</strong></td></tr>
+  <tr><td><strong>BCB SGS</strong> (macro)</td><td>SELIC, CDI, IPCA por código de série</td><td>API JSON pública, sem chave</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">O que significam <code>.php</code> e <code>.SA</code>? (perguntas reais de quem está aprendendo)</span>
+  <ul style="margin:6px 0 0">
+    <li><strong><code>.php</code></strong> em <code>fii_resultado.php</code> é só o <strong>endpoint do servidor</strong> do
+    Fundamentus — o nome do <em>script</em> que, ao ser chamado por GET, devolve a página HTML com a
+    tabela de FIIs. Não é um formato de dado; é o "endereço" da página que raspamos.</li>
+    <li><strong><code>.SA</code></strong> em <code>HGLG11.SA</code> é o <strong>sufixo de bolsa</strong> do Yahoo: ele
+    cataloga tickers do mundo todo, então <code>.SA</code> (de <em>São Paulo / B3</em>) diz "este papel é da
+    bolsa brasileira". Sem o sufixo, o Yahoo não saberia em qual bolsa procurar <code>HGLG11</code>.</li>
+  </ul>
+</div>
+
+<p>A composição acontece em <strong>duas camadas</strong>, e ambas usam o padrão de combinar fontes. Primeiro,
+o subpacote <code>fii/</code> junta Fundamentus + Yahoo num só <code>FetchFIIQuotes</code>; o último dividendo é
+<strong>melhor-esforço</strong> — se o Yahoo falhar, fica um cotação parcial, nunca uma linha falha:</p>
+
+<pre><code>// internal/marketdata/fii/composite.go
+func (c Composite) FetchFIIQuotes(ctx context.Context, tickers []marketdata.Ticker) (map[...]..., error) {
+    quotes, err := c.fundamentals.FetchFIIQuotes(ctx, tickers)  // dependência DURA
+    if err != nil {
+        return nil, err                                          // falha → degrada o lote (BR-602)
+    }
+    for t, q := range quotes {
+        cents, date, derr := c.dividends.FetchLastDividend(ctx, t)  // MELHOR-ESFORÇO
+        if derr == nil &amp;&amp; cents > 0 {
+            q.LastDividendCentavos = cents
+            q.LastDividendDate = date
+            quotes[t] = q
+        }
+        // Yahoo falhou? Deixa last-dividend vazio — cotação parcial, não linha falha.
+    }
+    return quotes, nil
+}</code></pre>
+
+<p>Depois, o subpacote <code>ingest/</code> combina o lado FII (composto) com o lado macro (BCB) para
+satisfazer o port inteiro — um segundo nível de composição:</p>
+
+<pre><code>// internal/marketdata/ingest/factory.go
+if cfg.MarketDataProvider == "live" {
+    fiiSource := fii.New(
+        fundamentus.New(cfg.MarketDataFundamentusBaseURL, cfg.MarketDataTimeout, clk),
+        yahoo.New(cfg.MarketDataYahooBaseURL, cfg.MarketDataTimeout),
+    )
+    macroSource := bcb.New(cfg.MarketDataBCBBaseURL, cfg.MarketDataTimeout, clk)
+    return combined{fii: fiiSource, macro: macroSource}   // FII + macro → 1 MarketDataProvider
+}
+return marketdata.Fake{At: clk.Now()}                      // default: zero rede</code></pre>
+
+<div class="box warn">
+  <span class="lbl">O trade-off honesto: grátis-mas-raspado vs. pago-mas-limpo</span>
+  Raspar uma tabela HTML é <strong>frágil</strong>: se o Fundamentus mudar a marcação, o parser quebra. Pagar a
+  brapi Pro (~R$116/mês) daria dados limpos com API estável — mas viola o custo zero. A escolha do MVP
+  é <strong>grátis e raspado</strong>, com a fragilidade <strong>mitigada por quatro travas</strong>: (1) o <strong>port</strong>
+  torna a troca para uma fonte licenciada um detalhe de config; (2) o <strong>Fake</strong> é o default, então
+  dev/CI nunca dependem da fonte real; (3) testes de parser baseados em <strong>fixtures</strong>; e (4)
+  <strong>degradação graciosa</strong> — uma falha de parse mantém o último dado bom, nunca escreve lixo.
+  Quando/se a raspagem provar fraca demais, graduar para a fonte licenciada é uma troca de config,
+  rastreada como dívida técnica (§15).
+</div>
+
+<p>E a robustez não é só no contorno — é dentro do parser. O Fundamentus localiza as colunas <strong>por
+palavra-chave no cabeçalho</strong>, não por posição fixa, então um reordenamento de colunas não quebra
+nada; e um <em>layout</em> irreconhecível vira <code>ErrProviderUnavailable</code> (degrada), não uma escrita
+corrompida:</p>
+
+<pre><code>// internal/marketdata/fundamentus/fundamentus.go
+rows, err := parseTableRows(io.LimitReader(resp.Body, maxBytes))  // body cap (hardening do SPEC-005)
+if err != nil || len(rows) &lt; 2 {
+    return nil, fmt.Errorf("%w: fundamentus parse: empty or unreadable table", marketdata.ErrProviderUnavailable)
+}
+cols := indexColumns(rows[0])                 // acha "papel"/"cota"/"dividend yield"/"p/vp"/"segmento"
+if cols.ticker &lt; 0 || cols.price &lt; 0 {        // colunas essenciais sumiram = layout mudou
+    return nil, fmt.Errorf("%w: fundamentus parse: expected columns not found (layout changed?)", marketdata.ErrProviderUnavailable)
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="dinheiro">4. Disciplina de dinheiro: <code>int64</code> centavos + basis points (BR-604)</h2>
+
+<p>A convenção mais inegociável da casa: <strong>dinheiro nunca é <code>float64</code></strong>. Preço e dividendos
+são <code>int64</code> em <strong>centavos</strong> (unidades menores); dividend yield, SELIC, CDI, IPCA e P/VP são
+inteiros em <strong>basis points</strong> (1 bp = 0,01%). A migration não tem <strong>uma coluna de ponto flutuante</strong>:</p>
+
+<pre><code>-- migrations/0003_market_data.up.sql
+CREATE TABLE fii_quotes (
+    ticker                 text        PRIMARY KEY,
+    price_centavos         bigint      NOT NULL,   -- R$ em centavos
+    dividend_yield_bps     integer     NOT NULL,   -- yield em basis points
+    p_vp_bps               integer     NOT NULL,   -- razão P/VP ×10000 (0.95 -> 9500)
+    sector                 text        NOT NULL,
+    last_dividend_centavos bigint      NOT NULL DEFAULT 0,
+    ...
+);</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que tanto rigor? Porque <code>float</code> não é determinístico</span>
+  <code>0.1 + 0.2 != 0.3</code> em ponto flutuante binário — o erro de arredondamento se acumula. Mas o PRD
+  exige <strong>"mesmos inputs → mesmo Health Score"</strong>: o cálculo tem que ser reproduzível bit a bit. Com
+  inteiros, <code>15,75</code> vira exatamente <code>1575</code> centavos, sempre. Toda a conversão de string
+  decimal → inteiro mora <strong>num lugar só</strong>, com <strong>uma regra documentada de arredondamento
+  (half-up)</strong>, para que cada adaptador produza o mesmo número a partir da mesma string da fonte:
+</div>
+
+<pre><code>// internal/platform/money/money.go
+//	DecimalToMinor("15,75", 2) -> 1575   // R$15,75 -> centavos
+//	DecimalToMinor("8,50", 2)  -> 850    // 8.50%   -> basis points
+//	DecimalToMinor("0,95", 4)  -> 9500   // razão P/VP -> ratio basis points
+func DecimalToMinor(s string, scale int) (int64, error) { ... }</code></pre>
+
+<p>Note que ele aceita as duas notações: a <strong>brasileira</strong> (<code>"1.234,56"</code> — ponto como
+separador de milhar, vírgula decimal) e a <strong>simples</strong> (<code>"0.11"</code>) — porque o Fundamentus
+serve PT-BR e o Yahoo serve <code>en-US</code>. Centralizar isso é o que permite os dois adaptadores
+compartilharem a mesma regra de arredondamento sem duplicar lógica frágil.</p>
+
+<div class="box bug">
+  <span class="lbl">Dois bugs de correção pegos em revisão (e por que o helper é centralizado e testado a fundo)</span>
+  Justamente porque <strong>todo</strong> número monetário do projeto passa por <code>DecimalToMinor</code>, um bug ali
+  contaminaria preço, yield, P/VP e todos os indicadores macro de uma vez. A revisão pegou dois:
+  <ul style="margin:6px 0 0">
+    <li><strong>Overflow de <code>int64</code> no carry do arredondamento.</strong> Quando o half-up precisa somar
+    1 e o valor já é <code>math.MaxInt64</code>, o <code>val++</code> daria a volta para negativo silenciosamente.
+    A correção: detectar o caso e devolver um erro de overflow.
+    <pre><code>if roundUp {
+    if val == math.MaxInt64 { // o carry estouraria o int64
+        return 0, fmt.Errorf("money: %q: overflow: %w", s, ErrInvalidDecimal)
+    }
+    val++
+}</code></pre></li>
+    <li><strong>Sinal solitário parseando para 0.</strong> Uma string como <code>"-"</code> ou <code>"+"</code>
+    (sinal sem dígitos) passava e virava <code>0</code> em vez de erro. A correção rejeita explicitamente
+    quando não há <strong>nenhum dígito</strong>:
+    <pre><code>if intPart == "" &amp;&amp; fracPart == "" {
+    // Nenhum dígito — ex.: "", um sinal solitário, ou ".".
+    return 0, fmt.Errorf("money: %q: %w", s, ErrInvalidDecimal)
+}</code></pre></li>
+  </ul>
+  A lição: um helper compartilhado e crítico merece <strong>testes table-driven rigorosos de borda</strong> —
+  é o ponto onde um bug pequeno tem alcance gigante.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="lkg">5. Integridade do "último dado bom" (BR-602)</h2>
+
+<p>Esta é a alma de confiabilidade da spec. Um dashboard só vale o quanto valem os dados por trás dele.
+A regra: <strong>um fetch que falhou, veio vazio ou veio malformado NUNCA pode sobrescrever uma linha boa</strong>.
+Melhor servir um dado de ontem (e marcá-lo como velho) do que apagar o bom e mostrar nada — ou pior,
+mostrar lixo. Três mecanismos garantem isso.</p>
+
+<h3>5.1 — Upsert idempotente via <code>ON CONFLICT</code></h3>
+<p>A escrita é um único <code>INSERT ... ON CONFLICT ... DO UPDATE</code> — atômico e idempotente. Rodar de
+novo com o mesmo dado dá a mesma linha; rodar com agendamentos sobrepostos não duplica nem corrompe:</p>
+
+<pre><code>// internal/marketdata/postgres/postgres.go
+INSERT INTO fii_quotes (ticker, price_centavos, ...) VALUES ($1, $2, ...)
+ON CONFLICT (ticker) DO UPDATE SET
+    price_centavos = EXCLUDED.price_centavos,
+    ...
+    fetched_at     = EXCLUDED.fetched_at</code></pre>
+
+<p>O macro usa a mesma ideia, mas a chave é <strong><code>(indicator, reference_date)</code></strong> — porque macro
+é uma <strong>série temporal</strong> (D5): re-buscar a mesma data é um no-op, e datas novas viram linhas novas.
+O <code>GetLatest</code> só lê a <code>reference_date</code> mais recente por indicador.</p>
+
+<h3>5.2 — A chave é: o fetch ruim nunca chega ao banco</h3>
+<p>O segredo do "último dado bom" não está no SQL — está <strong>antes</strong> dele. O worker só chama
+<code>Upsert</code> quando o fetch <strong>deu certo</strong>. Se a fonte caiu, ele <strong>nem tenta escrever</strong> — então a
+linha boa anterior fica intacta por construção:</p>
+
+<pre><code>// internal/marketdata/ingest/worker.go — isolamento por item
+quotes, err := w.provider.FetchFIIQuotes(fctx, tickers)
+if err != nil {
+    // Degrada: mantém o último dado bom de TODOS os tickers (BR-602).
+    w.logger.Warn("market data: FII provider unavailable; keeping last-known-good", ...)
+    w.recordItem(ctx, "fii", "provider_error")
+    sum.FIIFailed += len(tickers)
+    return                                  // NÃO escreve nada
+}
+for t, q := range quotes {
+    if err := w.fiiRepo.UpsertFIIQuote(ctx, q); err != nil { ... continue }  // 1 ruim não aborta o resto
+}</code></pre>
+
+<h3>5.3 — Isolamento de falha por item</h3>
+<p>Um ticker ruim, um indicador macro indisponível, um erro de gravação — nada disso aborta a rodada.
+O <code>RunOnce</code> <strong>nunca retorna erro</strong>: ele isola, registra (log + métrica) e segue. O resultado é
+uma <code>Summary</code> com contagens de OK e falha, classificada em <code>success</code> / <code>partial</code> /
+<code>error</code> para a telemetria.</p>
+
+<div class="box why">
+  <span class="lbl">Dado global, SEM <code>user_id</code> (BR-603) — o contraste com o SPEC-003</span>
+  Na autenticação (SPEC-003), <strong>tudo</strong> era escopado por usuário: <code>WHERE user_id = $1</code>, com o ID
+  vindo do <em>contexto</em>, nunca do payload. Aqui é o <strong>oposto deliberado</strong>: o preço do
+  <code>HGLG11</code> é o mesmo para todo mundo. Dados de mercado são <strong>referência global</strong> — não há
+  coluna <code>user_id</code> em lugar nenhum desta migration. A regra "identidade vem do contexto" não se
+  aplica a dado compartilhado. Entender <em>quando</em> escopar por usuário e <em>quando não</em> é parte do
+  design: o isolamento por usuário protege dado <em>privado</em>; dado de mercado é <em>público</em>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="worker">6. O worker de ingestão &amp; o agendamento</h2>
+
+<div class="box tip">
+  <span class="lbl">"Ingestion" e "worker" em português claro (perguntas reais de quem aprende)</span>
+  <ul style="margin:6px 0 0">
+    <li><strong>Ingestão (<em>ingestion</em>)</strong> = o ato de <strong>puxar dados de uma fonte externa para
+    dentro do nosso armazenamento</strong>. Não transformamos nem servimos nada ainda; só buscamos lá fora e
+    guardamos aqui. É o "I" de um pipeline de dados.</li>
+    <li><strong>Worker</strong> = um <strong>processo de fundo</strong> que faz trabalho <strong>sem ser disparado por uma
+    requisição HTTP</strong> de usuário. Enquanto um <em>handler</em> roda "porque alguém chamou a API", o worker
+    roda "porque chegou a hora" (um relógio). É trabalho <em>desacoplado do request path</em>.</li>
+  </ul>
+</div>
+
+<p>Por que desacoplar da requisição? Porque buscar a tabela inteira do Fundamentus e quatro séries do
+BCB leva segundos e pode falhar — você <strong>não</strong> quer que um usuário pedindo o dashboard espere por
+isso, nem que o request dele dispare uma raspagem. A ingestão roda <strong>em fundo, na sua própria
+cadência</strong>, e o dashboard só <strong>lê</strong> o que já está guardado. Há <strong>dois modos de disparar</strong> (D2):</p>
+
+<table>
+  <tr><th>Modo</th><th>O que é</th><th>Quando usar</th></tr>
+  <tr>
+    <td><strong><code>cmd/ingest</code></strong> (one-shot)</td>
+    <td>Um binário que faz <strong>uma</strong> rodada e sai. Sai com código ≠ 0 só em erro fatal (config/DB), nunca por falha de item.</td>
+    <td>O <strong>primário</strong> — chamado pelo cron do host. Sem risco de ingestão duplicada quando há várias réplicas da API.</td>
+  </tr>
+  <tr>
+    <td><strong>Scheduler in-process</strong></td>
+    <td>Uma goroutine dentro do <code>cmd/api</code> que roda no intervalo configurado, via <code>Clock</code>; ligada por flag (<code>MARKETDATA_SCHEDULER_ENABLED</code>).</td>
+    <td>Conveniência do MVP single-instance. <strong>Desligada</strong> em multi-réplica (senão N réplicas ingerem em paralelo).</td>
+  </tr>
+</table>
+
+<p>O scheduler roda uma vez na partida (dado fresco no boot), depois a cada intervalo, e <strong>para
+limpo</strong> quando o contexto é cancelado — drenando a rodada em voo <strong>antes</strong> de o banco fechar no
+shutdown:</p>
+
+<pre><code>// internal/marketdata/ingest/scheduler.go
+func (s *Scheduler) Run(ctx context.Context) {
+    s.worker.RunOnce(ctx)                      // roda já, na partida
+    ticker := time.NewTicker(s.interval)
+    defer ticker.Stop()
+    for {
+        select {
+        case &lt;-ctx.Done():                      // shutdown: para limpo
+            s.logger.Info("market data scheduler stopped")
+            return
+        case &lt;-ticker.C:
+            s.worker.RunOnce(ctx)
+        }
+    }
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Cadência (wall time) vs. dado (Clock) — uma distinção fina</span>
+  O <code>time.Ticker</code> usa o relógio de parede para a <strong>cadência</strong> (de quanto em quanto tempo
+  disparar) — isso é correto, é tempo real. Mas todo dado <strong>gravado</strong> (<code>observed_at</code>,
+  <code>fetched_at</code>, o cálculo de <em>staleness</em>) usa o <strong><code>Clock</code> injetado</strong>, nunca
+  <code>time.Now()</code> — para que os testes sejam determinísticos. "Quando disparar" é wall time;
+  "que carimbo o dado leva" é o <code>Clock</code>.
+</div>
+
+<h4>Observabilidade: só metadados (FR-609)</h4>
+<p>Cada rodada abre um <strong>span</strong> <code>marketdata.ingest</code>, com um <strong>span-filho por chamada de
+provedor</strong> (<code>marketdata.fetch_fii</code> / <code>marketdata.fetch_macro</code>). Os atributos são
+<strong>provider, kind, outcome, contagens</strong> — <strong>nunca</strong> um token de API (as fontes do MVP nem usam
+chave) e nunca payload. Há contadores (<code>ingestion_runs</code>, <code>ingestion_items</code>) e um <strong>gauge de
+frescor</strong> — segundos desde a última rodada — para alertar se a ingestão travar:</p>
+
+<pre><code>// internal/marketdata/ingest/worker.go
+if gauge, err := meter.Int64ObservableGauge("marketdata.seconds_since_last_run"); err == nil {
+    _, _ = meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+        ...
+        o.ObserveInt64(gauge, int64(w.clock.Now().Sub(last)/time.Second))  // só uma duração, zero PII
+        return nil
+    }, gauge)
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">7. As 6 decisões (D1–D6) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Um port ou dois?</td>
+    <td><strong>Um port conceitual</strong> (FII + macro), FII <strong>em lote</strong></td>
+    <td>Casa com o nome do PRD (<code>MarketDataProvider</code>); adaptadores ainda diferem por fonte internamente. A leitura de FII é batched porque a fonte devolve tudo de uma vez.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Modelo de agendamento?</td>
+    <td><strong><code>cmd/ingest</code> one-shot (cron) primário</strong> + scheduler in-process opcional (flag)</td>
+    <td>O cron evita ingestão duplicada quando a API escala horizontalmente; o scheduler é conveniência do MVP single-instance, desligável.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>De onde vêm os tickers, antes do SPEC-102?</td>
+    <td><strong>Watchlist configurada</strong> (<code>MARKETDATA_WATCHLIST</code>) via <code>TickerSource</code></td>
+    <td>Um port <code>TickerSource</code> com um adaptador estático agora; quando o SPEC-102 (holdings) chegar, troca-se por uma fonte baseada na carteira — sem mexer no worker.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Fonte de FII + macro?</td>
+    <td><strong>Composição: Fundamentus (bulk) + Yahoo <code>.SA</code> (último dividendo); BCB SGS (macro)</strong></td>
+    <td>Não há API grátis única (brapi tornou P/VP e segmento pagos). Compor fontes grátis atrás do port, trocável depois por uma licenciada — sem reescrita.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Forma do armazenamento macro?</td>
+    <td><strong>Série temporal</strong> (<code>indicator, reference_date</code>); FII fica <strong>snapshot</strong></td>
+    <td>A fonte já devolve uma série; útil para projeções/gráficos futuros; <code>GetLatest</code> expõe o mais recente. FII guarda só o snapshot atual (histórico fica para o SPEC-107).</td>
+  </tr>
+  <tr>
+    <td><strong>D6</strong></td><td>Como representar P/VP e razões?</td>
+    <td><strong>Basis points da razão</strong> (×10000): 0,95 → 9500</td>
+    <td>Consistente com a convenção de bps; sem float. Uma razão é só um número adimensional que também merece a disciplina inteira.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">8. As 7 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core puro primeiro, borda depois, cada fase compilando e
+revisável sozinha. Espelha a cadência do SPEC-005.</p>
+
+<h3>Fase 1 — Domínio, ports &amp; config</h3>
+<p>Value objects com construtor (<em>parse-don't-validate</em>): <code>Ticker</code> (4 letras + 1–2 dígitos),
+<code>Sector</code> (enum fechado; rótulo desconhecido → <code>Other</code>, acento-insensível), <code>Indicator</code>,
+<code>Unit</code>. Entidades <code>FIIQuote</code>/<code>MacroIndicator</code> (money <code>int64</code>, rates bps, tempo UTC).
+Os ports (<code>MarketDataProvider</code>, <code>FIIQuoteRepository</code>, <code>MacroRepository</code>,
+<code>TickerSource</code>) e os sentinelas (<code>ErrFIIQuoteNotFound</code>, <code>ErrMacroNotFound</code>,
+<code>ErrProviderUnavailable</code>). Config <code>MARKETDATA_*</code> com validação http(s)/positivos e máscara
+de token futuro.</p>
+
+<h3>Fase 2 — Persistência (migration + repositórios)</h3>
+<p>A migration <code>0003_market_data</code> up/down (bigint centavos, int bps, <strong>sem float, sem
+<code>user_id</code></strong>) e o pacote <code>postgres/</code>: upserts idempotentes <code>ON CONFLICT</code>,
+transacionais, reads que mapeiam <code>sql.ErrNoRows</code> → o sentinela <code>…NotFound</code>, com asserções
+<code>var _ marketdata.FIIQuoteRepository = …</code> em tempo de compilação.</p>
+
+<h3>Fase 3 — Adaptador de FII: composição Fundamentus + Yahoo (+ Fake)</h3>
+<p>Captura de <strong>fixtures</strong> reais (a página <code>.php</code> do Fundamentus, o JSON <code>.SA</code> do Yahoo);
+o <code>fundamentus/</code> (1 GET → parse de tabela HTML com <code>x/net/html</code> → mapa, <code>User-Agent</code>
+descritivo, body cap, layout-mudou → degrada); o <code>yahoo/</code> (último dividendo, melhor-esforço); o
+<code>fii/</code> que compõe os dois; e o <code>Fake</code> determinístico, o <strong>default</strong>.</p>
+
+<h3>Fase 4 — Adaptador macro (BCB SGS + IFIX)</h3>
+<p>O <code>bcb/</code>: busca SELIC/CDI/IPCA por código de série (consts documentados: 432, 4389, 13522),
+parseando para bps + <code>reference_date</code>. O <strong>IFIX não é série do BCB</strong> (é índice da B3) — o
+adaptador devolve <code>ErrProviderUnavailable</code> para ele e o worker degrada; uma fonte grátis de IFIX
+é um follow-up rastreado (§15). Mesmo contrato de degradação (timeout, body cap, falha → sentinela).</p>
+
+<h3>Fase 5 — Worker, scheduler, observabilidade &amp; <code>cmd/ingest</code></h3>
+<p>O <code>Worker.RunOnce</code> (resolve a watchlist + o set macro fixo; fetch→valida→upsert por item;
+isola falhas; devolve <code>Summary</code>); o scheduler in-process (Clock, flag-gated, drenado no shutdown);
+o <code>cmd/ingest</code> one-shot; a observabilidade (span por rodada + span-filho por chamada,
+contadores, gauge de frescor, só metadados); o alvo <code>task ingest</code>.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários <strong>sem rede nem DB</strong>: value objects e mapeamento money/bps; ambos adaptadores via
+<code>httptest</code> (sucesso, payload parcial, 404, 429→degrada, malformado, body cap); o worker com
+fakes (idempotência, último-dado-bom em falha, sucesso parcial, frescor/staleness com <code>Clock</code>
+falso). Integração <strong>gated</strong>: Postgres real (<code>TEST_DATABASE_URL</code>, <code>-p 1</code>) para a
+idempotência do upsert + round-trip up/down da <code>0003</code>; um fetch real BCB/FII <strong>opcional</strong> atrás
+de flag de env (pula limpo no CI, como o teste do Ollama vivo).</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (seção Market Data, <code>MARKETDATA_*</code>, <code>task ingest</code>),
+<code>.env.example</code>, <code>CHANGELOG.md</code>, SPEC-006 + PLAN-006 marcados <strong>Done</strong>, índices e
+status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">9. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o
+service importando o repositório <em>concreto</em>. A melhor forma de internalizar os ports &amp; adapters
+deste projeto é por <strong>tradução</strong>. (Para a teoria completa, veja a
+<a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>; aqui aplicamos
+ela ao SPEC-006.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-006</th><th>Onde vive</th></tr>
+  <tr><td>Controller / disparador</td><td><code>cmd/ingest</code> e o <code>Scheduler</code> (<strong>driving adapters</strong> — quem aciona o caso de uso)</td><td>Borda (<code>cmd/</code>, <code>ingest/</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>ingest.Worker</code> — o caso de uso "rodar uma ingestão", mas depende de <strong>ports</strong>, não de concretos</td><td>Borda de aplicação (orquestra; aqui também vive o OTel)</td></tr>
+  <tr><td>Repository concreto</td><td>Quebra em <strong>port</strong> (<code>FIIQuoteRepository</code>, no core) + <strong>adapter</strong> (<code>postgres.FIIQuoteRepository</code>, na borda)</td><td>Interface no core; SQL na borda</td></tr>
+  <tr><td>Cliente de API externa</td><td>Quebra em <strong>port</strong> (<code>MarketDataProvider</code>, no core) + <strong>adapters</strong> (<code>fundamentus/</code>, <code>yahoo/</code>, <code>bcb/</code>)</td><td>Interface no core; HTTP na borda</td></tr>
+  <tr><td>DTO</td><td>O struct <code>sgsObservation</code> / <code>chartResponse</code> — DTO de borda que se decodifica do JSON e converte para a entidade de domínio</td><td>Fica DTO, na borda</td></tr>
+  <tr><td>Entidade de domínio</td><td><code>FIIQuote</code>, <code>MacroIndicator</code>, <code>Ticker</code> — puros, sem SQL/HTTP/tempo</td><td>Core (domínio puro)</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> o repositório concreto — a seta de dependência aponta <strong>para
+fora</strong>, do núcleo rumo à infra. No hexagonal, isso vira: o <strong>core define a interface</strong> e o <strong>adapter
+a implementa</strong> — a seta aponta <strong>para dentro</strong>. Veja com o par real desta spec:</p>
+
+<pre><code>// O CORE define o port (internal/marketdata/ports.go):
+type FIIQuoteRepository interface {
+    UpsertFIIQuote(ctx context.Context, q FIIQuote) error
+    GetFIIQuoteByTicker(ctx context.Context, t Ticker) (FIIQuote, error)
+}
+
+// A BORDA o implementa e PROVA isso em tempo de compilação
+// (internal/marketdata/postgres/postgres.go):
+var _ marketdata.FIIQuoteRepository = FIIQuoteRepository{}   // o adapter depende do core, não o contrário</code></pre>
+
+<p>O <code>postgres</code> importa <code>marketdata</code>; <code>marketdata</code> <strong>jamais</strong> importa
+<code>database/sql</code> nem <code>net/http</code>. É por isso que o domínio é testável com fakes triviais e que
+trocar Fundamentus por brapi Pro, ou Postgres por outro banco, não toca uma linha do core.</p>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving ports</strong> (quem <em>aciona</em> a aplicação): <code>cmd/ingest</code> e o <code>Scheduler</code>
+  chamam <code>Worker.RunOnce</code>. Eles ficam à <strong>esquerda</strong> do hexágono.</li>
+  <li><strong>Driven ports</strong> (o que a aplicação <em>aciona</em>): <code>MarketDataProvider</code> (fontes
+  externas), <code>FIIQuoteRepository</code>/<code>MacroRepository</code> (banco), <code>TickerSource</code>
+  (watchlist). Ficam à <strong>direita</strong>.</li>
+  <li><strong>Domínio puro</strong>: <code>Ticker</code>, <code>Sector</code>, <code>FIIQuote</code>, <code>MacroIndicator</code>,
+  os sentinelas. <strong>Borda</strong>: tudo que tem HTTP, SQL ou OTel — os adaptadores e o pacote
+  <code>ingest</code>.</li>
+</ul>
+
+<div class="diagram">                 ┌──────────────── HEXÁGONO (core puro) ───────────────┐
+  cmd/ingest ──▶ │  Worker.RunOnce  (caso de uso)                       │
+  Scheduler  ──▶ │       │  depende de PORTS (interfaces), não concretos│
+   (driving)     │       ├── MarketDataProvider ◀── fundamentus/yahoo/bcb  (driven)
+                 │       ├── FIIQuoteRepository ◀── postgres/             (driven)
+                 │       ├── MacroRepository    ◀── postgres/             (driven)
+                 │       └── TickerSource       ◀── Watchlist             (driven)
+                 │  domínio: Ticker, FIIQuote, MacroIndicator (sem SQL/HTTP/OTel) │
+                 └──────────────────────────────────────────────────────┘
+   A seta de dependência sempre aponta PARA DENTRO: os adaptadores conhecem o core; o core não os conhece.</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">10. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA
+trilhos que <strong>baixam a taxa de erro</strong>. Veja, no SPEC-006, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "construa a ingestão" de uma vez. O PLAN-006 fatiou em 7 fases bottom-up, e cada
+uma fechava com <code>go build</code> + testes verdes antes da próxima. Construir o <strong>core puro primeiro</strong>
+(Fase 1) e só então a persistência (2) e os adaptadores de borda (3–4) significa que, quando o worker
+foi montado (Fase 5), todas as peças que ele compõe já existiam e eram testáveis isoladamente.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong>
+(BR-601 — o core <code>marketdata</code> não importa <code>net/http</code> nem <code>database/sql</code>; só os
+subpacotes de borda o fazem), o <strong>OTel só na borda</strong> (o pacote <code>ingest</code> importa OpenTelemetry;
+os adaptadores e o core <strong>não</strong>), e o <strong>no-<code>user_id</code></strong> (BR-603 — "este é dado global; não
+escope por usuário"). O doc-comment do pacote <code>ingest</code> declara essa fronteira explicitamente:
+<em>"Observability (OTel) lives here, at the edge — the marketdata core stays free of OTel."</em></p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que o core ficou puro</span>
+  É mecânica: <code>internal/marketdata</code> (core) e os adaptadores <code>fundamentus/</code>/<code>yahoo/</code>/
+  <code>bcb/</code>/<code>postgres/</code> <strong>não têm um único import de OpenTelemetry</strong> — todo o OTel mora em
+  <code>internal/marketdata/ingest</code>. E as asserções <code>var _ marketdata.FIIQuoteRepository = …</code> em
+  <code>postgres.go</code> fazem o compilador <strong>provar</strong> que o adapter satisfaz o port. Se a IA tivesse
+  metido um <code>span</code> dentro do <code>bcb</code>, ou esquecido um método do port, o build (ou o revisor)
+  barraria.
+</div>
+
+<h3>O <code>go-correctness-reviewer</code> e os dois bugs de dinheiro</h3>
+<p>Foi a lente de correção que pegou o <strong>overflow do <code>int64</code> no carry</strong> e o <strong>sinal solitário
+parseando para 0</strong> em <code>money.DecimalToMinor</code> (seção 4). Não eram bugs de arquitetura — eram
+bugs de <em>borda numérica</em>, exatamente o tipo que escapa numa leitura casual e que um revisor focado
+em correção (e testes table-driven de borda) flagra. Como o helper é <strong>centralizado</strong>, corrigir num
+lugar conserta todos os adaptadores.</p>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-006 referencia ADR-0002/0003 mas <strong>não os edita</strong> — se
+  a IA tentasse "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/
+  <code>gofmt</code> limpos — e os testes têm que passar <strong>sem rede e sem DB</strong>. Foi esse backstop que
+  provou, na prática, que o <code>Fake</code> default cobre o CI e que toda a feature roda offline.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-006</th><th>Por que baixa erro</th></tr>
+  <tr><td>Dinheiro nunca é <code>float64</code></td><td><code>price_centavos bigint</code>, <code>p_vp_bps integer</code>; tudo via <code>money.DecimalToMinor</code></td><td>Determinismo bit a bit — mesmos inputs, mesmo Health Score.</td></tr>
+  <tr><td>Erros são sentinelas, checados com <code>errors.Is</code></td><td><code>ErrProviderUnavailable</code>, <code>ErrFIIQuoteNotFound</code>; adaptadores envolvem com <code>%w</code></td><td>O worker distingue "degradou" de "não existe" sem comparar strings.</td></tr>
+  <tr><td>Parse-don't-validate</td><td><code>ParseTicker</code> valida no construtor — um <code>Ticker</code> inválido não existe</td><td>Um ticker malformado nunca chega a uma URL (anti request-forgery).</td></tr>
+  <tr><td>Tempo vem do <code>Clock</code>, nunca <code>time.Now()</code></td><td><code>observed_at</code>/<code>fetched_at</code> e o gauge de frescor usam <code>w.clock.Now()</code></td><td>Testes determinísticos de frescor/staleness — sem <code>sleep</code> frágil.</td></tr>
+  <tr><td>Reads nomeiam a operação; ausência = sentinela</td><td><code>GetFIIQuoteByTicker</code> → <code>ErrFIIQuoteNotFound</code>; <code>GetLatestMacroIndicator</code></td><td>Contrato de leitura previsível, igual em toda a base.</td></tr>
+  <tr><td>Doc-comments citam a BR/FR</td><td><code>// ... (SPEC-006 BR-602)</code> em todo adaptador e no SQL</td><td>Traço direto do documento ao código — a SDD fecha o ciclo.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td>A única nova: <code>golang.org/x/net/html</code> (parsing tolerante)</td><td>Já estava transitivamente no grafo (OTel/gRPC): zero download novo.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">11. Conexão com AI Engineering</h2>
+
+<p>O SPEC-006 <strong>não</strong> é uma feature de IA — é fundação de dados. Mas é a fundação que <strong>torna a IA
+honesta</strong>. Vale conectar este alicerce à arquitetura de IA futura.</p>
+
+<table>
+  <tr><th>Conceito de AI Engineering</th><th>Como o SPEC-006 o prepara</th></tr>
+  <tr>
+    <td><strong>Grounding / fonte de verdade</strong></td>
+    <td>A regra de ouro da IA confiável é "o modelo raciocina sobre fatos, não os inventa". O SPEC-006 produz <strong>esses fatos</strong>: preço, DY, P/VP, setor, SELIC/CDI/IPCA — <strong>ingeridos de forma determinística</strong>, nunca gerados (BR-605). É o solo onde o grounding pisa.</td>
+  </tr>
+  <tr>
+    <td><strong>Fact Builder (SPEC-104)</strong></td>
+    <td>O Fact Builder vai <strong>ler</strong> estes repositórios (<code>GetFIIQuoteByTicker</code>, <code>GetLatestMacroIndicator</code>), juntar com a carteira do usuário, e montar o <code>Facts</code> opaco que o <code>Insighter</code> recebe. O SPEC-006 é o "F" de onde os fatos vêm.</td>
+  </tr>
+  <tr>
+    <td><strong>Determinismo / reprodutibilidade</strong></td>
+    <td>Money em <code>int64</code> e rates em bps garantem que "mesmos inputs → mesmo Health Score" (PRD §6). Sem isso, o mesmo prompt produziria scores ligeiramente diferentes a cada rodada — e a explicabilidade (FR-013) perderia o chão.</td>
+  </tr>
+  <tr>
+    <td><strong>Frescor &amp; confiança do dado</strong></td>
+    <td><code>observed_at</code>/<code>fetched_at</code> + o gauge de staleness deixam a IA (e o usuário) saberem <strong>quão velho</strong> é o fato. Um insight sobre dado de ontem pode ser anotado como tal — em vez de fingir precisão que não tem.</td>
+  </tr>
+  <tr>
+    <td><strong>O seam multi-provedor (igual ao <code>Insighter</code>)</strong></td>
+    <td><code>MarketDataProvider</code> é a <strong>segunda costura de provedor externo</strong>, espelhando o <code>Insighter</code>. Esse padrão — todo recurso externo atrás de um port config-trocável — é exatamente o que o futuro <strong>MCP</strong> precisa: cada fonte de dados vira uma "ferramenta" plugável.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA confiável começa <strong>antes</strong> do modelo: com <strong>dados determinísticos e auditáveis</strong>. O
+  SPEC-005 instalou a costura por onde a IA fala e os portões que a verificam; o SPEC-006 instala a
+  <strong>fonte de verdade sobre a qual ela raciocina</strong> — ingerida, nunca inventada, com último-dado-bom
+  protegido, dinheiro em inteiros, e tudo atrás de um port trocável. Sem este chão, o grounding seria
+  ficção.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">12. O que vem a seguir</h2>
+
+<p>Com a fonte de verdade ingerida e protegida atrás de um port, as features que <strong>leem</strong> dados de
+mercado agora têm onde se apoiar. Repare como cada uma pluga numa peça que o SPEC-006 já deixou pronta.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como usa o SPEC-006</th></tr>
+  <tr><td>SPEC-102</td><td>Holdings (carteira)</td><td>Fornece uma <code>TickerSource</code> baseada na carteira — substitui a watchlist estática (D3), sem mexer no worker.</td></tr>
+  <tr><td>SPEC-103</td><td>Dashboard</td><td><strong>Lê</strong> <code>fii_quotes</code> + <code>macro_indicators</code> pelos repositórios para valor atual, alocação e renda passiva.</td></tr>
+  <tr><td>SPEC-104</td><td>Fact Builder + Insighter</td><td>Junta estes fatos de mercado com a carteira e os entrega ao <code>Insighter</code> como <code>Facts</code> — grounding determinístico.</td></tr>
+  <tr><td>SPEC-107</td><td>Projeções</td><td>Usa a <strong>série</strong> macro (D5) e, eventualmente, o histórico de dividendos de FII (hoje só snapshot — §15).</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001</td><td>Esqueleto Go (config, logs, HTTP, Docker)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-002</td><td>Persistência &amp; Migrations</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-003</td><td>Autenticação &amp; isolamento por usuário</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-004</td><td>Observabilidade (OpenTelemetry)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptador de LLM</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-101 / 102</td><td>Perfil &amp; Holdings — <em>fornece</em> a <code>TickerSource</code> real</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O <code>MarketDataProvider</code> como seam do multi-agente CIO + MCP</span>
+  Olhando longe: assim como o <code>Insighter</code> é a fronteira por onde o futuro sistema multi-agente
+  (o "CIO") raciocina, o <code>MarketDataProvider</code> é a fronteira por onde ele <strong>obtém dados</strong>.
+  No mundo MCP, cada fonte externa vira uma <strong>ferramenta plugável</strong> — e o SPEC-006 já modelou dados
+  de mercado exatamente assim: atrás de um port, config-trocável, com degradação graciosa e telemetria
+  sem segredos. Quando o CIO chegar, ele herda essa costura intacta — adicionar uma fonte nova (ou uma
+  ferramenta MCP) é plugar um adapter, não reescrever o núcleo.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-006 o YieldForge ganhou sua <strong>fonte de verdade de mercado</strong>: o port
+  <code>MarketDataProvider</code> com Fundamentus + Yahoo (FII) e BCB SGS (macro) trocáveis por config,
+  dinheiro em <code>int64</code> centavos e rates em bps, upserts idempotentes que <strong>nunca sobrescrevem o
+  último dado bom</strong>, e um worker de ingestão desacoplado do request path — tudo com o core puro e o
+  OTel só na borda, pronto para alimentar o dashboard, o Fact Builder e as projeções.
+</div>
+
+<footer>
+  YieldForge · Aula 06 (SPEC-006) · gerada como material de estudo. Veja também a
+  <a href="SPEC-001-aula.html">Aula 01</a>, a <a href="SPEC-002-aula.html">Aula 02</a>, a
+  <a href="SPEC-003-aula.html">Aula 03</a>, a <a href="SPEC-004-aula.html">Aula 04</a>, a
+  <a href="SPEC-005-aula.html">Aula 05</a>, a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-006-marketdata-port-and-ingestion-worker.md">SPEC-006</a>
+  e o <a href="../03-plans/PLAN-006-marketdata-port-and-ingestion-worker.md">PLAN-006</a>.
+</footer>
+
+</div>
+</body>
+</html>

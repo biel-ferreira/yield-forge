@@ -8,6 +8,7 @@ package money
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -19,7 +20,9 @@ var ErrInvalidDecimal = errors.New("invalid decimal number")
 // half-up. It accepts both Brazilian and plain forms: if a comma is present, dots are
 // treated as thousands separators and the comma as the decimal point ("1.234,56" →
 // 123456 at scale 2); otherwise a dot is the decimal point ("0.11" → 11 at scale 2).
-// Callers pass a clean numeric string (e.g. strip a trailing '%').
+// Callers pass a clean numeric string (e.g. strip a trailing '%'). Rounding is half-up by
+// magnitude, so a negative rounds away from zero ("-0,005" at scale 2 -> -1). Market-data
+// values are non-negative; this only matters if money is reused for signed amounts.
 //
 //	DecimalToMinor("15,75", 2) -> 1575   // R$15,75 -> centavos
 //	DecimalToMinor("8,50", 2)  -> 850    // 8.50%   -> basis points
@@ -47,6 +50,10 @@ func DecimalToMinor(s string, scale int) (int64, error) {
 	}
 
 	intPart, fracPart, _ := strings.Cut(s, ".")
+	if intPart == "" && fracPart == "" {
+		// No digits at all — e.g. "", a lone sign, or ".".
+		return 0, fmt.Errorf("money: %q: %w", s, ErrInvalidDecimal)
+	}
 	if intPart == "" {
 		intPart = "0"
 	}
@@ -68,6 +75,9 @@ func DecimalToMinor(s string, scale int) (int64, error) {
 		return 0, fmt.Errorf("money: %q: %w", s, ErrInvalidDecimal)
 	}
 	if roundUp {
+		if val == math.MaxInt64 { // the carry would overflow int64
+			return 0, fmt.Errorf("money: %q: overflow: %w", s, ErrInvalidDecimal)
+		}
 		val++
 	}
 	if neg {

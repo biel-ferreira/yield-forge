@@ -24,12 +24,13 @@ import (
 // ticker or a provider outage never aborts the run, and a failed fetch never overwrites
 // last-known-good data (SPEC-006 BR-602, FR-605, FR-610).
 type Worker struct {
-	provider  marketdata.MarketDataProvider
-	fiiRepo   marketdata.FIIQuoteRepository
-	macroRepo marketdata.MacroRepository
-	tickers   marketdata.TickerSource
-	clock     clock.Clock
-	logger    *slog.Logger
+	provider     marketdata.MarketDataProvider
+	providerName string // telemetry label (fake | live), low-cardinality
+	fiiRepo      marketdata.FIIQuoteRepository
+	macroRepo    marketdata.MacroRepository
+	tickers      marketdata.TickerSource
+	clock        clock.Clock
+	logger       *slog.Logger
 
 	tracer trace.Tracer
 	runs   metric.Int64Counter
@@ -59,6 +60,7 @@ func (s Summary) outcome() string {
 
 func newWorker(
 	provider marketdata.MarketDataProvider,
+	providerName string,
 	fiiRepo marketdata.FIIQuoteRepository,
 	macroRepo marketdata.MacroRepository,
 	tickers marketdata.TickerSource,
@@ -70,15 +72,16 @@ func newWorker(
 	items, _ := meter.Int64Counter("marketdata.ingestion_items")
 
 	w := &Worker{
-		provider:  provider,
-		fiiRepo:   fiiRepo,
-		macroRepo: macroRepo,
-		tickers:   tickers,
-		clock:     clk,
-		logger:    logger,
-		tracer:    observability.Tracer("marketdata"),
-		runs:      runs,
-		items:     items,
+		provider:     provider,
+		providerName: providerName,
+		fiiRepo:      fiiRepo,
+		macroRepo:    macroRepo,
+		tickers:      tickers,
+		clock:        clk,
+		logger:       logger,
+		tracer:       observability.Tracer("marketdata"),
+		runs:         runs,
+		items:        items,
 	}
 
 	// Freshness signal: seconds since the last completed run, so monitoring can alert if
@@ -109,6 +112,7 @@ func (w *Worker) RunOnce(ctx context.Context) Summary {
 
 	outcome := sum.outcome()
 	span.SetAttributes(
+		attribute.String("marketdata.provider", w.providerName),
 		attribute.Int("marketdata.fii_ok", sum.FIIOK),
 		attribute.Int("marketdata.fii_failed", sum.FIIFailed),
 		attribute.Int("marketdata.macro_ok", sum.MacroOK),
@@ -116,7 +120,10 @@ func (w *Worker) RunOnce(ctx context.Context) Summary {
 		attribute.String("marketdata.outcome", outcome),
 	)
 	if w.runs != nil {
-		w.runs.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", outcome)))
+		w.runs.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("provider", w.providerName),
+			attribute.String("outcome", outcome),
+		))
 	}
 
 	w.mu.Lock()
@@ -142,8 +149,16 @@ func (w *Worker) ingestFII(ctx context.Context, sum *Summary) {
 		return // macro-only run
 	}
 
-	quotes, err := w.provider.FetchFIIQuotes(ctx, tickers)
+	// Child span for the provider call (SPEC-006 FR-609): provider/kind/outcome only.
+	fctx, span := w.tracer.Start(ctx, "marketdata.fetch_fii")
+	quotes, err := w.provider.FetchFIIQuotes(fctx, tickers)
 	if err != nil {
+		span.SetAttributes(
+			attribute.String("marketdata.provider", w.providerName),
+			attribute.String("marketdata.kind", "fii"),
+			attribute.String("marketdata.outcome", "provider_error"),
+		)
+		span.End()
 		// Degrade: keep last-known-good for every ticker (BR-602).
 		w.logger.Warn("market data: FII provider unavailable; keeping last-known-good",
 			slog.String("error", err.Error()))
@@ -151,6 +166,13 @@ func (w *Worker) ingestFII(ctx context.Context, sum *Summary) {
 		sum.FIIFailed += len(tickers)
 		return
 	}
+	span.SetAttributes(
+		attribute.String("marketdata.provider", w.providerName),
+		attribute.String("marketdata.kind", "fii"),
+		attribute.String("marketdata.outcome", "success"),
+		attribute.Int("marketdata.count", len(quotes)),
+	)
+	span.End()
 
 	for t, q := range quotes {
 		if err := w.fiiRepo.UpsertFIIQuote(ctx, q); err != nil {
@@ -167,8 +189,15 @@ func (w *Worker) ingestFII(ctx context.Context, sum *Summary) {
 
 func (w *Worker) ingestMacro(ctx context.Context, sum *Summary) {
 	for _, ind := range marketdata.AllIndicators {
-		m, err := w.provider.FetchMacroIndicator(ctx, ind)
+		mctx, span := w.tracer.Start(ctx, "marketdata.fetch_macro")
+		m, err := w.provider.FetchMacroIndicator(mctx, ind)
 		if err != nil {
+			span.SetAttributes(
+				attribute.String("marketdata.provider", w.providerName),
+				attribute.String("marketdata.indicator", string(ind)),
+				attribute.String("marketdata.outcome", "provider_error"),
+			)
+			span.End()
 			// IFIX has no free source yet (SPEC-006 §15) and any source can be down: degrade.
 			w.logger.Warn("market data: macro indicator unavailable; keeping last-known-good",
 				slog.String("indicator", string(ind)), slog.String("error", err.Error()))
@@ -176,6 +205,12 @@ func (w *Worker) ingestMacro(ctx context.Context, sum *Summary) {
 			sum.MacroFailed++
 			continue
 		}
+		span.SetAttributes(
+			attribute.String("marketdata.provider", w.providerName),
+			attribute.String("marketdata.indicator", string(ind)),
+			attribute.String("marketdata.outcome", "success"),
+		)
+		span.End()
 		if err := w.macroRepo.UpsertMacroIndicator(ctx, m); err != nil {
 			w.logger.Error("market data: upsert macro indicator failed",
 				slog.String("indicator", string(ind)), slog.String("error", err.Error()))
@@ -191,6 +226,7 @@ func (w *Worker) ingestMacro(ctx context.Context, sum *Summary) {
 func (w *Worker) recordItem(ctx context.Context, kind, outcome string) {
 	if w.items != nil {
 		w.items.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("provider", w.providerName),
 			attribute.String("kind", kind),
 			attribute.String("outcome", outcome),
 		))

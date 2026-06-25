@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	noopTrace "go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 )
@@ -74,7 +78,72 @@ func testWorker(t *testing.T, provider marketdata.MarketDataProvider, fii market
 	wl, err := marketdata.NewWatchlist(watch)
 	require.NoError(t, err)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return newWorker(provider, fii, macro, wl, fakeClock{t: time.Unix(1_700_000_000, 0).UTC()}, logger)
+	return newWorker(provider, "fake", fii, macro, wl, fakeClock{t: time.Unix(1_700_000_000, 0).UTC()}, logger)
+}
+
+// --- span recorder helpers (in-memory OTel exporter) ---
+
+func spanRecorder(t *testing.T) *tracetest.InMemoryExporter {
+	t.Helper()
+	exp := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+		otel.SetTracerProvider(noopTrace.NewTracerProvider())
+	})
+	return exp
+}
+
+func attr(span tracetest.SpanStub, key string) (string, bool) {
+	for _, kv := range span.Attributes {
+		if string(kv.Key) == key {
+			return kv.Value.Emit(), true
+		}
+	}
+	return "", false
+}
+
+// TestRunOnce_SpanCarriesMetadataOnly verifies the ingestion span records low-cardinality
+// run metadata (provider + outcome + per-kind counts) and nothing sensitive (FR-609, BR-608).
+func TestRunOnce_SpanCarriesMetadataOnly(t *testing.T) {
+	exp := spanRecorder(t)
+	w := testWorker(t, marketdata.Fake{}, newMemFIIRepo(), newMemMacroRepo(), "HGLG11")
+
+	w.RunOnce(context.Background())
+
+	spans := exp.GetSpans()
+	require.NotEmpty(t, spans)
+
+	var parent tracetest.SpanStub
+	var sawFetchFII, sawFetchMacro bool
+	for _, s := range spans {
+		switch s.Name {
+		case "marketdata.ingest":
+			parent = s
+		case "marketdata.fetch_fii":
+			sawFetchFII = true
+		case "marketdata.fetch_macro":
+			sawFetchMacro = true
+		}
+	}
+	require.Equal(t, "marketdata.ingest", parent.Name, "the span is named for the operation, not an id")
+	require.True(t, sawFetchFII, "a child span per provider call (FR-609)")
+	require.True(t, sawFetchMacro, "a child span per macro provider call (FR-609)")
+
+	outcome, ok := attr(parent, "marketdata.outcome")
+	require.True(t, ok)
+	require.Equal(t, "success", outcome)
+
+	// Only the documented low-cardinality keys appear on the parent span — no token/URL/payload.
+	allowed := map[string]bool{
+		"marketdata.provider": true, "marketdata.outcome": true,
+		"marketdata.fii_ok": true, "marketdata.fii_failed": true,
+		"marketdata.macro_ok": true, "marketdata.macro_failed": true,
+	}
+	for _, kv := range parent.Attributes {
+		require.True(t, allowed[string(kv.Key)], "unexpected span attribute %q (possible leak)", kv.Key)
+	}
 }
 
 func TestRunOnce_HappyPath(t *testing.T) {

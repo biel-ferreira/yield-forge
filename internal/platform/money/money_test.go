@@ -38,7 +38,11 @@ func TestDecimalToMinor(t *testing.T) {
 }
 
 func TestDecimalToMinor_Invalid(t *testing.T) {
-	for _, in := range []string{"", "abc", "1,2,3", "R$ 10", "1.2.3,4x"} {
+	for _, in := range []string{
+		"", "abc", "1,2,3", "R$ 10", "1.2.3,4x",
+		"-", "+", ".", // a lone sign / dot is not a number (must not parse to 0)
+		"92233720368547758.075", // round-up carry would overflow int64
+	} {
 		_, err := DecimalToMinor(in, 2)
 		require.ErrorIs(t, err, ErrInvalidDecimal, "should reject %q", in)
 	}

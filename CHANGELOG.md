@@ -159,6 +159,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test, and an in-memory-exporter assertion that **no facts/content reach a span**
   (BR-505). Gated live-Ollama integration test skips cleanly without `TEST_OLLAMA_URL`.
 
+#### SPEC-006 implementation (MarketDataProvider port & ingestion worker)
+
+- `internal/marketdata` core (pure — no HTTP/SQL/OTel/SDK): the `MarketDataProvider`,
+  `FIIQuoteRepository`, `MacroRepository`, and `TickerSource` ports; the `FIIQuote` /
+  `MacroIndicator` domain and `Ticker` / `Sector` / `Indicator` / `Unit` value objects;
+  sentinel errors; a deterministic `Fake`; and a `Watchlist` ticker source. Market data is
+  **global reference data — no `user_id` anywhere** (BR-603).
+- `internal/platform/money` — the project's single rounding rule (**half-up**):
+  `DecimalToMinor` parses Brazilian and plain decimal strings into `int64` minor units
+  (centavos) and integer **basis points** (DY, P/VP, SELIC/CDI/IPCA), so no value is ever
+  a `float64` (BR-604).
+- Provider adapters behind the port (FII source chosen per D4, free + no key): `fundamentus`
+  (one bulk request → price/DY/P-VP/segment, HTML table parsed by header keyword via
+  `golang.org/x/net/html`), `yahoo` (`.SA` last dividend, best-effort), and `bcb` (BCB-SGS
+  SELIC/CDI/IPCA by series code). A `fii` composite merges fundamentals + last dividend.
+  Every adapter caps the body (`io.LimitReader`), sends a descriptive `User-Agent`, and
+  degrades to `ErrProviderUnavailable` on any failure — **never corrupting last-known-good**.
+- Persistence: migration `0003_market_data` (`fii_quotes` snapshot per ticker;
+  `macro_indicators` time series; `bigint`/`integer` only, no floats, no `user_id`) and the
+  Postgres repositories with **idempotent `ON CONFLICT` upserts** (a re-run/overlap is safe;
+  a failed fetch never overwrites a good row — BR-602).
+- `internal/marketdata/ingest` (the edge — OTel lives here, core stays pure): the **worker**
+  (`RunOnce` with per-item failure isolation + graceful degradation), the Clock-driven
+  **scheduler** (flag-gated, wired into `cmd/api` and drained before the DB closes), the
+  composition **factory** (`live` = composite + BCB, default `fake`), and ingestion
+  **observability** — `marketdata.ingest` span + per-provider-call child spans, `ingestion_runs`
+  / `ingestion_items` counters, and a `seconds_since_last_run` freshness gauge, all metadata
+  only (no secrets/payload — BR-608).
+- `cmd/ingest` one-shot runner (cron-friendly; `task ingest` / `make ingest`), the
+  request-decoupled alternative to the in-process scheduler.
+- Configuration `MARKETDATA_PROVIDER` (fake|live), `MARKETDATA_FUNDAMENTUS_BASE_URL`,
+  `MARKETDATA_YAHOO_BASE_URL`, `MARKETDATA_BCB_BASE_URL` (all http(s)-validated),
+  `MARKETDATA_WATCHLIST`, `MARKETDATA_REFRESH_INTERVAL` (>0), `MARKETDATA_TIMEOUT` (>0),
+  `MARKETDATA_SCHEDULER_ENABLED`; `.env.example` updated.
+- Tests: value objects + money (BR/plain forms, half-up, overflow/lone-sign rejection),
+  adapter `httptest` suites (header-keyed parse, layout-change/HTTP-error/429→degrade,
+  best-effort dividend, BCB series codes), worker paths (last-known-good on outage,
+  store-failure isolation, macro-only), span-metadata-only assertion, and a **real-Postgres
+  integration** proving upsert idempotency + the `0003` round-trip.
+- New direct dependency: `golang.org/x/net` (HTML table parsing) — already transitive via
+  the OTel stack, so no new download (ADR-0003 stdlib-first posture preserved).
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while

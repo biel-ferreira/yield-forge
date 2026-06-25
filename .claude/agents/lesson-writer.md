@@ -38,7 +38,28 @@ SDD working agreement (every closed spec gets `docs/lessons/SPEC-0NN-aula.html`)
      foundation to the future AI architecture — e.g. how per-user isolation later scopes
      insights, how a port here mirrors the `Insighter` seam, how this prepares the
      multi-agent CIO / MCP phases.
-7. **Output** to `docs/lessons/SPEC-0NN-aula.html` (use the spec's number). Self-contained
+7. **Always include a "Ponte: arquitetura em camadas → hexagonal" section.** The author
+   already knows the classic layered stack (handler/controller → DTO → service →
+   repository) and learns the project's ports & adapters best by *translation*. In every
+   lesson, teach the spec's design through that bridge, grounded in the spec's **real**
+   code:
+   - A **de-para table** mapping the layered terms to this spec's hexagonal pieces —
+     handler ≈ driving adapter; DTO stays a DTO at the edge; service stays the use-case but
+     lives in the core and depends on **ports**; the concrete repository/provider splits
+     into a **port** (interface owned by the domain) + an **adapter** (implementation at the
+     edge). Use the actual type/file names introduced by this spec.
+   - The **"grande virada" (inversão de dependência):** in layered code the service imports
+     the concrete repository (depends outward); in hexagonal the service *defines* the
+     interface and the adapter implements it (the dependency arrow points inward). Show it
+     with this spec's real port + adapter.
+   - Name the spec's **driving vs. driven** ports, and which pieces are domain (pure) vs.
+     edge. Reference the canonical conceptual lesson
+     (`docs/lessons/arquitetura-hexagonal-aula.html`) so the reader can go deeper; do not
+     re-teach the whole hexagonal theory — apply it to *this* spec.
+   - Keep it concrete: a small ASCII flow diagram tied to the spec is encouraged. If the
+     spec is purely infra/cross-cutting with no clear port, say so briefly and map what it
+     does have.
+8. **Output** to `docs/lessons/SPEC-0NN-aula.html` (use the spec's number). Self-contained
    HTML (inline CSS, no external assets — zero-cost, opens offline).
 
 Return a one-line summary of what you wrote and the file path. Do not modify any file

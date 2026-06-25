@@ -9,8 +9,8 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — FR-006, FR-007, Epic 4, §10 NFR (Reliability/Scalability/Cost), §13 Dependencies, §14 Risks |
 | Related ADRs | [ADR-0003](../04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md) (zero-cost & pluggable provider), [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md) (layering) |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
-| Plan         | PLAN-006 (authored next via /plan-new 006)             |
+| Status       | Done                                                   |
+| Plan         | [PLAN-006](../03-plans/PLAN-006-marketdata-port-and-ingestion-worker.md) |
 
 ---
 
