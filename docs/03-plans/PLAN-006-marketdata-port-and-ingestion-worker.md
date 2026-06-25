@@ -8,7 +8,7 @@
 | Related Feature | Foundational — the market-data seam + scheduled ingestion    |
 | Related Spec    | [SPEC-006](../02-specs/SPEC-006-marketdata-port-and-ingestion-worker.md) |
 | Version         | 0.1.0                                                        |
-| Status          | Draft (provisional — SPEC-006 is Draft; decisions D1–D6 resolved, incl. D4) |
+| Status          | Approved (decisions D1–D6 resolved, incl. D4)                |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-24                                                   |
 

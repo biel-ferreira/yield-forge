@@ -32,7 +32,7 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-003 | [Authentication & Per-User Isolation](SPEC-003-authentication-and-per-user-isolation.md) | FR-015 | ✅ Done |
 | SPEC-004 | [Observability Baseline (OpenTelemetry)](SPEC-004-observability-baseline.md) | §10 Observability | ✅ Done |
 | SPEC-005 | [`Insighter` Port & Free/Local LLM Adapter](SPEC-005-insighter-port-and-llm-adapter.md) | FR-018, FR-013, FR-014 | ✅ Done |
-| SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](SPEC-006-marketdata-port-and-ingestion-worker.md) | FR-006, FR-007 | 📝 Draft |
+| SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](SPEC-006-marketdata-port-and-ingestion-worker.md) | FR-006, FR-007 | 📋 Approved |
 
 > SPEC-005 defines the explainability (FR-013) and non-advice (FR-014) gates as
 > middleware wrapping the port, so every AI feature inherits them (ADR-0002/0003).
