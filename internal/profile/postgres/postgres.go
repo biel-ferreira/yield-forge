@@ -34,13 +34,16 @@ type ProfileRepository struct {
 // NewProfileRepository returns a ProfileRepository over db.
 func NewProfileRepository(db *sql.DB) ProfileRepository { return ProfileRepository{db: db} }
 
-// UpsertProfile inserts or replaces the caller's profile. The single ON CONFLICT statement
-// is atomic and idempotent; created_at is left untouched on update so it reflects first
-// creation, while updated_at advances (SPEC-101 FR-1012, BR-1011).
-func (r ProfileRepository) UpsertProfile(ctx context.Context, p profile.Profile) error {
+// UpsertProfile inserts or replaces the caller's profile and returns the stored row. The
+// single ON CONFLICT … RETURNING statement is atomic and idempotent — created_at is left
+// untouched on update (so it reflects first creation) while updated_at advances, and the
+// RETURNING gives the authoritative timestamps without a second round-trip or a race
+// (SPEC-101 FR-1012, BR-1011). The input value objects are already validated, so they are
+// returned as-is with the DB-assigned timestamps.
+func (r ProfileRepository) UpsertProfile(ctx context.Context, p profile.Profile) (profile.Profile, error) {
 	objectives, err := json.Marshal(p.Objectives)
 	if err != nil {
-		return fmt.Errorf("upsert profile: marshal objectives: %w", err)
+		return profile.Profile{}, fmt.Errorf("upsert profile: marshal objectives: %w", err)
 	}
 
 	const stmt = `
@@ -50,13 +53,15 @@ func (r ProfileRepository) UpsertProfile(ctx context.Context, p profile.Profile)
 			risk_profile  = EXCLUDED.risk_profile,
 			objectives    = EXCLUDED.objectives,
 			horizon_years = EXCLUDED.horizon_years,
-			updated_at    = EXCLUDED.updated_at`
+			updated_at    = EXCLUDED.updated_at
+		RETURNING created_at, updated_at`
 
-	if _, err := r.db.ExecContext(ctx, stmt,
-		p.UserID, string(p.Risk), objectives, p.Horizon.Years(), p.CreatedAt, p.UpdatedAt); err != nil {
-		return fmt.Errorf("upsert profile: %w", err)
+	if err := r.db.QueryRowContext(ctx, stmt,
+		p.UserID, string(p.Risk), objectives, p.Horizon.Years(), p.CreatedAt, p.UpdatedAt).
+		Scan(&p.CreatedAt, &p.UpdatedAt); err != nil {
+		return profile.Profile{}, fmt.Errorf("upsert profile: %w", err)
 	}
-	return nil
+	return p, nil
 }
 
 // GetProfileByUserID returns the profile for userID, or profile.ErrProfileNotFound. The

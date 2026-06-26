@@ -14,12 +14,12 @@ type fakeRepo struct{ data map[string]Profile }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{data: map[string]Profile{}} }
 
-func (r *fakeRepo) UpsertProfile(_ context.Context, p Profile) error {
+func (r *fakeRepo) UpsertProfile(_ context.Context, p Profile) (Profile, error) {
 	if existing, ok := r.data[p.UserID]; ok {
 		p.CreatedAt = existing.CreatedAt // preserved across upserts (BR-1011)
 	}
 	r.data[p.UserID] = p
-	return nil
+	return p, nil
 }
 
 func (r *fakeRepo) GetProfileByUserID(_ context.Context, userID string) (Profile, error) {

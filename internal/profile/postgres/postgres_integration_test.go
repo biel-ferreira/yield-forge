@@ -74,7 +74,9 @@ func TestProfileRepository_UpsertRoundTripAndIdempotency_Integration(t *testing.
 	uid := createUser(t, db, "a@example.com")
 
 	t1 := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
-	require.NoError(t, repo.UpsertProfile(ctx, sampleProfile(t, uid, t1)))
+	created, err := repo.UpsertProfile(ctx, sampleProfile(t, uid, t1))
+	require.NoError(t, err)
+	require.True(t, t1.Equal(created.CreatedAt), "insert RETURNING gives the stored row")
 
 	got, err := repo.GetProfileByUserID(ctx, uid)
 	require.NoError(t, err)
@@ -83,17 +85,20 @@ func TestProfileRepository_UpsertRoundTripAndIdempotency_Integration(t *testing.
 	require.Equal(t, 10, got.Horizon.Years())
 	require.True(t, t1.Equal(got.CreatedAt))
 
-	// Update: a later upsert changes fields, preserves created_at, advances updated_at.
+	// Update: a later upsert changes fields, preserves created_at, advances updated_at — and
+	// the RETURNING row reflects that atomically (no re-read needed).
 	t2 := t1.Add(48 * time.Hour)
 	updated := sampleProfile(t, uid, t2)
 	updated.Risk = profile.RiskAggressive
-	require.NoError(t, repo.UpsertProfile(ctx, updated))
+	upserted, err := repo.UpsertProfile(ctx, updated)
+	require.NoError(t, err)
+	require.Equal(t, profile.RiskAggressive, upserted.Risk)
+	require.True(t, t1.Equal(upserted.CreatedAt), "created_at is preserved across upserts (BR-1011)")
+	require.True(t, t2.Equal(upserted.UpdatedAt), "updated_at advances")
 
 	got, err = repo.GetProfileByUserID(ctx, uid)
 	require.NoError(t, err)
-	require.Equal(t, profile.RiskAggressive, got.Risk)
-	require.True(t, t1.Equal(got.CreatedAt), "created_at is preserved across upserts (BR-1011)")
-	require.True(t, t2.Equal(got.UpdatedAt), "updated_at advances")
+	require.Equal(t, profile.RiskAggressive, got.Risk, "the update persisted")
 }
 
 func TestProfileRepository_NotFound_Integration(t *testing.T) {
@@ -113,8 +118,10 @@ func TestProfileRepository_PerUserIsolation_Integration(t *testing.T) {
 	pa.Risk = profile.RiskConservative
 	pb := sampleProfile(t, b, time.Now().UTC())
 	pb.Risk = profile.RiskAggressive
-	require.NoError(t, repo.UpsertProfile(ctx, pa))
-	require.NoError(t, repo.UpsertProfile(ctx, pb))
+	_, err := repo.UpsertProfile(ctx, pa)
+	require.NoError(t, err)
+	_, err = repo.UpsertProfile(ctx, pb)
+	require.NoError(t, err)
 
 	gotA, err := repo.GetProfileByUserID(ctx, a)
 	require.NoError(t, err)
@@ -126,9 +133,10 @@ func TestProfileRepository_CascadeOnUserDelete_Integration(t *testing.T) {
 	repo, db := profileDB(t)
 	ctx := context.Background()
 	uid := createUser(t, db, "gone@example.com")
-	require.NoError(t, repo.UpsertProfile(ctx, sampleProfile(t, uid, time.Now().UTC())))
+	_, err := repo.UpsertProfile(ctx, sampleProfile(t, uid, time.Now().UTC()))
+	require.NoError(t, err)
 
-	_, err := db.ExecContext(ctx, `DELETE FROM users WHERE id = $1::uuid`, uid)
+	_, err = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1::uuid`, uid)
 	require.NoError(t, err)
 
 	_, err = repo.GetProfileByUserID(ctx, uid)

@@ -58,10 +58,11 @@ func (s *Service) SetProfile(ctx context.Context, userID string, in SetProfileIn
 		CreatedAt:  now, // ignored on update — the store preserves the original (BR-1011)
 		UpdatedAt:  now,
 	}
-	if err := s.repo.UpsertProfile(ctx, p); err != nil {
+	stored, err := s.repo.UpsertProfile(ctx, p) // returns the authoritative row (preserved created_at)
+	if err != nil {
 		return Profile{}, fmt.Errorf("set profile: %w", err)
 	}
-	return s.repo.GetProfileByUserID(ctx, userID)
+	return stored, nil
 }
 
 // GetProfile returns the user's profile or ErrProfileNotFound (ProfileReader).
