@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 101 — SPEC-101: Perfil do Investidor | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 101 · Primeira Feature de Usuário</span>
+    <h1>SPEC-101 — Perfil do Investidor</h1>
+    <p>A <strong>primeira feature que o usuário vê</strong> e a <strong>primeira a consumir a costura de identidade</strong> do SPEC-003: um registro pequeno e estável — perfil de risco, objetivos, horizonte — que faz a pergunta central do produto, <em>"minha carteira está alinhada aos meus objetivos?"</em>, ser respondível. Toda a aula gira em torno de uma regra: <strong>identidade vem do contexto, nunca do corpo da requisição.</strong></p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: por que um perfil, e o que o SPEC-101 entregou</a></li>
+    <li><a href="#problema">O problema: análise <em>orientada a objetivo</em> precisa saber quem é o investidor</a></li>
+    <li><a href="#identidade">A LIÇÃO PRINCIPAL — identidade vem do contexto, nunca do <code>user_id</code> do payload (BR-1012)</a></li>
+    <li><a href="#vo">Value objects parse-don't-validate: tornar o inválido inrepresentável</a></li>
+    <li><a href="#jsonb">A decisão D1 (jsonb) e o upsert idempotente com <code>RETURNING</code></a></li>
+    <li><a href="#camadas">A separação hexagonal: core puro, adaptador Postgres, handlers HTTP</a></li>
+    <li><a href="#sem">Por que NÃO há dinheiro e NÃO há IA aqui (e por que isso importa)</a></li>
+    <li><a href="#decisoes">As 5 decisões (D1–D5) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: por que um perfil</h2>
+
+<p>As specs de fundação (tier <code>00x</code>) montaram a casa: esqueleto (001), persistência (002),
+identidade (003), observabilidade (004), o port <code>Insighter</code> da IA (005) e a ingestão de dados de
+mercado (006). Nenhuma delas era uma <strong>feature de usuário</strong> — eram cofre, fechadura e encanamento. O
+SPEC-101 é a <strong>primeira pedra do tier <code>1xx</code></strong>: a primeira coisa que um investidor de verdade
+<em>cria</em> e <em>vê</em>, e a primeira a <strong>consumir a costura de identidade</strong> que o SPEC-003 deixou pronta.</p>
+
+<p>O que ele entrega é deliberadamente pequeno: o pacote <code>internal/profile</code> com o domínio
+<code>Profile</code> e seus value objects (<code>RiskProfile</code>, <code>Objective</code>, <code>Horizon</code>), o serviço, dois
+ports, o adaptador Postgres, a migration <code>0004_profiles</code> e dois endpoints — <code>GET /profile</code> e
+<code>PUT /profile</code>. Nada <em>analisa</em> esse perfil ainda. O SPEC-101 <strong>guarda o registro</strong> e <strong>expõe um
+port de leitura</strong>; as features que raciocinam sobre ele (Insight Engine SPEC-104, Rebalanceamento
+SPEC-105, Health Score SPEC-106) leem por esse port mais tarde.</p>
+
+<div class="diagram">ANTES (SPEC-006)                          DEPOIS (SPEC-101)
+  só fundação — nada que o usuário cria    a 1ª feature de usuário: perfil de risco + objetivos + horizonte
+  a costura auth.UserID(ctx) provada,      o 1º consumidor real dela: WHERE user_id = $1 com o ID do contexto
+    mas sem nenhuma feature usando
+  análise da IA seria genérica             o INPUT determinístico que torna a análise orientada a objetivo
+  sem tabela escopada por usuário          migration 0004: profiles, PK user_id, FK ON DELETE CASCADE
+  nenhum port de leitura de perfil         ProfileReader — o seam por onde SPEC-104/105/106 vão ler</div>
+
+<p>Os endpoints novos:</p>
+<pre><code>PUT /profile  {"risk_profile","objectives":[...],"horizon_years"}  →  200 {perfil} | 400 | 401
+GET /profile  (autenticado)                                        →  200 {perfil} | 404 | 401</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que o perfil é a feature mais importante de chegar primeiro?</span>
+  Porque a premissa inteira do YieldForge (PRD §4) é <strong>análise orientada a objetivo</strong>: um insight
+  precisa considerar <em>quem é o investidor</em>, não só o que ele tem na carteira. Dizer "seu FII X subiu
+  3%" é genérico; dizer "isto reforça sua meta de <em>renda passiva</em> dentro do seu horizonte de 10 anos"
+  só é possível se existir um <strong>registro estável do perfil</strong>. Sem ele, a IA só consegue produzir
+  conselho genérico e sem chão — exatamente o que o produto promete <em>não</em> ser.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="problema">2. O problema: saber quem é o investidor</h2>
+
+<p>O SPEC-101 resolve uma tensão simples de enunciar e fácil de errar: precisamos guardar três fatos
+sobre o investidor, de forma que (a) sejam só dele, (b) sejam válidos por construção, e (c) outras
+features possam lê-los sem se acoplar a HTTP ou SQL. São três campos só:</p>
+
+<table>
+  <tr><th>Campo</th><th>O que é</th><th>Forma escolhida</th></tr>
+  <tr><td><strong>Perfil de risco</strong></td><td>Tolerância a risco do investidor</td><td>Enum fechado: <code>conservative | moderate | aggressive</code></td></tr>
+  <tr><td><strong>Objetivos</strong></td><td>Metas financeiras (uma ou mais)</td><td>Enum fechado de 4 valores; um <strong>conjunto não-vazio e deduplicado</strong></td></tr>
+  <tr><td><strong>Horizonte</strong></td><td>Por quantos anos pretende investir</td><td>Inteiro de anos, limitado a <strong>1–50</strong> (os 5/10/20 do PRD são exemplos)</td></tr>
+</table>
+
+<p>Repare que isto é um <strong>registro um-para-um com o usuário</strong>: cada pessoa tem exatamente um perfil.
+Essa é a primeira diferença grande em relação ao SPEC-006 — lá o dado era <strong>global</strong> (o preço do
+<code>HGLG11</code> é o mesmo para todos, sem <code>user_id</code> em lugar nenhum). Aqui o dado é <strong>privado</strong>: o
+perfil de A nunca pode ser visto ou sobrescrito por B. É por isso que a aula inteira gira em torno do
+isolamento por usuário — e que a costura <code>auth.UserID(ctx)</code> do SPEC-003 finalmente sai do papel.</p>
+
+<!-- ============================================================ -->
+<h2 id="identidade">3. A LIÇÃO PRINCIPAL — identidade vem do contexto, nunca do payload (BR-1012)</h2>
+
+<p>Se você levar uma única ideia desta aula, leve esta. Quando uma rota lida com <strong>dado privado por
+usuário</strong>, a pergunta "de quem é esse dado?" tem <strong>uma resposta correta e uma catastrófica</strong>:</p>
+
+<ul>
+  <li><strong>Correta:</strong> o dono vem da <strong>sessão autenticada</strong> — <code>auth.UserID(ctx)</code>, um valor que o
+  middleware do SPEC-003 colocou no <code>context</code> e que o cliente <strong>não controla</strong>.</li>
+  <li><strong>Catastrófica:</strong> o dono vem de um campo <code>user_id</code> <strong>enviado pelo cliente</strong> no corpo ou na
+  query. Aí qualquer pessoa pode mandar <code>{"user_id":"id-do-vizinho"}</code> e <strong>ler ou sobrescrever o
+  perfil de outra</strong>. É a vulnerabilidade clássica de <em>IDOR</em> (referência direta e insegura a objeto).</li>
+</ul>
+
+<p>O SPEC-101 não <em>pede</em> que você lembre de fazer certo — ele torna o errado <strong>estruturalmente
+impossível</strong>, com quatro travas empilhadas. Vamos ver cada uma no código real.</p>
+
+<h3>Trava 1 — o DTO do <code>PUT</code> não tem campo <code>user_id</code></h3>
+<p>O corpo da requisição só carrega <strong>dado</strong>, jamais identidade. Não existe onde colocar um
+<code>user_id</code> mesmo que você quisesse:</p>
+<pre><code>// internal/transport/http/profile.go
+// profileRequest is the PUT body. There is deliberately NO user_id field — identity comes
+// from the authenticated session (BR-1012), and decodeJSON's DisallowUnknownFields rejects a
+// stray user_id, so a client cannot supply an identity.
+type profileRequest struct {
+    RiskProfile  string   `json:"risk_profile"`
+    Objectives   []string `json:"objectives"`
+    HorizonYears int      `json:"horizon_years"`
+}</code></pre>
+
+<h3>Trava 2 — <code>DisallowUnknownFields</code> rejeita um <code>user_id</code> contrabandeado</h3>
+<p>"Mas e se eu mandar <code>user_id</code> mesmo assim?" O decoder de JSON está configurado para <strong>recusar
+qualquer campo desconhecido</strong>. Um corpo com <code>user_id</code> não é silenciosamente ignorado — ele faz o
+<code>PUT</code> inteiro virar <code>400</code>:</p>
+<pre><code>// internal/transport/http/response.go
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+    r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+    dec := json.NewDecoder(r.Body)
+    dec.DisallowUnknownFields()   // ← um user_id intruso vira erro de decode
+    return dec.Decode(dst)
+}</code></pre>
+
+<h3>Trava 3 — o handler pega o ID do contexto e o <em>passa</em> ao serviço</h3>
+<p>A identidade entra na lógica de aplicação por <strong>um único caminho</strong>: o valor que o middleware
+resolveu da sessão. Se não houver sessão, é <code>401</code> antes de tocar no serviço:</p>
+<pre><code>// internal/transport/http/profile.go — putProfile
+id, ok := auth.UserID(r.Context())     // ← do contexto, nunca do corpo
+if !ok {
+    writeError(w, http.StatusUnauthorized, "authentication required")
+    return
+}
+// ...decodifica o corpo (só dado)...
+p, err := h.service.SetProfile(r.Context(), id, profile.SetProfileInput{  // id passado à parte
+    RiskProfile:  req.RiskProfile,
+    Objectives:   req.Objectives,
+    HorizonYears: req.HorizonYears,
+})</code></pre>
+
+<p>E o próprio <code>SetProfileInput</code> deixa isso explícito no comentário: o <code>userID</code> é fornecido
+<strong>separadamente</strong>, vindo sempre do contexto autenticado, nunca desse struct.</p>
+
+<h3>Trava 4 — toda query é escopada <code>WHERE user_id = $1</code></h3>
+<p>Por fim, no adaptador, leitura e escrita só tocam a linha daquele usuário. A escrita usa
+<code>user_id</code> como conflito do upsert; a leitura filtra por ele:</p>
+<pre><code>// internal/profile/postgres/postgres.go — GetProfileByUserID
+SELECT user_id::text, risk_profile, objectives, horizon_years, created_at, updated_at
+FROM profiles WHERE user_id = $1::uuid</code></pre>
+
+<div class="box why">
+  <span class="lbl">O contraste que fecha a ideia: corpo carrega <em>dado</em>, sessão carrega <em>identidade</em></span>
+  Numa pilha em camadas mal-feita, é tentador um <code>UpdateProfile(dto)</code> onde o <code>dto</code> traz tudo —
+  inclusive o dono. Aqui a separação é rígida: <strong>o corpo da requisição é só o conteúdo do perfil; o
+  dono vem da sessão</strong>. Como o cliente controla o corpo mas <strong>não</strong> controla a sessão, o ataque de
+  trocar de dono some por construção. E há um teste explícito que prova isso: ele manda
+  <code>{"user_id":"hacker",...}</code> e verifica que o <code>DisallowUnknownFields</code> o rejeita — o vizinho está
+  a salvo por <em>design</em>, não por disciplina.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="vo">4. Value objects parse-don't-validate</h2>
+
+<p>Os três campos do perfil não são <code>string</code>/<code>int</code> crus espalhados pelo código — são <strong>value
+objects</strong> que validam <strong>no construtor</strong>. A consequência é poderosa: <strong>um valor inválido não pode
+existir</strong>. Se você tem um <code>RiskProfile</code> em mãos, ele <em>já é</em> válido; não precisa checar de novo.</p>
+
+<pre><code>// internal/profile/riskprofile.go
+func ParseRiskProfile(s string) (RiskProfile, error) {
+    rp := RiskProfile(strings.ToLower(strings.TrimSpace(s)))   // normaliza
+    if !validRiskProfiles[rp] {
+        return "", fmt.Errorf("parse risk profile %q: %w", s, ErrInvalidRiskProfile)
+    }
+    return rp, nil
+}</code></pre>
+
+<p>O <code>Horizon</code> vai além: ele <strong>esconde o inteiro</strong> num struct com campo privado, então a única forma
+de criar um é pelo construtor que checa os limites 1–50. Não dá nem para construir um horizonte fora
+da faixa:</p>
+<pre><code>// internal/profile/horizon.go
+type Horizon struct{ years int }   // campo privado: ninguém constrói direto
+
+func ParseHorizon(years int) (Horizon, error) {
+    if years &lt; MinHorizonYears || years &gt; MaxHorizonYears {
+        return Horizon{}, fmt.Errorf("parse horizon %d: %w (want %d-%d years)", years, ErrInvalidHorizon, MinHorizonYears, MaxHorizonYears)
+    }
+    return Horizon{years: years}, nil
+}</code></pre>
+
+<p>E os <strong>objetivos</strong> têm uma regra de conjunto (BR-1014): pelo menos um, sem duplicatas, em ordem
+estável. O <code>ParseObjectives</code> faz tudo de uma vez — valida cada string, deduplica preservando a
+ordem da primeira aparição, e recusa um conjunto vazio com um sentinela próprio:</p>
+<pre><code>// internal/profile/objective.go
+func ParseObjectives(raw []string) ([]Objective, error) {
+    seen := make(map[Objective]bool, len(raw))
+    out  := make([]Objective, 0, len(raw))
+    for _, s := range raw {
+        o, err := ParseObjective(s)
+        if err != nil {
+            return nil, err                 // valor desconhecido → ErrInvalidObjective
+        }
+        if !seen[o] {                       // deduplica, mantendo a ordem
+            seen[o] = true
+            out = append(out, o)
+        }
+    }
+    if len(out) == 0 {
+        return nil, ErrNoObjectives         // conjunto vazio → sentinela próprio
+    }
+    return out, nil
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que value objects ganham de <code>string</code>/<code>int</code> crus?</span>
+  Com strings cruas, a validação fica <strong>espalhada</strong>: cada lugar que recebe um "perfil de risco" tem
+  que lembrar de checar se é um dos três valores. Esqueça num lugar e um <code>"banana"</code> vaza para o
+  banco. Com value objects, a validação mora <strong>num lugar só</strong> (o construtor) e o sistema de tipos
+  <strong>carrega a garantia</strong>: uma função que recebe <code>RiskProfile</code> sabe que recebeu algo válido. O erro
+  vira <strong>inrepresentável</strong>, não "improvável". Repare ainda que o adaptador Postgres, ao <em>ler</em>, passa
+  os valores guardados de volta pelos mesmos construtores — então uma linha corrompida no banco vira
+  um erro explícito, não um value object inválido circulando solto.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="jsonb">5. A decisão D1 (jsonb) e o upsert idempotente com <code>RETURNING</code></h2>
+
+<h3>5.1 — Por que <code>jsonb</code> para os objetivos (D1)</h3>
+<p>Os objetivos são uma <strong>lista</strong> (<code>[]Objective</code>). Guardar uma lista num banco relacional tem três
+caminhos, e cada um tem um custo:</p>
+<table>
+  <tr><th>Opção</th><th>Prós</th><th>Contras</th></tr>
+  <tr><td><code>text[]</code> (array nativo do Postgres)</td><td>Relacional, indexável</td><td><strong>Atrito de driver</strong>: <code>database/sql</code> + pgx não têm um scanner limpo de <code>[]string</code> sem importar tipos específicos do pgx no adaptador.</td></tr>
+  <tr><td>Tabela-filha normalizada (<code>profile_objectives</code>)</td><td>"Certo" pelo livro relacional</td><td><strong>Exagero</strong> para um conjunto fixo de 4 valores: mais uma tabela, mais um JOIN, mais SQL — sem ganho real.</td></tr>
+  <tr><td><strong><code>jsonb</code> (escolhido)</strong></td><td><strong>Stdlib-limpo</strong>: <code>json.Marshal</code> para escrever, <code>[]byte</code> + <code>json.Unmarshal</code> para ler. Ainda consultável (<code>objectives @&gt; '["retirement"]'</code>).</td><td>Não é o modelo relacional "puro" — mas o custo é teórico aqui.</td></tr>
+</table>
+
+<p>A escolha foi <code>jsonb</code>: limpa com a stack atual, sem dependência nova, e ainda dá para consultar
+dentro do JSON se um dia precisar. A escrita e a leitura são duas linhas honestas de stdlib:</p>
+<pre><code>// escrever (UpsertProfile):
+objectives, err := json.Marshal(p.Objectives)        // []Objective → jsonb
+
+// ler (GetProfileByUserID):
+var rawObjectives []string
+json.Unmarshal(objectivesJSON, &amp;rawObjectives)        // jsonb → []string
+objectives, _ := profile.ParseObjectives(rawObjectives)  // → []Objective revalidado</code></pre>
+
+<div class="box warn">
+  <span class="lbl">O trade-off honesto, registrado como dívida</span>
+  <code>jsonb</code> é a escolha certa <em>para um conjunto fixo de 4 valores</em>. Se um dia os objetivos
+  crescerem muito, ou se precisarmos de consultas relacionais pesadas em cima deles (ex.: "quantos
+  usuários têm <em>renda passiva</em> como meta?"), o caminho é graduar para uma tabela normalizada — e isso
+  está rastreado explicitamente como dívida técnica no PLAN-101 §12. Hoje, normalizar seria
+  complexidade sem retorno.
+</div>
+
+<h3>5.2 — O upsert idempotente: <code>ON CONFLICT … RETURNING</code> num só comando</h3>
+<p>O <code>PUT</code> é um <strong>create-or-update</strong> (D4 — substituição total): se não há perfil, cria; se há,
+substitui. Isso é um <strong>upsert</strong>, e o jeito Postgres de fazê-lo atômico é <code>INSERT … ON CONFLICT …
+DO UPDATE</code>. Mas há um detalhe lindo aqui — o <code>RETURNING</code>:</p>
+
+<pre><code>// internal/profile/postgres/postgres.go — UpsertProfile
+INSERT INTO profiles (user_id, risk_profile, objectives, horizon_years, created_at, updated_at)
+VALUES ($1::uuid, $2, $3, $4, $5, $6)
+ON CONFLICT (user_id) DO UPDATE SET
+    risk_profile  = EXCLUDED.risk_profile,
+    objectives    = EXCLUDED.objectives,
+    horizon_years = EXCLUDED.horizon_years,
+    updated_at    = EXCLUDED.updated_at      -- created_at NÃO entra aqui: é preservado
+RETURNING created_at, updated_at             -- a linha autoritativa, sem re-leitura</code></pre>
+
+<p>Três coisas acontecem num <strong>único comando atômico</strong>:</p>
+<ol>
+  <li><strong>Preserva <code>created_at</code>:</strong> no <code>DO UPDATE</code>, a coluna <code>created_at</code> <strong>não</strong> é tocada — então,
+  numa atualização, ela continua refletindo a primeira criação. Só o <code>updated_at</code> avança.</li>
+  <li><strong>Idempotente:</strong> rodar o mesmo <code>PUT</code> de novo dá a mesma linha; não duplica (a chave é
+  <code>user_id</code>, e há só um perfil por usuário — BR-1011).</li>
+  <li><strong>Devolve a verdade sem re-ler:</strong> o <code>RETURNING created_at, updated_at</code> traz os timestamps
+  <strong>autoritativos</strong> que o banco gravou, no mesmo round-trip.</li>
+</ol>
+
+<div class="box bug">
+  <span class="lbl">A versão anterior tinha uma janela de corrida — e o <code>RETURNING</code> a fechou</span>
+  Uma primeira tentativa fazia <strong>upsert e depois um <code>SELECT</code> separado</strong> para descobrir o
+  <code>created_at</code> autoritativo. A revisão de correção apontou o problema: entre o upsert e o re-read,
+  <strong>outra escrita do mesmo usuário</strong> poderia entrar, e o <code>SELECT</code> leria um estado diferente do que
+  o upsert acabou de gravar — uma janela de corrida sutil. A correção foi colapsar tudo num só comando
+  com <code>RETURNING</code>: a escrita já <strong>devolve</strong> a linha autoritativa, sem segundo round-trip e sem
+  espaço para corrida. É um padrão SQL que vale guardar: <em>quando você precisa do estado pós-escrita,
+  peça-o ao próprio <code>INSERT</code>/<code>UPDATE</code> via <code>RETURNING</code> em vez de reler.</em>
+</div>
+
+<h3>5.3 — Um perfil por usuário, FK com cascade</h3>
+<p>A migration <code>0004</code> não tem chave substituta (<code>id</code> surrogate): o <strong><code>user_id</code> é a chave
+primária natural</strong> (D3), o que <em>garante</em> um-para-um no nível do banco. E a FK para <code>users</code> tem
+<code>ON DELETE CASCADE</code> — apagou o usuário, o perfil dele some junto:</p>
+<pre><code>-- migrations/0004_profiles.up.sql
+CREATE TABLE profiles (
+    user_id       uuid        PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+    risk_profile  text        NOT NULL,
+    objectives    jsonb       NOT NULL,
+    horizon_years integer     NOT NULL,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now()
+);</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="camadas">6. A separação hexagonal: core puro, adaptador, handlers</h2>
+
+<p>O pacote <code>internal/profile</code> é dividido com a mesma disciplina das specs anteriores — e vale ver
+quem importa o quê, porque é aí que mora a pureza do domínio.</p>
+
+<table>
+  <tr><th>Peça</th><th>Onde vive</th><th>Importa</th></tr>
+  <tr><td>Domínio + value objects (<code>profile.go</code>, <code>riskprofile.go</code>, <code>objective.go</code>, <code>horizon.go</code>)</td><td>Core puro</td><td>Só stdlib (<code>errors</code>, <code>fmt</code>, <code>strings</code>, <code>time</code>) — <strong>zero SQL/HTTP</strong></td></tr>
+  <tr><td>Ports (<code>ports.go</code>) e serviço (<code>service.go</code>)</td><td>Core puro</td><td>Só o <code>context</code> e o port <code>Clock</code></td></tr>
+  <tr><td>Adaptador (<code>postgres/postgres.go</code>)</td><td>Borda</td><td><code>database/sql</code>, pgx — e <strong>importa o core</strong>, nunca o contrário</td></tr>
+  <tr><td>Handlers (<code>transport/http/profile.go</code>)</td><td>Borda</td><td><code>net/http</code>, o pacote <code>auth</code> e o core</td></tr>
+</table>
+
+<p>Há <strong>dois ports</strong>, e a distinção entre eles é a parte mais elegante da spec:</p>
+<pre><code>// internal/profile/ports.go
+// ProfileRepository — port DRIVEN (persistência). O adaptador Postgres o implementa.
+type ProfileRepository interface {
+    UpsertProfile(ctx context.Context, p Profile) (Profile, error)
+    GetProfileByUserID(ctx context.Context, userID string) (Profile, error) // ErrProfileNotFound quando ausente
+}
+
+// ProfileReader — o port de LEITURA voltado ao consumidor: o seam por onde o Insight Engine,
+// o Rebalanceamento e o Health Score (SPEC-104/105/106) leem o perfil sem se acoplar a HTTP/SQL.
+type ProfileReader interface {
+    GetProfile(ctx context.Context, userID string) (Profile, error) // ErrProfileNotFound quando ausente
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que dois ports, e por que o <code>ProfileReader</code> é tão importante?</span>
+  O <code>ProfileRepository</code> é o que o <strong>serviço usa</strong> para falar com o banco. O <code>ProfileReader</code> é o
+  que as <strong>futuras features de IA vão usar</strong> para ler o perfil — e ele expõe só <code>GetProfile</code>, nada
+  de escrita. O próprio <code>Service</code> o satisfaz (<code>var _ ProfileReader = (*Service)(nil)</code>), então o
+  SPEC-104 vai receber um <code>ProfileReader</code> e <strong>nunca</strong> vai saber que existe HTTP ou SQL por trás. Esse
+  é o mesmo formato de costura do <code>Insighter</code> (SPEC-005) e do <code>MarketDataProvider</code> (SPEC-006):
+  <strong>interface pequena, definida pelo domínio, que esconde a borda do consumidor.</strong>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="sem">7. Por que NÃO há dinheiro e NÃO há IA aqui</h2>
+
+<p>Uma das coisas mais didáticas do SPEC-101 é o que ele <strong>deixa de fora de propósito</strong> — e por quê.
+Contraste direto com o SPEC-005/006:</p>
+
+<table>
+  <tr><th>Regra binding</th><th>SPEC-005/006</th><th>SPEC-101</th></tr>
+  <tr><td><strong>Dinheiro em <code>int64</code> centavos / bps</strong></td><td>Central: preço, DY, P/VP, SELIC — tudo inteiro, nunca <code>float</code></td><td><strong>Não se aplica:</strong> o perfil não tem nenhum valor monetário. Risco, objetivos e horizonte são enums e um inteiro de anos.</td></tr>
+  <tr><td><strong>Explicabilidade (FR-013)</strong></td><td>Gate: todo insight da IA carrega explicação</td><td><strong>Não se aplica:</strong> não há saída de IA aqui para explicar.</td></tr>
+  <tr><td><strong>Não-aconselhamento (FR-014)</strong></td><td>Gate: a IA nunca emite ordem de compra/venda</td><td><strong>Não se aplica:</strong> o perfil não produz recomendação nenhuma.</td></tr>
+</table>
+
+<p>Isto não é descuido — está escrito no próprio doc-comment do domínio (BR-1016):
+<em>"There is no money and no AI output here, so the explainability/non-advice gates do not apply."</em>
+O perfil é o <strong>INPUT determinístico</strong> que aquelas features de IA vão <em>ler</em> depois. Ele é o solo; os
+gates da IA pisam nele lá na frente.</p>
+
+<div class="box why">
+  <span class="lbl">Saber <em>quando uma regra não se aplica</em> é parte do design</span>
+  Uma armadilha comum é aplicar toda regra a tudo, por reflexo — converter o horizonte para centavos
+  "porque é número", ou tentar anexar um disclaimer a um perfil. As regras da casa têm <strong>escopo</strong>: a
+  disciplina de dinheiro protege <em>cálculo financeiro reproduzível</em>; os gates FR-013/014 protegem
+  <em>saída de IA</em>. O perfil não é nem um nem outro — é dado de entrada estruturado. Reconhecer isso
+  mantém a spec enxuta e evita complexidade cerimonial sem propósito.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">8. As 5 decisões (D1–D5) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Como guardar os objetivos?</td>
+    <td><strong>Array <code>jsonb</code></strong> do enum fechado</td>
+    <td>Limpo com <code>database/sql</code> + pgx (<code>Marshal</code>/<code>Unmarshal</code>, sem atrito de scanner), ainda consultável. Melhor que <code>text[]</code> (atrito de driver) e que uma tabela-filha (exagero para 4 valores fixos).</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td><code>GET</code> quando não há perfil?</td>
+    <td><strong><code>404</code> + <code>ErrProfileNotFound</code></strong></td>
+    <td>Sinal claro de "não definido" em vez de um <code>200</code> com corpo vazio. O sentinela deixa o consumidor tratar a ausência com graça.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Chave primária?</td>
+    <td><strong><code>user_id</code> como PK</strong></td>
+    <td>É a chave natural um-para-um; garante "um perfil por usuário" no nível do banco, sem <code>id</code> substituto.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Semântica de update?</td>
+    <td><strong><code>PUT</code> substituição total (upsert)</strong></td>
+    <td>O perfil é pequeno; substituir por inteiro é mais simples de raciocinar que um <code>PATCH</code> parcial. <code>PATCH</code> fica como melhoria futura se o perfil crescer.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Forma do horizonte?</td>
+    <td><strong>Inteiro de anos, 1–50</strong></td>
+    <td>Os 5/10/20 do PRD são exemplos, não um enum fixo — um inteiro limitado é mais flexível e ainda validável.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">9. As 7 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core puro primeiro, borda depois, cada fase compilando e
+revisável sozinha.</p>
+
+<h3>Fase 1 — Domínio &amp; ports</h3>
+<p>Os value objects com construtor (<em>parse-don't-validate</em>): <code>RiskProfile</code>, <code>Objective</code>
+(+ <code>ParseObjectives</code> com dedupe e regra de não-vazio), <code>Horizon</code> (1–50, campo privado). A entidade
+<code>Profile</code> e os sentinelas (<code>ErrProfileNotFound</code>, <code>ErrInvalidRiskProfile</code>, <code>ErrInvalidObjective</code>,
+<code>ErrNoObjectives</code>, <code>ErrInvalidHorizon</code>). Os dois ports: <code>ProfileRepository</code> (persistência) e
+<code>ProfileReader</code> (consumidor).</p>
+
+<h3>Fase 2 — Persistência (migration + repositório)</h3>
+<p>A migration <code>0004_profiles</code> up/down (PK <code>user_id</code>, FK <code>ON DELETE CASCADE</code>, <code>objectives jsonb</code>,
+sem dinheiro). O pacote <code>postgres/</code>: o <code>UpsertProfile</code> idempotente com <code>ON CONFLICT … RETURNING</code>
+(preserva <code>created_at</code>), o <code>GetProfileByUserID</code> escopado que mapeia <code>sql.ErrNoRows</code> →
+<code>ErrProfileNotFound</code> (e <code>22P02</code> → não-encontrado, nunca 500), e a asserção de compilação
+<code>var _ profile.ProfileRepository = ProfileRepository{}</code>.</p>
+
+<h3>Fase 3 — Aplicação (serviço)</h3>
+<p>O <code>profile.Service</code>: <code>SetProfile(ctx, userID, input)</code> (valida → deduplica → upserte) e
+<code>GetProfile(ctx, userID)</code> (satisfaz o <code>ProfileReader</code>). A identidade <strong>entra pelo parâmetro</strong>, vinda
+do contexto do handler, nunca confiada de uma entrada. Fakes escritos à mão para os testes.</p>
+
+<h3>Fase 4 — API (transporte)</h3>
+<p>O <code>transport/http/profile.go</code>: <code>GET /profile</code> (200/404) e <code>PUT /profile</code> (200, 400 nos
+inválidos), DTOs separados do domínio, o envelope <code>writeJSON</code>. <strong>O <code>user_id</code> vem de
+<code>auth.UserID(ctx)</code> — um <code>user_id</code> no corpo é rejeitado pelo <code>DisallowUnknownFields</code>.</strong> A
+interface pequena <code>ProfileService</code> definida no consumidor (transporte). Registro das rotas
+(auto-protegidas, não estão na allowlist pública) e fiação no <code>cmd/api</code>.</p>
+
+<h3>Fase 5 — Observabilidade</h3>
+<p>Os endpoints herdam os spans nomeados por rota do <code>otelhttp</code> (<code>GET /profile</code> /
+<code>PUT /profile</code>); as chamadas ao banco viram span-filho de query (sem valores de argumento). Nenhuma
+nova config de telemetria; nenhum PII além do <code>user_id</code> já logado (FR-1018).</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: value objects (válido/inválido/dedupe/limites); serviço com fake
+(substituição no upsert, <strong>preservação do <code>created_at</code></strong>, not-found, validação); handlers
+(validação de DTO, <strong>identidade-do-contexto com <code>user_id</code> do corpo rejeitado</strong>, 400/404/401, e um
+teste de que o span <strong>não carrega valores do perfil</strong>). Integração <strong>gated</strong>: Postgres real
+(<code>TEST_DATABASE_URL</code>, <code>-p 1</code>) para o round-trip do upsert, o up/down da <code>0004</code>, o
+<strong>isolamento por usuário</strong> (A nunca vê B) e o <strong>cascade</strong> ao apagar o usuário.</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (endpoints <code>/profile</code>), <code>CHANGELOG.md</code>, SPEC-101 + PLAN-101 marcados
+<strong>Done</strong>, índices e status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">10. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o
+service importando o repositório <em>concreto</em>. O SPEC-101 é um caso lindo para a <strong>tradução</strong>, porque
+ele tem todas as peças clássicas — handler, DTO, service, repositório — só que rearranjadas pela
+inversão de dependência. (Para a teoria completa, veja a
+<a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>; aqui aplicamos
+ela ao SPEC-101.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-101</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>profileHandler</code> (<strong>driving adapter</strong> — traduz HTTP ↔ caso de uso)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO de request/response</td><td><code>profileRequest</code> / <code>profileResponse</code> — continuam DTOs, na borda</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>profile.Service</code> — o caso de uso "definir/ler perfil", mas <strong>vive no core</strong> e depende de <strong>ports</strong>, não de concretos</td><td>Core puro</td></tr>
+  <tr><td>Repository concreto</td><td>Quebra em <strong>port</strong> (<code>ProfileRepository</code>, no core) + <strong>adapter</strong> (<code>postgres.ProfileRepository</code>, na borda)</td><td>Interface no core; SQL na borda</td></tr>
+  <tr><td>(novo, sem equivalente direto em camadas)</td><td><code>ProfileReader</code> — port de leitura para <em>outros</em> casos de uso (SPEC-104/105/106) lerem sem tocar HTTP/DB</td><td>Interface no core</td></tr>
+  <tr><td>Entidade de domínio</td><td><code>Profile</code>, <code>RiskProfile</code>, <code>Objective</code>, <code>Horizon</code> — puros, sem SQL/HTTP/tempo direto</td><td>Core (domínio puro)</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> o repositório concreto — a seta de dependência aponta <strong>para
+fora</strong>, do núcleo rumo à infra. No hexagonal, isso vira: o <strong>core define a interface</strong> e o <strong>adapter
+a implementa</strong> — a seta aponta <strong>para dentro</strong>. Veja com o par real desta spec:</p>
+
+<pre><code>// O CORE define o port (internal/profile/ports.go):
+type ProfileRepository interface {
+    UpsertProfile(ctx context.Context, p Profile) (Profile, error)
+    GetProfileByUserID(ctx context.Context, userID string) (Profile, error)
+}
+
+// A BORDA o implementa e PROVA isso em tempo de compilação
+// (internal/profile/postgres/postgres.go):
+var _ profile.ProfileRepository = ProfileRepository{}   // o adapter depende do core, não o contrário</code></pre>
+
+<p>O <code>postgres</code> importa <code>profile</code>; <code>profile</code> <strong>jamais</strong> importa <code>database/sql</code> nem
+<code>net/http</code>. É por isso que o <code>Service</code> é testável com um fake trivial (sem banco), e que trocar
+Postgres por outro armazenamento não toca uma linha do core.</p>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem <em>aciona</em> a aplicação): o <code>profileHandler</code> chama o serviço através
+  da pequena interface <code>ProfileService</code> definida no próprio transporte (consumer-defined). Fica à
+  <strong>esquerda</strong> do hexágono.</li>
+  <li><strong>Driven port</strong> (o que a aplicação <em>aciona</em>): <code>ProfileRepository</code> (banco), implementado pelo
+  adaptador <code>postgres</code>. Fica à <strong>direita</strong>.</li>
+  <li><strong>Port de saída para outros casos de uso</strong>: <code>ProfileReader</code> — não aciona nem é acionado pela
+  infra; é a fresta por onde <em>futuros</em> casos de uso (a IA) leem o perfil.</li>
+  <li><strong>Domínio puro</strong>: <code>Profile</code>, <code>RiskProfile</code>, <code>Objective</code>, <code>Horizon</code>, os sentinelas,
+  o <code>Service</code>. <strong>Borda</strong>: tudo com HTTP ou SQL — o handler e o adaptador Postgres.</li>
+</ul>
+
+<div class="diagram">                 ┌──────────────── HEXÁGONO (core puro) ───────────────┐
+  HTTP  ──▶ profileHandler ──▶ │  profile.Service  (caso de uso)              │
+  (driving, via ProfileService)│       │  depende de PORT, não de concreto    │
+                               │       └── ProfileRepository ◀── postgres/    (driven)
+                               │                                              │
+   SPEC-104/105/106  ◀─────────│── ProfileReader  (port de leitura)           │
+   (futuros consumidores)      │  domínio: Profile, RiskProfile, Objective, Horizon (sem SQL/HTTP) │
+                               └──────────────────────────────────────────────┘
+   A identidade (auth.UserID(ctx)) entra pelo handler e atravessa como PARÂMETRO — nunca pelo corpo.
+   A seta de dependência sempre aponta PARA DENTRO: o adaptador conhece o core; o core não o conhece.</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA
+trilhos que <strong>baixam a taxa de erro</strong>. Veja, no SPEC-101, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "faça o perfil" de uma vez. O PLAN-101 fatiou em 7 fases bottom-up (domínio →
+persistência → serviço → transporte → observabilidade → testes → docs), e cada uma fechava com
+<code>go build</code> + testes verdes antes da próxima. Construir o <strong>core puro primeiro</strong> (Fase 1) significa
+que, quando o handler foi montado (Fase 4), os value objects e o serviço já existiam e eram testáveis
+isoladamente — o erro tem menos espaço para se propagar três camadas adiante.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong> (o core
+<code>profile</code> não importa <code>net/http</code> nem <code>database/sql</code>; só o subpacote <code>postgres</code> e o transporte o
+fazem) e, sobretudo, a <strong>identidade do contexto</strong> (BR-1012 — "nunca confie num <code>user_id</code> do
+payload"). Foi a lente de revisão que firmou as quatro travas da <a href="#identidade">seção 3</a> e
+exigiu o teste explícito que manda <code>{"user_id":"hacker",...}</code> e prova que o
+<code>DisallowUnknownFields</code> o rejeita.</p>
+
+<h3>O <code>go-correctness-reviewer</code> e a corrida do re-read</h3>
+<p>Foi a lente de correção que pegou a <strong>janela de corrida entre o upsert e o re-read</strong> (seção 5.2):
+não era um bug de arquitetura, era um bug de <em>concorrência sutil</em> — exatamente o tipo que escapa numa
+leitura casual. A correção (colapsar tudo num <code>ON CONFLICT … RETURNING</code>) não só fechou a corrida
+como ficou mais simples. O mesmo revisor garantiu o mapeamento de <code>22P02</code> (UUID malformado) →
+não-encontrado em vez de 500, e o <code>%w</code> + prefixo minúsculo em todos os erros.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que o core ficou puro</span>
+  É mecânica: <code>internal/profile</code> (core) importa só stdlib + <code>context</code> + o port <code>Clock</code> — <strong>nenhum
+  import de <code>database/sql</code> ou <code>net/http</code></strong>. E a asserção <code>var _ profile.ProfileRepository =
+  ProfileRepository{}</code> em <code>postgres.go</code> faz o compilador <strong>provar</strong> que o adapter satisfaz o port. Se
+  a IA tivesse metido um <code>sql.DB</code> dentro do core, ou esquecido um método do port, o build barraria.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-101 referencia o ADR-0002 mas <strong>não o edita</strong> — se a IA
+  tentasse "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code>
+  limpos — e os testes têm que passar <strong>sem rede e sem DB</strong>. Os testes de integração (isolamento,
+  cascade) ficam atrás do gate de <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo no CI.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-101</th><th>Por que baixa erro</th></tr>
+  <tr><td>Identidade vem do contexto, nunca do payload</td><td>DTO sem <code>user_id</code> + <code>DisallowUnknownFields</code> + <code>auth.UserID(ctx)</code> + <code>WHERE user_id = $1</code></td><td>O ataque de IDOR some por construção — não por disciplina.</td></tr>
+  <tr><td>Parse-don't-validate</td><td><code>ParseRiskProfile</code>/<code>ParseObjectives</code>/<code>ParseHorizon</code> validam no construtor</td><td>Um valor inválido é inrepresentável; a garantia viaja no tipo.</td></tr>
+  <tr><td>Erros são sentinelas, checados com <code>errors.Is</code></td><td><code>ErrProfileNotFound</code>, <code>ErrInvalidObjective</code> etc.; handler mapeia cada um a um status</td><td>O handler distingue 400 de 404 de 500 sem comparar strings.</td></tr>
+  <tr><td>Tempo vem do <code>Clock</code>, nunca <code>time.Now()</code></td><td><code>now := s.clock.Now()</code> no <code>SetProfile</code></td><td>Testes determinísticos de <code>created_at</code>/<code>updated_at</code> — sem <code>sleep</code> frágil.</td></tr>
+  <tr><td>Reads nomeiam a operação; ausência = sentinela</td><td><code>GetProfileByUserID</code> → <code>ErrProfileNotFound</code></td><td>Contrato de leitura previsível, igual em toda a base.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>ProfileService</code> no <code>transport/http</code> só expõe o que o HTTP usa</td><td>Fakes triviais nos testes; baixo acoplamento.</td></tr>
+  <tr><td>Doc-comments citam a BR/FR</td><td><code>// ... (SPEC-101 BR-1012)</code> nos handlers, no port e no SQL</td><td>Traço direto do documento ao código — a SDD fecha o ciclo.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só <code>encoding/json</code> da stdlib para o jsonb</td><td>Zero download novo; superfície de ataque e manutenção mínimas.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering</h2>
+
+<p>O SPEC-101 <strong>não</strong> é uma feature de IA — é o <strong>input</strong> que torna a IA <em>orientada a objetivo</em>. Vale
+conectar este alicerce à arquitetura de IA futura.</p>
+
+<table>
+  <tr><th>O que construímos agora</th><th>Como serve a IA depois</th></tr>
+  <tr>
+    <td><strong>O port <code>ProfileReader</code></strong></td>
+    <td>É o <strong>mesmo formato de costura</strong> do <code>Insighter</code> (SPEC-005) e do <code>MarketDataProvider</code> (SPEC-006): interface pequena, definida pelo domínio. O Insight Engine (SPEC-104) vai receber um <code>ProfileReader</code> e ler o perfil <strong>sem saber</strong> que existe HTTP ou SQL — exatamente como vai receber o <code>Insighter</code> sem saber qual LLM está por trás.</td>
+  </tr>
+  <tr>
+    <td><strong>Isolamento por <code>user_id</code> do contexto</strong></td>
+    <td>O <strong>Fact Builder</strong> (SPEC-104) vai computar fatos da carteira <em>de um usuário só</em> e juntá-los ao perfil <em>daquele mesmo usuário</em>. O <code>WHERE user_id = $1</code> de hoje é o que garante que o perfil (e logo o insight) de A nunca vaze para B. Um insight personalizado sem esse isolamento seria um vazamento de dados.</td>
+  </tr>
+  <tr>
+    <td><strong>Perfil como fato determinístico</strong></td>
+    <td>A regra de ouro da IA confiável é "o modelo raciocina sobre fatos, não os inventa". O perfil é um desses fatos: risco, objetivos, horizonte — dados <strong>declarados pelo usuário</strong>, válidos por construção. O LLM os recebe como parte do <code>Facts</code> opaco; nunca os adivinha.</td>
+  </tr>
+  <tr>
+    <td><strong>Grounding orientado a objetivo</strong></td>
+    <td>É o perfil que transforma "seu FII subiu 3%" em "isto reforça sua meta de <em>renda passiva</em> dentro do seu horizonte de 10 anos". Sem o registro de objetivos/horizonte, a explicação (FR-013) seria genérica. O perfil é o que dá à explicabilidade um <em>alvo</em> contra o qual avaliar a carteira.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA orientada a objetivo começa por saber <strong>qual é o objetivo</strong>. O SPEC-005 instalou a costura por
+  onde a IA fala; o SPEC-006 instalou a fonte de fatos de mercado; o SPEC-101 instala o <strong>fato sobre o
+  investidor</strong> — pequeno, estável, válido por construção, isolado por usuário e exposto por um port de
+  leitura. Quando o Insight Engine chegar, ele lê o perfil pelo <code>ProfileReader</code>, junta com a carteira
+  e o mercado, e finalmente responde: <em>"sua carteira está alinhada aos seus objetivos?"</em>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir</h2>
+
+<p>Com o perfil persistido e exposto atrás do <code>ProfileReader</code>, as features que <strong>raciocinam sobre o
+investidor</strong> agora têm onde se apoiar. Repare como cada uma pluga no port que o SPEC-101 já deixou
+pronto.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como usa o SPEC-101</th></tr>
+  <tr><td>SPEC-102</td><td>Carteira (holdings)</td><td>O segundo registro por usuário; junto com o perfil forma o par "quem é + o que tem" que a análise precisa.</td></tr>
+  <tr><td>SPEC-104</td><td>Insight Engine + Fact Builder</td><td><strong>Lê o perfil pelo <code>ProfileReader</code></strong>, junta com a carteira + o mercado, e entrega ao <code>Insighter</code> como parte dos <code>Facts</code> — o grounding orientado a objetivo.</td></tr>
+  <tr><td>SPEC-105</td><td>Assistente de Rebalanceamento</td><td>Usa o perfil de risco + horizonte para avaliar se a alocação atual condiz com a tolerância declarada.</td></tr>
+  <tr><td>SPEC-106</td><td>Health Score</td><td>Pondera o score contra os objetivos e o horizonte do perfil — "saudável <em>para esse investidor</em>".</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…004</td><td>Esqueleto, persistência, auth, observabilidade</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptador de LLM</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101</td><td>Perfil do investidor (escopado por <code>user_id</code>)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-102</td><td>Carteira (FIIs + renda fixa, por usuário)</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O <code>ProfileReader</code> como seam do multi-agente CIO + MCP</span>
+  Olhando longe: assim como o <code>Insighter</code> é a fronteira por onde o futuro sistema multi-agente (o
+  "CIO") raciocina, o <code>ProfileReader</code> é uma das fronteiras por onde ele <strong>obtém o contexto do
+  investidor</strong>. Cada agente que precisar saber "quem é este usuário e o que ele quer" lê pelo mesmo
+  port — sem acoplamento a HTTP/SQL, com identidade isolada por usuário. Quando o CIO chegar, ele herda
+  essa costura intacta: o perfil já é um fato pronto, válido e privado, esperando para ser lido.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-101 o YieldForge ganhou sua <strong>primeira feature de usuário</strong>: o perfil do investidor (risco,
+  objetivos, horizonte) — value objects válidos por construção, guardados num upsert idempotente
+  <code>ON CONFLICT … RETURNING</code> com objetivos em <code>jsonb</code>, escopados por <code>user_id</code> vindo <strong>sempre do
+  contexto autenticado, nunca do corpo</strong>, e expostos pelo port <code>ProfileReader</code> que a IA orientada a
+  objetivo vai ler a seguir.
+</div>
+
+<footer>
+  YieldForge · Aula 101 (SPEC-101) · gerada como material de estudo. Veja também a
+  <a href="SPEC-003-aula.html">Aula 03</a> (auth — a costura de identidade que esta consome), a
+  <a href="SPEC-005-aula.html">Aula 05</a>, a <a href="SPEC-006-aula.html">Aula 06</a>, a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-101-investor-profile.md">SPEC-101</a>
+  e o <a href="../03-plans/PLAN-101-investor-profile.md">PLAN-101</a>.
+</footer>
+
+</div>
+</body>
+</html>

@@ -178,6 +178,8 @@ counts, freshness) — no payloads.
 | POST   | `/auth/login`    | public | Start a session — sets an `HttpOnly` session cookie |
 | POST   | `/auth/logout`   | session | Revoke the current session (`204`) |
 | GET    | `/auth/me`       | session | The authenticated caller's `{id,email}` |
+| GET    | `/profile`       | session | The caller's investor profile — `200` or `404 {"error":"profile not set"}` |
+| PUT    | `/profile`       | session | Create/replace the profile — `{risk_profile, objectives[], horizon_years}` (SPEC-101) |
 
 ## Authentication
 
