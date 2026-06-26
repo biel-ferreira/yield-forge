@@ -16,11 +16,12 @@ import (
 type Deps struct {
 	Logger       *slog.Logger
 	Build        buildinfo.Info
-	Ready        Pinger         // readiness dependency (the DB pool)
-	Auth         AuthService    // authentication use cases
-	Profile      ProfileService // investor profile use cases (SPEC-101)
-	CookieName   string         // session cookie name
-	CookieSecure bool           // set the cookie's Secure flag (off in dev)
+	Ready        Pinger           // readiness dependency (the DB pool)
+	Auth         AuthService      // authentication use cases
+	Profile      ProfileService   // investor profile use cases (SPEC-101)
+	Portfolio    PortfolioService // portfolio holdings use cases (SPEC-102)
+	CookieName   string           // session cookie name
+	CookieSecure bool             // set the cookie's Secure flag (off in dev)
 	SessionTTL   time.Duration
 }
 
@@ -44,6 +45,7 @@ func NewRouter(d Deps) http.Handler {
 		sessionTTL:   d.SessionTTL,
 	}
 	profileH := profileHandler{service: d.Profile, logger: d.Logger}
+	holdingsH := holdingsHandler{service: d.Portfolio, logger: d.Logger}
 
 	mux := http.NewServeMux()
 	// Public (see isPublicRoute).
@@ -57,6 +59,14 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /auth/me", authH.me)
 	mux.HandleFunc("GET /profile", profileH.getProfile)
 	mux.HandleFunc("PUT /profile", profileH.putProfile)
+	mux.HandleFunc("POST /holdings/fii", holdingsH.createFIIHolding)
+	mux.HandleFunc("GET /holdings/fii", holdingsH.listFIIHoldings)
+	mux.HandleFunc("PUT /holdings/fii/{id}", holdingsH.updateFIIHolding)
+	mux.HandleFunc("DELETE /holdings/fii/{id}", holdingsH.deleteFIIHolding)
+	mux.HandleFunc("POST /holdings/fixed-income", holdingsH.createFixedIncomeHolding)
+	mux.HandleFunc("GET /holdings/fixed-income", holdingsH.listFixedIncomeHoldings)
+	mux.HandleFunc("PUT /holdings/fixed-income/{id}", holdingsH.updateFixedIncomeHolding)
+	mux.HandleFunc("DELETE /holdings/fixed-income/{id}", holdingsH.deleteFixedIncomeHolding)
 	mux.HandleFunc("/", api.notFound) // catch-all → JSON 404 (when authenticated)
 
 	var handler http.Handler = routeNamer(mux)
