@@ -27,8 +27,9 @@ These flow down from PRD §6 into every spec, line of code, and user-facing stri
   Templates in [`templates/`](templates/). Build order in [docs/02-specs/README.md](docs/02-specs/README.md).
 - Update [`CHANGELOG.md`](CHANGELOG.md) `[Unreleased]` in the **same change** as any
   notable work (Keep a Changelog format, SemVer headings).
-- On closing a spec: flip its SPEC + PLAN status to Done, update `README.md` if
-  endpoints/env changed, and produce a **PT-BR HTML lesson** at
+- On closing a spec: flip its SPEC + PLAN status to Done, update `README.md` and
+  [`api/openapi.yaml`](api/openapi.yaml) if endpoints/env changed (see the OpenAPI rule
+  under Code conventions), and produce a **PT-BR HTML lesson** at
   `docs/lessons/SPEC-0NN-aula.html`.
 - ADRs are immutable once accepted — supersede, never edit.
 
@@ -98,6 +99,16 @@ Deliberately chosen (not accidental). Apply to all new Go code:
   `handlers.go` endpoint lives in `handlers_integration_test.go`.
 - **HTTP:** request/response DTOs are separate from domain types; validate at the edge;
   errors use the generic `{"error":"..."}` envelope via the `writeJSON` helper.
+- **OpenAPI is the API contract — keep it in lockstep.** Every HTTP endpoint is declared
+  once in the `routeTable` (`internal/transport/http/routes.go`) and documented in the
+  hand-maintained spec [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1, served at
+  `GET /docs` + `GET /openapi.yaml`). **Whenever you add, remove, or change an endpoint —
+  its path, method, request/response shape, or status codes — update `api/openapi.yaml`
+  in the SAME change.** A drift test (`openapi_test.go`) fails the build if a registered
+  route is undocumented or a documented route no longer exists; it parses the spec by
+  indentation, so respect the file's formatting contract (path keys at 2 spaces, method
+  keys at 4). Money/rates appear in the spec as integers (`*_centavos` / `*_bps`), never
+  floats — the wire ban extends to the contract.
 - **Money crosses the JSON boundary as integer minor units (centavos), never a float** —
   serialize `int64` centavos (or a documented decimal string); parse inbound provider
   amounts via `json.Number` or string, never `float64`. The `float64` ban extends to the wire.

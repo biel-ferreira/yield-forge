@@ -48,25 +48,16 @@ func NewRouter(d Deps) http.Handler {
 	holdingsH := holdingsHandler{service: d.Portfolio, logger: d.Logger}
 
 	mux := http.NewServeMux()
-	// Public (see isPublicRoute).
-	mux.HandleFunc("GET /healthz", api.healthz)
-	mux.HandleFunc("GET /readyz", api.readyz)
-	mux.HandleFunc("GET /version", api.version)
-	mux.HandleFunc("POST /auth/register", authH.register)
-	mux.HandleFunc("POST /auth/login", authH.login)
-	// Protected (require a valid session).
-	mux.HandleFunc("POST /auth/logout", authH.logout)
-	mux.HandleFunc("GET /auth/me", authH.me)
-	mux.HandleFunc("GET /profile", profileH.getProfile)
-	mux.HandleFunc("PUT /profile", profileH.putProfile)
-	mux.HandleFunc("POST /holdings/fii", holdingsH.createFIIHolding)
-	mux.HandleFunc("GET /holdings/fii", holdingsH.listFIIHoldings)
-	mux.HandleFunc("PUT /holdings/fii/{id}", holdingsH.updateFIIHolding)
-	mux.HandleFunc("DELETE /holdings/fii/{id}", holdingsH.deleteFIIHolding)
-	mux.HandleFunc("POST /holdings/fixed-income", holdingsH.createFixedIncomeHolding)
-	mux.HandleFunc("GET /holdings/fixed-income", holdingsH.listFixedIncomeHoldings)
-	mux.HandleFunc("PUT /holdings/fixed-income/{id}", holdingsH.updateFixedIncomeHolding)
-	mux.HandleFunc("DELETE /holdings/fixed-income/{id}", holdingsH.deleteFixedIncomeHolding)
+	// The application API surface comes from one declared table (routes.go) so the
+	// OpenAPI spec can be drift-tested against it (openapi_test.go). Public vs protected
+	// is decided by isPublicRoute, not by registration order.
+	for _, rt := range routeTable(api, authH, profileH, holdingsH) {
+		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler)
+	}
+	// API documentation meta-routes (public): the embedded OpenAPI spec + Swagger UI.
+	// Not part of routeTable — they document the API, they are not part of it.
+	mux.HandleFunc("GET /openapi.yaml", serveOpenAPISpec)
+	mux.HandleFunc("GET /docs", serveSwaggerUI)
 	mux.HandleFunc("/", api.notFound) // catch-all → JSON 404 (when authenticated)
 
 	var handler http.Handler = routeNamer(mux)

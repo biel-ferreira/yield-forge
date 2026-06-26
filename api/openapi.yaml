@@ -1,0 +1,616 @@
+# YieldForge HTTP API — OpenAPI 3.1 contract.
+#
+# This file is the hand-maintained source of truth for the API surface. It is embedded
+# into the binary (api/api.go) and served at GET /openapi.yaml + rendered at GET /docs.
+#
+# FORMATTING CONTRACT (load-bearing — do not reflow):
+#   The drift test (internal/transport/http/openapi_test.go) parses the `paths:` block
+#   by indentation rather than with a YAML library (stdlib-first, ADR-0003). Therefore:
+#     * each path key is indented EXACTLY two spaces  ("  /profile:")
+#     * each operation/method key EXACTLY four spaces  ("    get:")
+#     * path templating uses the ServeMux style "{id}" so keys match the router verbatim
+#   Keep new endpoints in that shape or the drift guard will misparse them.
+#
+# CONVENTIONS:
+#   * Money is integer minor units (centavos); rates are integer basis points (bps).
+#     They cross the wire as JSON integers (format int64), NEVER floats.
+#   * Auth is a server-side session in an HttpOnly cookie (see securitySchemes).
+#   * Errors use the generic envelope {"error":"..."}.
+openapi: 3.1.0
+info:
+  title: YieldForge API
+  version: 0.1.0
+  description: |-
+    AI-powered Investment Copilot for Brazilian retail investors (FIIs + Fixed Income).
+
+    **Money & rates:** monetary amounts are integer **centavos** (`*_centavos`) and
+    rates are integer **basis points** (`*_bps`, 1 bp = 0.01%). They are always JSON
+    integers, never floating-point.
+
+    **Auth:** all routes are deny-by-default and require a valid session cookie except
+    the public allowlist (`/healthz`, `/readyz`, `/version`, `POST /auth/register`,
+    `POST /auth/login`). Identity is taken from the session, never from the request body.
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: system
+    description: Liveness, readiness, and build metadata.
+  - name: auth
+    description: Registration, sessions, and the authenticated identity.
+  - name: profile
+    description: The investor profile (risk, objectives, horizon).
+  - name: holdings
+    description: Portfolio holdings — FIIs and fixed income (per-user, ownership-scoped).
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: Liveness probe
+      description: Returns 200 as long as the process is serving. Always public.
+      operationId: getHealthz
+      security: []
+      responses:
+        "200":
+          description: The process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                status: ok
+  /readyz:
+    get:
+      tags: [system]
+      summary: Readiness probe
+      description: 200 when the database is reachable, 503 otherwise. Always public.
+      operationId: getReadyz
+      security: []
+      responses:
+        "200":
+          description: The app and its dependencies are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: ready
+                checks:
+                  db: up
+        "503":
+          description: A dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: not_ready
+                checks:
+                  db: down
+  /version:
+    get:
+      tags: [system]
+      summary: Build metadata
+      operationId: getVersion
+      security: []
+      responses:
+        "200":
+          description: Build version, commit, and build time.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResponse"
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Create an account
+      operationId: registerUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "201":
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: The email is already registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: email already registered
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Start a session
+      description: Verifies credentials and sets an HttpOnly session cookie.
+      operationId: loginUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: Authenticated. A session cookie is set.
+          headers:
+            Set-Cookie:
+              description: The HttpOnly session cookie (name defaults to `yf_session`).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid email or password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: invalid email or password
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current session
+      operationId: logoutUser
+      responses:
+        "204":
+          description: Session revoked; the cookie is cleared.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: The authenticated caller's identity
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: The current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /profile:
+    get:
+      tags: [profile]
+      summary: Get the caller's investor profile
+      operationId: getProfile
+      responses:
+        "200":
+          description: The investor profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The profile has not been set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: profile not set
+    put:
+      tags: [profile]
+      summary: Create or replace the caller's investor profile
+      operationId: setProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileRequest"
+      responses:
+        "200":
+          description: The saved profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /holdings/fii:
+    get:
+      tags: [holdings]
+      summary: List the caller's FII holdings
+      operationId: listFIIHoldings
+      responses:
+        "200":
+          description: The caller's FII holdings (possibly empty).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FIIHoldingResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [holdings]
+      summary: Create an FII holding
+      operationId: createFIIHolding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FIIHoldingRequest"
+      responses:
+        "201":
+          description: The created holding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FIIHoldingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /holdings/fii/{id}:
+    put:
+      tags: [holdings]
+      summary: Update an owned FII holding
+      operationId: updateFIIHolding
+      parameters:
+        - $ref: "#/components/parameters/HoldingID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FIIHoldingRequest"
+      responses:
+        "200":
+          description: The updated holding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FIIHoldingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/HoldingNotFound"
+    delete:
+      tags: [holdings]
+      summary: Delete an owned FII holding
+      operationId: deleteFIIHolding
+      parameters:
+        - $ref: "#/components/parameters/HoldingID"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/HoldingNotFound"
+  /holdings/fixed-income:
+    get:
+      tags: [holdings]
+      summary: List the caller's fixed-income holdings
+      operationId: listFixedIncomeHoldings
+      responses:
+        "200":
+          description: The caller's fixed-income holdings (possibly empty).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FixedIncomeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [holdings]
+      summary: Create a fixed-income holding
+      operationId: createFixedIncomeHolding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedIncomeRequest"
+      responses:
+        "201":
+          description: The created holding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixedIncomeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /holdings/fixed-income/{id}:
+    put:
+      tags: [holdings]
+      summary: Update an owned fixed-income holding
+      operationId: updateFixedIncomeHolding
+      parameters:
+        - $ref: "#/components/parameters/HoldingID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedIncomeRequest"
+      responses:
+        "200":
+          description: The updated holding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixedIncomeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/HoldingNotFound"
+    delete:
+      tags: [holdings]
+      summary: Delete an owned fixed-income holding
+      operationId: deleteFixedIncomeHolding
+      parameters:
+        - $ref: "#/components/parameters/HoldingID"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/HoldingNotFound"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: yf_session
+      description: |-
+        Server-side session token in an HttpOnly cookie, issued by `POST /auth/login`.
+        The cookie name is configurable via `AUTH_COOKIE_NAME` (default `yf_session`).
+  parameters:
+    HoldingID:
+      name: id
+      in: path
+      required: true
+      description: The holding's UUID.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: The request body or a field is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: invalid request body
+    Unauthorized:
+      description: Authentication is required or the session is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: authentication required
+    HoldingNotFound:
+      description: No such holding owned by the caller.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: holding not found
+  schemas:
+    Error:
+      type: object
+      description: The generic error envelope used by all 4xx/5xx responses.
+      properties:
+        error:
+          type: string
+      required: [error]
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+    ReadinessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          examples: [ready, not_ready]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+          description: Per-dependency status (e.g. `{"db":"up"}`).
+      required: [status, checks]
+    VersionResponse:
+      type: object
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        built_at:
+          type: string
+      required: [version, commit, built_at]
+    Credentials:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+      required: [email, password]
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+      required: [id, email]
+    ProfileRequest:
+      type: object
+      description: There is deliberately no `user_id` field — identity comes from the session.
+      properties:
+        risk_profile:
+          type: string
+          enum: [conservative, moderate, aggressive]
+        objectives:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [retirement, passive_income, wealth_preservation, long_term_growth]
+        horizon_years:
+          type: integer
+          minimum: 1
+          maximum: 50
+      required: [risk_profile, objectives, horizon_years]
+    ProfileResponse:
+      type: object
+      properties:
+        risk_profile:
+          type: string
+          enum: [conservative, moderate, aggressive]
+        objectives:
+          type: array
+          items:
+            type: string
+            enum: [retirement, passive_income, wealth_preservation, long_term_growth]
+        horizon_years:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [risk_profile, objectives, horizon_years, created_at, updated_at]
+    FIIHoldingRequest:
+      type: object
+      properties:
+        ticker:
+          type: string
+          description: The FII ticker (e.g. `HGLG11`).
+          example: HGLG11
+        quantity:
+          type: integer
+          minimum: 1
+          description: Number of cotas (positive whole number).
+        average_price_centavos:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Average cost per cota, in centavos (integer, never a float).
+      required: [ticker, quantity, average_price_centavos]
+    FIIHoldingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ticker:
+          type: string
+        quantity:
+          type: integer
+        average_price_centavos:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, ticker, quantity, average_price_centavos, created_at, updated_at]
+    FixedIncomeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        institution:
+          type: string
+        invested_amount_centavos:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Invested amount in centavos (integer, never a float).
+        annual_rate_bps:
+          type: integer
+          minimum: 0
+          description: Annual rate in basis points (1 bp = 0.01%).
+        maturity_date:
+          type: [string, "null"]
+          format: date
+          description: Maturity as `YYYY-MM-DD`; null/omitted for daily-liquidity holdings.
+        liquidity_type:
+          type: string
+          enum: [daily, at_maturity]
+      required: [name, institution, invested_amount_centavos, annual_rate_bps, liquidity_type]
+    FixedIncomeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        institution:
+          type: string
+        invested_amount_centavos:
+          type: integer
+          format: int64
+        annual_rate_bps:
+          type: integer
+        maturity_date:
+          type: [string, "null"]
+          format: date
+        liquidity_type:
+          type: string
+          enum: [daily, at_maturity]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name, institution, invested_amount_centavos, annual_rate_bps, liquidity_type, created_at, updated_at]
+security:
+  - cookieAuth: []

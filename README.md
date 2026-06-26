@@ -193,6 +193,21 @@ counts, freshness) — no payloads.
 > points (`*_bps`) — never a float. `maturity_date` is a `YYYY-MM-DD` string (null for
 > daily-liquidity holdings). All `/holdings/*` routes are per-user and ownership-scoped.
 
+### API docs (OpenAPI / Swagger)
+
+The full contract is the hand-maintained OpenAPI 3.1 spec at [`api/openapi.yaml`](api/openapi.yaml),
+embedded into the binary and served two public ways:
+
+| Method | Path            | Purpose                                              |
+| ------ | --------------- | ---------------------------------------------------- |
+| GET    | `/docs`         | Interactive **Swagger UI** (renders the spec)        |
+| GET    | `/openapi.yaml` | The raw OpenAPI 3.1 document                          |
+
+The spec is kept in lockstep with the router by a build-failing drift test
+(`internal/transport/http/openapi_test.go`): every registered route must be documented, and
+vice-versa. Adding or changing an endpoint **requires** updating `api/openapi.yaml` in the
+same change (see `CLAUDE.md`).
+
 ## Authentication
 
 Email + password with **server-side sessions** (SPEC-003). Passwords are stored only
