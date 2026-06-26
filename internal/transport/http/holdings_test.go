@@ -12,9 +12,24 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/biel-ferreira/yield-forge/internal/auth"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
+	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 	"github.com/biel-ferreira/yield-forge/internal/portfolio"
 )
+
+func holdingsRouter(svc PortfolioService) http.Handler {
+	user := auth.User{ID: "u1", Email: "me@example.com"}
+	return NewRouter(Deps{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Build:      buildinfo.Info{},
+		Ready:      fakePinger{},
+		Auth:       fakeAuth{authUser: user},
+		Portfolio:  svc,
+		CookieName: "yf_session",
+		SessionTTL: time.Hour,
+	})
+}
 
 // fakePortfolioService records the userID/id it was called with so we can assert identity is
 // taken from the context (not the body/path), and returns configured results/errors.
@@ -170,4 +185,41 @@ func TestHoldings_Unauthenticated(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.listFIIHoldings(rec, httptest.NewRequest(http.MethodGet, "/holdings/fii", nil))
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestHTTP_HoldingsSpanRouteNamed runs auth → holdings end to end and verifies the span is
+// route-named and carries no money/ticker values (SPEC-102 FR-1028).
+func TestHTTP_HoldingsSpanRouteNamed(t *testing.T) {
+	exp := spanRecorder(t)
+	router := holdingsRouter(&fakePortfolioService{fiiResult: sampleFII("u1")})
+
+	body := `{"ticker":"HGLG11","quantity":100,"average_price_centavos":15750}`
+	rr := doReq(router, http.MethodPost, "/holdings/fii", body, &http.Cookie{Name: "yf_session", Value: "tok"})
+	require.Equal(t, http.StatusCreated, rr.Code)
+
+	spans := exp.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "POST /holdings/fii", spans[0].Name)
+	for _, kv := range spans[0].Attributes {
+		v := kv.Value.Emit()
+		require.NotContains(t, v, "15750", "money must not leak onto the span")
+		require.NotContains(t, v, "HGLG11", "holding values must not leak onto the span")
+	}
+}
+
+// TestHTTP_HoldingsIDRouteIsLowCardinality verifies the {id} routes are named by the route
+// pattern, not the raw UUID, so the span stays low-cardinality (SPEC-004 BR-406 / FR-1028).
+func TestHTTP_HoldingsIDRouteIsLowCardinality(t *testing.T) {
+	exp := spanRecorder(t)
+	router := holdingsRouter(&fakePortfolioService{fiiResult: sampleFII("u1")})
+
+	const id = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+	body := `{"ticker":"HGLG11","quantity":1,"average_price_centavos":1}`
+	rr := doReq(router, http.MethodPut, "/holdings/fii/"+id, body, &http.Cookie{Name: "yf_session", Value: "tok"})
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	spans := exp.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "PUT /holdings/fii/{id}", spans[0].Name, "named by the route pattern, not the raw id")
+	require.NotContains(t, spans[0].Name, id)
 }
