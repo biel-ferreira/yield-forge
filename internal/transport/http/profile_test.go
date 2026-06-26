@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/biel-ferreira/yield-forge/internal/auth"
+	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 	"github.com/biel-ferreira/yield-forge/internal/profile"
 )
 
@@ -139,4 +140,33 @@ func TestProfile_Unauthenticated(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.getProfile(rec, httptest.NewRequest(http.MethodGet, "/profile", nil))
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestHTTP_ProfileSpanRouteNamed exercises auth → profile end to end and verifies the server
+// span is named by the matched route and carries no profile values (SPEC-101 FR-1018).
+func TestHTTP_ProfileSpanRouteNamed(t *testing.T) {
+	exp := spanRecorder(t)
+	user := auth.User{ID: "u1", Email: "me@example.com"}
+	router := NewRouter(Deps{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Build:      buildinfo.Info{},
+		Ready:      fakePinger{},
+		Auth:       fakeAuth{authUser: user},
+		Profile:    &fakeProfileService{setResult: sampleProfile("u1")},
+		CookieName: "yf_session",
+		SessionTTL: time.Hour,
+	})
+
+	body := `{"risk_profile":"moderate","objectives":["retirement"],"horizon_years":10}`
+	rr := doReq(router, http.MethodPut, "/profile", body, &http.Cookie{Name: "yf_session", Value: "tok"})
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	spans := exp.GetSpans()
+	require.Len(t, spans, 1, "one server span per request")
+	require.Equal(t, "PUT /profile", spans[0].Name, "named by the matched route, not the raw path")
+	for _, kv := range spans[0].Attributes {
+		v := kv.Value.Emit()
+		require.NotContains(t, v, "moderate", "no profile values on the span")
+		require.NotContains(t, v, "retirement", "no profile values on the span")
+	}
 }
