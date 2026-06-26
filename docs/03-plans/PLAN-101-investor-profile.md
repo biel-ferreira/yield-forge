@@ -8,7 +8,7 @@
 | Related Feature | SPEC-101 — the first user-facing feature; first consumer of the auth identity seam |
 | Related Spec    | [SPEC-101](../02-specs/SPEC-101-investor-profile.md)         |
 | Version         | 0.1.0                                                        |
-| Status          | Approved (decisions D1–D5 resolved, D1 = jsonb)              |
+| Status          | Done (decisions D1–D5 resolved, D1 = jsonb)                  |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-24                                                   |
 

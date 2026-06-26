@@ -201,6 +201,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New direct dependency: `golang.org/x/net` (HTML table parsing) — already transitive via
   the OTel stack, so no new download (ADR-0003 stdlib-first posture preserved).
 
+#### SPEC-101 implementation (investor profile)
+
+- `internal/profile` core (pure — no SQL/HTTP/SDK): the `Profile` domain and value objects
+  (`RiskProfile`, `Objective`, `Horizon`), the service, sentinels, and two ports —
+  `ProfileRepository` (persistence) and **`ProfileReader`** (the consumer seam the Insight
+  Engine, Rebalancing, and Health Score will read, SPEC-104/105/106). The first user-facing
+  feature, and the first to consume the SPEC-003 identity-from-context seam.
+- **Identity from context, enforced structurally (BR-1012):** the PUT DTO has no `user_id`
+  field and `DisallowUnknownFields` rejects a smuggled one, so a client cannot supply or
+  override identity; the handler passes `auth.UserID(ctx)` to the service and every query is
+  scoped `WHERE user_id = $1`.
+- Value objects validate on construction (parse-don't-validate): `RiskProfile`
+  (conservative|moderate|aggressive), `Objective` (4-value set — **deduplicated, ≥1
+  required**), `Horizon` (1–50 whole years).
+- `HTTP`: `GET /profile` (200 / 404 when unset) and `PUT /profile` (create-or-update),
+  behind the deny-by-default auth middleware; DTOs separate from domain; the generic
+  `{"error":"..."}` envelope. No money and no AI output here, so the explainability/non-advice
+  gates do not apply (BR-1016).
+- Persistence: migration `0004_profiles` (PK `user_id`, FK → `users` `ON DELETE CASCADE`,
+  objectives as **`jsonb`** per D1) and the Postgres repository with an idempotent
+  `INSERT … ON CONFLICT (user_id) DO UPDATE … RETURNING` upsert that **preserves `created_at`,
+  advances `updated_at`, and returns the authoritative row atomically** (no re-read, no race);
+  reads are user-scoped, re-validate stored values through their constructors, and map absence
+  to `ErrProfileNotFound`.
+- Observability: the endpoints inherit route-named `otelhttp` spans (`GET /profile` /
+  `PUT /profile`); a test asserts the span carries no profile values (FR-1018).
+- Tests: value objects (dedupe/bounds), service (validation, **created_at preservation**),
+  handlers (**context-identity, body-`user_id` rejected**, 400/404/401, span-no-PII), and a
+  **real-Postgres integration** proving upsert idempotency, per-user isolation, and FK cascade.
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while
