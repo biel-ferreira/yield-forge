@@ -31,10 +31,10 @@ type SetProfileInput struct {
 	HorizonYears int
 }
 
-// SetProfile validates the input, upserts the profile under userID, and returns the stored
-// row (re-read so created_at reflects first creation on an update). A validation failure
-// returns the relevant sentinel (Err*RiskProfile / Err*Objective / Err*Horizon) and writes
-// nothing.
+// SetProfile validates the input and upserts the profile under userID, returning the stored
+// row the repository hands back from its atomic upsert (with the preserved created_at). A
+// validation failure returns the relevant sentinel (Err*RiskProfile / Err*Objective /
+// Err*Horizon) and writes nothing.
 func (s *Service) SetProfile(ctx context.Context, userID string, in SetProfileInput) (Profile, error) {
 	risk, err := ParseRiskProfile(in.RiskProfile)
 	if err != nil {
