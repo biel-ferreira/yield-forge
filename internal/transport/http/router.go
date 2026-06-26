@@ -16,10 +16,11 @@ import (
 type Deps struct {
 	Logger       *slog.Logger
 	Build        buildinfo.Info
-	Ready        Pinger      // readiness dependency (the DB pool)
-	Auth         AuthService // authentication use cases
-	CookieName   string      // session cookie name
-	CookieSecure bool        // set the cookie's Secure flag (off in dev)
+	Ready        Pinger         // readiness dependency (the DB pool)
+	Auth         AuthService    // authentication use cases
+	Profile      ProfileService // investor profile use cases (SPEC-101)
+	CookieName   string         // session cookie name
+	CookieSecure bool           // set the cookie's Secure flag (off in dev)
 	SessionTTL   time.Duration
 }
 
@@ -42,6 +43,7 @@ func NewRouter(d Deps) http.Handler {
 		cookieSecure: d.CookieSecure,
 		sessionTTL:   d.SessionTTL,
 	}
+	profileH := profileHandler{service: d.Profile, logger: d.Logger}
 
 	mux := http.NewServeMux()
 	// Public (see isPublicRoute).
@@ -53,6 +55,8 @@ func NewRouter(d Deps) http.Handler {
 	// Protected (require a valid session).
 	mux.HandleFunc("POST /auth/logout", authH.logout)
 	mux.HandleFunc("GET /auth/me", authH.me)
+	mux.HandleFunc("GET /profile", profileH.getProfile)
+	mux.HandleFunc("PUT /profile", profileH.putProfile)
 	mux.HandleFunc("/", api.notFound) // catch-all → JSON 404 (when authenticated)
 
 	var handler http.Handler = routeNamer(mux)
