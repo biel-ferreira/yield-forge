@@ -180,6 +180,18 @@ counts, freshness) — no payloads.
 | GET    | `/auth/me`       | session | The authenticated caller's `{id,email}` |
 | GET    | `/profile`       | session | The caller's investor profile — `200` or `404 {"error":"profile not set"}` |
 | PUT    | `/profile`       | session | Create/replace the profile — `{risk_profile, objectives[], horizon_years}` (SPEC-101) |
+| POST   | `/holdings/fii`  | session | Create an FII holding — `{ticker, quantity, average_price_centavos}` → `201` (SPEC-102) |
+| GET    | `/holdings/fii`  | session | List the caller's FII holdings |
+| PUT    | `/holdings/fii/{id}`    | session | Update an owned FII holding (`404` if not owned) |
+| DELETE | `/holdings/fii/{id}`    | session | Delete an owned FII holding (`204` / `404`) |
+| POST   | `/holdings/fixed-income` | session | Create a fixed-income holding — `{name, institution, invested_amount_centavos, annual_rate_bps, maturity_date, liquidity_type}` → `201` |
+| GET    | `/holdings/fixed-income` | session | List the caller's fixed-income holdings |
+| PUT    | `/holdings/fixed-income/{id}` | session | Update an owned fixed-income holding |
+| DELETE | `/holdings/fixed-income/{id}` | session | Delete an owned fixed-income holding |
+
+> Money crosses the wire as **integer centavos** (`*_centavos`) and rates as integer basis
+> points (`*_bps`) — never a float. `maturity_date` is a `YYYY-MM-DD` string (null for
+> daily-liquidity holdings). All `/holdings/*` routes are per-user and ownership-scoped.
 
 ## Authentication
 

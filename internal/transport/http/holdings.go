@@ -46,7 +46,7 @@ type holdingsHandler struct {
 
 const dateLayout = "2006-01-02" // date-only wire format for maturity_date
 
-// --- DTOs (money crosses the wire as integer centavos / bps, never a float — BR-1027) ---
+// --- DTOs (money crosses the wire as integer centavos / bps, never a float — FR-1027/BR-1022) ---
 
 type fiiHoldingRequest struct {
 	Ticker               string `json:"ticker"`

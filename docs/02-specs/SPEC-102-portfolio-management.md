@@ -9,7 +9,7 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — FR-001, FR-002, Epic 1, §13 Dependencies |
 | Related ADRs | [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md) (layering) |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
+| Status       | Done                                                   |
 | Plan         | [PLAN-102](../03-plans/PLAN-102-portfolio-management.md) |
 
 ---

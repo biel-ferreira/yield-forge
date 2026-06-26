@@ -8,7 +8,7 @@
 | Related Feature | SPEC-102 — the system of record for holdings; first feature with money |
 | Related Spec    | [SPEC-102](../02-specs/SPEC-102-portfolio-management.md)     |
 | Version         | 0.1.0                                                        |
-| Status          | Approved (decisions D1–D5 resolved)                          |
+| Status          | Done (decisions D1–D5 resolved)                             |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-26                                                   |
 

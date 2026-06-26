@@ -29,7 +29,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-005 | SPEC-005 | [`Insighter` Port & Free/Local LLM Adapter](PLAN-005-insighter-port-and-llm-adapter.md) | ✅ Done |
 | PLAN-006 | SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](PLAN-006-marketdata-port-and-ingestion-worker.md) | ✅ Done |
 | PLAN-101 | SPEC-101 | [Investor Profile](PLAN-101-investor-profile.md) | ✅ Done |
-| PLAN-102 | SPEC-102 | [Portfolio Management (FII + FI)](PLAN-102-portfolio-management.md) | 📋 Approved |
+| PLAN-102 | SPEC-102 | [Portfolio Management (FII + FI)](PLAN-102-portfolio-management.md) | ✅ Done |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
 

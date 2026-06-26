@@ -239,6 +239,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   handlers (**context-identity, body-`user_id` rejected**, 400/404/401, span-no-PII), and a
   **real-Postgres integration** proving upsert idempotency, per-user isolation, and FK cascade.
 
+#### SPEC-102 implementation (portfolio management)
+
+- `internal/portfolio` core (pure — no SQL/HTTP/SDK): the `FIIHolding` and
+  `FixedIncomeHolding` domain, value objects (`Quantity`, `LiquidityType`; the FII `Ticker`
+  is **reused from `marketdata`** — a pure value object from a foundational seam, D1), the
+  service, sentinels, and two ports — `Repository` (persistence) and **`Reader`** (the
+  consumer seam the dashboard, Fact Builder, and projections read, SPEC-103/104/107). The
+  system of record for what the user owns, and the first feature to handle money.
+- **Identity AND ownership from context (BR-1021):** no DTO carries a `user_id`
+  (`DisallowUnknownFields` rejects a smuggled one); reads are scoped `WHERE user_id = $1` and
+  mutations are **double-scoped** `WHERE id = $1 AND user_id = $2`, so a cross-user id is
+  "not found", never an existence oracle — one user can never read, edit, or delete another's
+  holding.
+- **Money is `int64` centavos / integer basis points end to end** — domain, DB columns
+  (`bigint`/`integer`, no floats), and the JSON wire (`*_centavos` / `*_bps`, never a
+  `float64`) — so balances are exact (BR-1022).
+- Value objects (parse-don't-validate): `Quantity` (positive whole cotas, D5), `LiquidityType`
+  (`daily`|`at_maturity`, D3). The at-maturity **past-date rule** is enforced on create via the
+  `Clock`; a daily-liquidity holding normalizes its maturity to null. Cost basis only —
+  current value is computed downstream (BR-1024).
+- HTTP CRUD: `POST/GET/PUT/DELETE /holdings/fii` and `/holdings/fixed-income` (8 endpoints),
+  behind the deny-by-default auth middleware; per-type DTOs separate from domain; `maturity_date`
+  as a `YYYY-MM-DD` wire string; ownership errors → `404`. No AI output (FR-013/014 N/A).
+- Persistence: migration `0005_holdings` (two tables, UUID PK, `user_id` FK → `users`
+  `ON DELETE CASCADE`, `user_id` index, money `bigint` / rate `integer`) and the Postgres
+  repository with `RETURNING` creates/updates (preserving `created_at`) and double-scoped,
+  ownership-checked update/delete returning `ErrHoldingNotFound`.
+- Observability: route-named `otelhttp` spans; tests assert the `{id}` routes stay
+  low-cardinality (`PUT /holdings/fii/{id}`, not the raw UUID) and that no money/ticker leaks
+  onto a span (FR-1028).
+- Tests: value objects, service (maturity matrix, validation, ownership propagation),
+  handlers (**context-identity, body-`user_id` rejected**, money round-trip, ownership 404,
+  maturity parsing, 401), and a **real-Postgres integration** proving CRUD, per-user isolation,
+  **ownership scoping** (B cannot touch A's row), and FK cascade.
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while
