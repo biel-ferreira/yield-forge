@@ -42,7 +42,7 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | Spec ID  | Feature                          | PRD FRs               | Status      |
 | -------- | -------------------------------- | --------------------- | ----------- |
 | SPEC-101 | [Investor Profile](SPEC-101-investor-profile.md) | FR-003                | ✅ Done |
-| SPEC-102 | Portfolio Management (FII + FI)  | FR-001, FR-002        | Not started |
+| SPEC-102 | [Portfolio Management (FII + FI)](SPEC-102-portfolio-management.md) | FR-001, FR-002 | ✅ Done |
 | SPEC-103 | Dashboard                        | FR-004, FR-005        | Not started |
 | SPEC-104 | AI Insight Engine                | FR-008–FR-010 (+ FR-013/014 via SPEC-005) | Not started |
 | SPEC-105 | AI Rebalancing Assistant         | FR-011, FR-014        | Not started |

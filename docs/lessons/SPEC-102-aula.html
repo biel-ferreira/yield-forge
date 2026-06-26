@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 102 — SPEC-102: Carteira (Holdings) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 102 · A Carteira · Primeira Feature com Dinheiro</span>
+    <h1>SPEC-102 — Carteira (Holdings de FII + Renda Fixa)</h1>
+    <p>O <strong>sistema de registro do que o investidor possui</strong>: o substrato determinístico contra o qual o dashboard, o Health Score e <em>todo</em> insight da IA reconciliam. Junto com o perfil (SPEC-101), forma o par <em>"quem é + o que tem"</em> que torna a pergunta central — <em>"minha carteira está alinhada aos meus objetivos?"</em> — respondível. E é a <strong>primeira feature que lida com dinheiro</strong>: aqui se firma a disciplina <code>int64</code> centavos, de ponta a ponta.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: por que a carteira é a fundação de tudo</a></li>
+    <li><a href="#problema">O problema: "uma visão única e precisa de tudo o que possuo" (Epic 1)</a></li>
+    <li><a href="#dinheiro">LIÇÃO PRINCIPAL #1 — dinheiro NUNCA é <code>float</code> (BR-1022), nem na wire</a></li>
+    <li><a href="#ownership">LIÇÃO PRINCIPAL #2 — identidade <em>e</em> posse vêm do contexto (BR-1021): o duplo-escopo</a></li>
+    <li><a href="#d1">A decisão D1 (reusar <code>marketdata.Ticker</code>) e a pergunta de arquitetura que ela levantou</a></li>
+    <li><a href="#vo">Value objects parse-don't-validate &amp; as regras de vencimento (via <code>Clock</code>)</a></li>
+    <li><a href="#modelo">O modelo de duas tabelas (D2), o upsert com <code>RETURNING</code> e o port <code>Reader</code></a></li>
+    <li><a href="#sem">Por que NÃO há IA aqui — mas as regras de dinheiro <em>se aplicam</em></a></li>
+    <li><a href="#decisoes">As 5 decisões (D1–D5) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: por que a carteira é a fundação de tudo</h2>
+
+<p>O SPEC-101 entregou a <strong>primeira feature de usuário</strong> (o perfil — quem é o investidor). O SPEC-102
+entrega a <strong>segunda metade do par</strong>: <em>o que o investidor tem</em>. Ele é o <strong>sistema de registro</strong>
+(<em>system of record</em>) dos FIIs (FR-001) e da renda fixa (FR-002) — a fonte autoritativa, persistida e
+escopada por usuário, sobre cada posição que a pessoa declarou possuir.</p>
+
+<p>Por que isso é a fundação? Porque "uma visão única e precisa de tudo o que possuo" (Epic 1) é o chão de
+<strong>todo</strong> cálculo a jusante. O resumo da carteira, a alocação, a renda passiva, o Health Score e <em>cada</em>
+insight da IA <strong>reconciliam contra os holdings</strong> — eles valem exatamente o quanto os holdings valem.
+Se a base estiver errada, tudo acima dela está errado. Daí o rigor desta spec.</p>
+
+<p>O que ele entrega é o pacote <code>internal/portfolio</code> com dois domínios (<code>FIIHolding</code> e
+<code>FixedIncomeHolding</code>), os value objects (<code>Quantity</code>, <code>LiquidityType</code>, e o <code>Ticker</code> <strong>reusado
+do marketdata</strong>), o serviço, o port <code>Repository</code> e o port consumidor <code>Reader</code>, o adaptador Postgres,
+a migration <code>0005_holdings</code> (duas tabelas) e <strong>oito endpoints</strong> CRUD. Nada <em>calcula</em> valor de
+mercado ainda — esta spec <strong>guarda o custo (cost basis)</strong> e <strong>expõe um port de leitura</strong>.</p>
+
+<div class="diagram">ANTES (SPEC-101)                          DEPOIS (SPEC-102)
+  perfil: quem é o investidor             carteira: o que ele tem — o system of record (FII + renda fixa)
+  1 registro 1-para-1 por usuário         N holdings por usuário → surge a noção de POSSE (ownership)
+  identidade vem do contexto              identidade + POSSE: mutação é DUPLO-ESCOPO (id $1 AND user_id $2)
+  sem dinheiro nenhum                     a 1ª feature com DINHEIRO: int64 centavos / int bps, até na wire
+  PUT /profile (upsert 1-para-1)          8 endpoints CRUD: POST/GET/PUT/DELETE × {fii, fixed-income}
+  ProfileReader (seam de leitura)         Reader.ListHoldings → Holdings{FII, FixedIncome} para SPEC-103/104/107</div>
+
+<p>Os endpoints novos (todos atrás da auth deny-by-default, fora da allowlist pública):</p>
+<pre><code>POST   /holdings/fii            {ticker, quantity, average_price_centavos}          → 201 | 400 | 401
+GET    /holdings/fii                                                                → 200 [] | 401
+PUT    /holdings/fii/{id}       {...}                                               → 200 | 400 | 404 | 401
+DELETE /holdings/fii/{id}                                                           → 204 | 404 | 401
+POST   /holdings/fixed-income   {name, institution, invested_amount_centavos,
+                                 annual_rate_bps, maturity_date, liquidity_type}    → 201 | 400 | 401
+GET    /holdings/fixed-income                                                       → 200 [] | 401
+PUT    /holdings/fixed-income/{id}  {...}                                           → 200 | 400 | 404 | 401
+DELETE /holdings/fixed-income/{id}                                                  → 204 | 404 | 401</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que a carteira é o "substrato determinístico" do produto?</span>
+  Porque a regra binding nº 3 do PRD diz que <strong>"fatos são computados, não gerados"</strong> — a IA raciocina
+  <em>sobre</em> números, nunca os inventa. A carteira é uma das duas fontes desses fatos (a outra é o
+  mercado, SPEC-006). Quando o Fact Builder (SPEC-104) montar o pacote <code>Facts</code> que o Insighter recebe,
+  ele vai <strong>ler os holdings deste usuário</strong> e cruzá-los com as cotações. Se a carteira não fosse exata e
+  isolada por usuário, o grounding seria ficção e o insight de A poderia vazar dado de B.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="problema">2. O problema: "uma visão única e precisa de tudo o que possuo"</h2>
+
+<p>O SPEC-102 resolve um enunciado simples e fácil de errar: precisamos guardar <strong>N posições por usuário</strong>,
+de dois tipos, de forma que (a) sejam só do dono, (b) sejam válidas por construção, (c) o <strong>dinheiro seja
+exato</strong> e (d) outras features possam lê-las sem se acoplar a HTTP ou SQL. Dois tipos de holding, cada um com
+seus campos:</p>
+
+<table>
+  <tr><th>Tipo</th><th>Campos</th><th>Forma escolhida</th></tr>
+  <tr>
+    <td><strong>FIIHolding</strong></td>
+    <td><code>ticker</code>, <code>quantity</code>, <code>average_price_centavos</code></td>
+    <td><code>Ticker</code> (reusado do marketdata, D1), <code>Quantity</code> inteiro &gt; 0 (D5), preço médio em <strong>centavos</strong></td>
+  </tr>
+  <tr>
+    <td><strong>FixedIncomeHolding</strong></td>
+    <td><code>name</code>, <code>institution</code>, <code>invested_amount_centavos</code>, <code>annual_rate_bps</code>, <code>maturity_date</code>, <code>liquidity_type</code></td>
+    <td>texto não-vazio; valor em <strong>centavos</strong>; taxa em <strong>basis points</strong>; data de vencimento opcional; liquidez enum fechado (D3)</td>
+  </tr>
+</table>
+
+<p>Repare a grande diferença em relação ao SPEC-101: lá o registro era <strong>um-para-um</strong> com o usuário (cada
+pessoa tem <em>um</em> perfil, com <code>user_id</code> como PK). Aqui é <strong>um-para-muitos</strong>: cada pessoa tem
+<em>muitos</em> holdings, cada um com seu próprio <code>id</code> (UUID surrogate). É essa multiplicidade que introduz
+a noção de <strong>posse</strong> (<em>ownership</em>) — e que faz o isolamento por usuário ganhar uma segunda camada, como
+veremos na <a href="#ownership">seção 4</a>.</p>
+
+<!-- ============================================================ -->
+<h2 id="dinheiro">3. LIÇÃO PRINCIPAL #1 — dinheiro NUNCA é <code>float</code> (BR-1022)</h2>
+
+<p>O SPEC-102 é a <strong>primeira feature que lida com dinheiro</strong> — então é aqui que a convenção mais
+inegociável da casa sai do papel e se prova de ponta a ponta. A regra: valores monetários
+(<code>average_price</code>, <code>invested_amount</code>) são <code>int64</code> em <strong>centavos</strong> (unidades menores); taxas
+(<code>annual_rate</code>) são inteiros em <strong>basis points</strong> (1 bp = 0,01%). Nunca <code>float64</code> — <strong>nem no
+domínio, nem nas colunas do banco, nem atravessando o JSON</strong>.</p>
+
+<div class="box bug">
+  <span class="lbl">Por que <code>float</code> para dinheiro é um BUG, não um detalhe de estilo</span>
+  Ponto flutuante binário <strong>não consegue representar exatamente</strong> a maioria das frações decimais:
+  <code>0.1 + 0.2 == 0.30000000000000004</code>, não <code>0.3</code>. Some milhares de posições e o erro de
+  arredondamento <strong>contamina o saldo</strong> — o investidor vê um total que não bate com a soma das partes.
+  Pior: o PRD exige <strong>"mesmos inputs → mesmo Health Score"</strong>, reprodutível bit a bit. Com <code>float</code>,
+  o mesmo cálculo pode dar resultados ligeiramente diferentes a cada rodada. Com inteiros, <code>R$ 15,75</code>
+  é <strong>exatamente</strong> <code>1575</code> centavos, sempre, em qualquer máquina. O dinheiro vira <em>exato e
+  reproduzível</em> por construção.
+</div>
+
+<h3>3.1 — Inteiro no domínio</h3>
+<p>Os campos de dinheiro do domínio já nascem inteiros — sem nenhum <code>float64</code> à vista:</p>
+<pre><code>// internal/portfolio/holding.go
+type FIIHolding struct {
+    ID                   string
+    UserID               string
+    Ticker               marketdata.Ticker
+    Quantity             Quantity
+    AveragePriceCentavos int64          // ← centavos, nunca float
+    CreatedAt, UpdatedAt time.Time
+}
+
+type FixedIncomeHolding struct {
+    // ...
+    InvestedAmountCentavos int64        // ← centavos
+    AnnualRateBps          int          // ← basis points (1 bp = 0,01%)
+    MaturityDate           *time.Time
+    LiquidityType          LiquidityType
+}</code></pre>
+
+<h3>3.2 — Inteiro nas colunas do banco</h3>
+<p>A migration <code>0005</code> não tem <strong>uma única coluna de ponto flutuante</strong>: dinheiro é <code>bigint</code>,
+taxa é <code>integer</code>:</p>
+<pre><code>-- migrations/0005_holdings.up.sql
+CREATE TABLE fii_holdings (
+    id                     uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    ticker                 text        NOT NULL,
+    quantity               integer     NOT NULL,    -- > 0 (app-enforced)
+    average_price_centavos bigint      NOT NULL,    -- R$ em centavos, nunca float
+    ...
+);
+-- fixed_income_holdings: invested_amount_centavos bigint, annual_rate_bps integer</code></pre>
+
+<h3>3.3 — Inteiro <em>atravessando a wire</em> (a parte mais fácil de esquecer)</h3>
+<p>Esta é a sutileza nova do SPEC-102. Não basta ser inteiro por dentro: o <strong>JSON também</strong> carrega
+inteiros. Os DTOs nomeiam os campos com o sufixo da unidade (<code>_centavos</code> / <code>_bps</code>) — assim o
+contrato é explícito e não há lugar para um <code>float</code> entrar:</p>
+<pre><code>// internal/transport/http/holdings.go
+// money crosses the wire as integer centavos / bps, never a float — FR-1027/BR-1022
+type fiiHoldingRequest struct {
+    Ticker               string `json:"ticker"`
+    Quantity             int    `json:"quantity"`
+    AveragePriceCentavos int64  `json:"average_price_centavos"`   // ← int64 na wire
+}
+
+type fixedIncomeRequest struct {
+    Name                   string  `json:"name"`
+    Institution            string  `json:"institution"`
+    InvestedAmountCentavos int64   `json:"invested_amount_centavos"`  // ← centavos
+    AnnualRateBps          int     `json:"annual_rate_bps"`           // ← basis points
+    MaturityDate           *string `json:"maturity_date"`             // "YYYY-MM-DD" ou null
+    LiquidityType          string  `json:"liquidity_type"`
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que o nome do campo carrega a unidade (<code>average_price_centavos</code>)?</span>
+  Porque o número sozinho é ambíguo: <code>1575</code> são R$ 15,75 ou R$ 1.575,00? O sufixo <strong><code>_centavos</code>
+  resolve a ambiguidade no próprio contrato</strong> — o cliente sabe que precisa enviar centavos, e o
+  servidor sabe o que recebeu. É autodocumentação que também previne o erro clássico de "esqueci o fator
+  100". O mesmo vale para <code>_bps</code>: <code>850</code> com sufixo <code>_bps</code> é inequivocamente 8,50%. Quando uma
+  feature futura precisar parsear um decimal de entrada (ex.: "15,75"), ela usa o helper centralizado
+  <code>internal/platform/money.DecimalToMinor</code> (half-up), do SPEC-006 — mas aqui o contrato já é inteiro,
+  então nem isso é necessário.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="ownership">4. LIÇÃO PRINCIPAL #2 — identidade <em>e</em> posse vêm do contexto (BR-1021)</h2>
+
+<p>O SPEC-101 ensinou: <strong>identidade vem do contexto, nunca do payload</strong>. O SPEC-102 leva isso um degrau
+acima, porque um usuário tem <em>muitos</em> holdings. Agora não basta saber <em>quem está pedindo</em>; é preciso
+saber <em>se aquele holding específico é dele</em>. Isso é <strong>posse (ownership)</strong>, e a defesa ganha uma camada
+extra: as mutações são <strong>duplo-escopo</strong>.</p>
+
+<table>
+  <tr><th></th><th>SPEC-101 (perfil, 1-para-1)</th><th>SPEC-102 (holdings, 1-para-N)</th></tr>
+  <tr><td><strong>Leitura</strong></td><td><code>WHERE user_id = $1</code></td><td><code>WHERE user_id = $1</code></td></tr>
+  <tr><td><strong>Update / Delete</strong></td><td><code>WHERE user_id = $1</code> (a chave É o usuário)</td><td><strong><code>WHERE id = $1 AND user_id = $2</code></strong> (id + dono)</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">A regra de ouro: um id de outro usuário é "não encontrado" (404), NUNCA "proibido" (403)</span>
+  Por que não retornar <code>403 Forbidden</code> quando B tenta editar o holding de A? Porque <code>403</code> <strong>vaza
+  informação</strong>: ele confirma que <em>aquele id existe</em> (só não é seu). Isso é um <em>existence oracle</em> —
+  um atacante poderia varrer ids e mapear quais existem. A defesa correta é tornar "não é seu" <strong>indistinguível
+  de "não existe"</strong>: ambos viram <code>404 {"error":"holding not found"}</code>. O <code>WHERE id = $1 AND user_id = $2</code>
+  faz exatamente isso — a linha de A simplesmente <strong>não casa</strong> para B, e o resultado é zero linhas, igual
+  a um id inexistente. O sentinela do domínio diz isso explicitamente: "absent or not owned — the two are
+  indistinguishable on purpose".
+</div>
+
+<p>Como no SPEC-101, o errado é tornado <strong>estruturalmente impossível</strong>, com quatro travas empilhadas — só
+que agora a quarta é o <em>duplo</em>-escopo. Vamos vê-las no código real.</p>
+
+<h3>Trava 1 — nenhum DTO carrega <code>user_id</code> (nem na path, nem no corpo)</h3>
+<p>Olhe de novo os DTOs da <a href="#dinheiro">seção 3.3</a>: não há campo <code>user_id</code> em lugar nenhum.
+O dono nunca é <em>dado</em>; é sempre <em>identidade</em>, vinda da sessão.</p>
+
+<h3>Trava 2 — <code>DisallowUnknownFields</code> rejeita um <code>user_id</code> contrabandeado</h3>
+<p>O decoder de JSON compartilhado (<code>decodeJSON</code>, do SPEC-101) recusa qualquer campo desconhecido — um
+corpo com <code>user_id</code> intruso vira <code>400</code>, não é silenciosamente ignorado.</p>
+
+<h3>Trava 3 — o handler pega o ID do contexto e o <em>passa</em> ao serviço</h3>
+<p>Há um helper minúsculo, <code>callerID</code>, que centraliza a leitura da identidade da sessão. Se não houver
+sessão autenticada, é <code>401</code> antes de tocar o serviço — e o <code>user_id</code> entra na lógica por <strong>um único
+caminho</strong>:</p>
+<pre><code>// internal/transport/http/holdings.go
+// callerID returns the authenticated user id from the request context ... Identity is only
+// ever read from the context the middleware set, never from request input (BR-1021).
+func callerID(w http.ResponseWriter, r *http.Request) (string, bool) {
+    id, ok := auth.UserID(r.Context())   // ← do contexto, nunca do corpo/path
+    if !ok {
+        writeError(w, http.StatusUnauthorized, "authentication required")
+        return "", false
+    }
+    return id, true
+}
+
+// updateFIIHolding — o id do RECURSO vem da path; o id do DONO vem do contexto
+userID, ok := callerID(w, r)
+// ...
+holding, err := h.service.UpdateFIIHolding(r.Context(), userID, r.PathValue("id"), fiiInput(req))
+//                                                    ↑ dono (contexto)  ↑ recurso (path)</code></pre>
+
+<div class="box tip">
+  <span class="lbl">A distinção fina: o <code>{id}</code> da path é o id do RECURSO, não do DONO</span>
+  Repare que o <code>{id}</code> em <code>PUT /holdings/fii/{id}</code> <strong>é</strong> entrada do cliente — mas ele identifica
+  <em>qual holding</em>, não <em>quem é o usuário</em>. O dono nunca vem da path. Por isso o serviço recebe os
+  <strong>dois</strong> separados: <code>userID</code> (do contexto, confiável) e <code>id</code> (da path, não confiável). E é o
+  SQL duplo-escopo que reconcilia: o <code>id</code> da path só "existe" se pertencer ao <code>userID</code> do contexto.
+</div>
+
+<h3>Trava 4 — o SQL duplo-escopo, com <code>RETURNING</code> e contagem de linhas</h3>
+<p>No adaptador, a leitura filtra por <code>user_id</code>; a mutação filtra por <strong>id E user_id</strong>. Um update que
+não casa nenhuma linha (<code>sql.ErrNoRows</code>) vira <code>ErrHoldingNotFound</code>; um delete que afeta zero linhas,
+idem:</p>
+<pre><code>// internal/portfolio/postgres/postgres.go — UpdateFIIHolding
+UPDATE fii_holdings
+SET ticker = $3, quantity = $4, average_price_centavos = $5, updated_at = $6
+WHERE id = $1::uuid AND user_id = $2::uuid       -- ← DUPLO-ESCOPO
+RETURNING created_at, updated_at                 -- created_at preservado; updated_at avança
+// ...
+if notFound(err) {                               // sql.ErrNoRows OU uuid malformado (22P02)
+    return portfolio.FIIHolding{}, portfolio.ErrHoldingNotFound
+}
+
+// deleteHolding — afetou 0 linhas? não era seu (ou não existe) → ErrHoldingNotFound
+n, _ := res.RowsAffected()
+if n == 0 {
+    return portfolio.ErrHoldingNotFound
+}</code></pre>
+
+<div class="box bug">
+  <span class="lbl">Um detalhe de robustez: o UUID malformado vira 404, nunca 500</span>
+  E se o cliente mandar <code>PUT /holdings/fii/abc</code> com um <code>id</code> que não é um UUID válido? O cast
+  <code>$1::uuid</code> falharia com o SQLSTATE <code>22P02</code> (<em>invalid_text_representation</em>). Sem cuidado, isso
+  borbulharia como erro de banco e viraria um <code>500</code>. A função <code>notFound</code> trata <code>22P02</code> como
+  "não casou nenhuma linha" — afinal, um id malformado <strong>nunca</strong> poderia casar — devolvendo o mesmo
+  <code>404</code> de um id que não existe. Um id inválido não é um erro do servidor; é só mais um "não
+  encontrado". Isso fecha o <em>oracle</em> de existência por completo.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="d1">5. A decisão D1: reusar <code>marketdata.Ticker</code> — e a pergunta que ela levantou</h2>
+
+<p>O FII tem um <code>ticker</code> (ex.: <code>HGLG11</code>). O SPEC-006 já definiu um value object <code>Ticker</code> que valida
+o formato B3 (4 letras + 1–2 dígitos). A pergunta: <strong>o portfolio cria seu próprio <code>Ticker</code>, ou reusa o do
+marketdata?</strong> A decisão D1 foi <strong>reusar</strong>:</p>
+
+<pre><code>// internal/portfolio/holding.go
+import "github.com/biel-ferreira/yield-forge/internal/marketdata"
+
+type FIIHolding struct {
+    Ticker marketdata.Ticker   // ← o MESMO value object do marketdata (D1)
+    // ...
+}
+
+// internal/portfolio/service.go — usa o ParseTicker do marketdata
+ticker, err := marketdata.ParseTicker(in.Ticker)</code></pre>
+
+<p>Mas isso levantou uma pergunta de arquitetura legítima: <strong><code>portfolio</code> importar <code>marketdata</code> não
+quebra o hexagonal "package-oriented", onde cada feature é autocontida?</strong> A resposta é instrutiva e vale
+guardar.</p>
+
+<div class="box why">
+  <span class="lbl">A regra dura é DIREÇÃO de dependência, não "feature não importa feature"</span>
+  A regra binding do projeto é: <strong>o core não importa SQL, HTTP nem framework</strong> — a seta de dependência
+  aponta para dentro. Um <code>marketdata.Ticker</code> é um <strong>value object puro</strong> (só stdlib por baixo); importá-lo
+  <strong>não</strong> arrasta SQL nem HTTP para dentro do <code>portfolio</code>, então a regra dura continua intacta. Além
+  disso, <code>marketdata</code> é uma costura <strong>foundational</strong> (tier <code>0xx</code>), e <strong>feature → foundational é a
+  direção pretendida</strong> — exatamente o mesmo formato de <code>profile → auth.UserID(ctx)</code> no SPEC-101. O grafo
+  continua <strong>acíclico</strong> (<code>marketdata</code> não importa <code>portfolio</code> de volta). E o <strong>hook <code>block-layering</code>
+  passou</strong>: ele barra import de SQL/HTTP/SDK no core, não import de um tipo de domínio puro.
+</div>
+
+<p>Há um bônus de correção nessa reutilização: existe <strong>uma única definição de "ticker B3 válido"</strong> no
+projeto inteiro. Isso garante que um holding de <code>HGLG11</code> e uma cotação de <code>HGLG11</code> usem exatamente a
+mesma noção de ticker — então eles <strong>reconciliam</strong> quando o dashboard cruzar carteira com mercado. Duas
+definições divergentes seriam uma fonte silenciosa de bugs ("por que esse holding não acha sua cotação?").</p>
+
+<div class="box tip">
+  <span class="lbl">A alternativa reservada para a Regra de Três (shared kernel)</span>
+  E se um <strong>terceiro</strong> consumidor de <code>Ticker</code> aparecer (além de <code>marketdata</code> e <code>portfolio</code>)?
+  Aí a decisão prevê <strong>promover</strong> o <code>Ticker</code> para um <em>shared kernel</em> dedicado —
+  <code>internal/b3</code> — para que nenhuma feature "dona" do tipo seja importada pelas outras. Isso é a
+  <strong>Regra de Três</strong>: não se cria a abstração compartilhada na primeira reutilização (seria especulação);
+  espera-se a terceira, quando o padrão está provado. Por ora, importar do <code>marketdata</code> é a escolha certa,
+  e a promoção fica rastreada como melhoria futura no PLAN-102.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="vo">6. Value objects parse-don't-validate &amp; as regras de vencimento</h2>
+
+<p>Como nas specs anteriores, os campos não são <code>string</code>/<code>int</code> crus: são <strong>value objects</strong> que
+validam <strong>no construtor</strong>. Um valor inválido não pode existir.</p>
+
+<h3>6.1 — <code>Quantity</code>: inteiro estritamente positivo (D5)</h3>
+<p>FII se compra em cotas inteiras (não há "1,5 cota"), então a quantidade é um inteiro &gt; 0, com o campo
+<strong>privado</strong> para que ninguém construa um valor inválido direto:</p>
+<pre><code>// internal/portfolio/quantity.go
+type Quantity struct{ value int }   // campo privado: só o construtor cria
+
+func ParseQuantity(n int) (Quantity, error) {
+    if n &lt;= 0 {
+        return Quantity{}, fmt.Errorf("parse quantity %d: %w", n, ErrInvalidQuantity)
+    }
+    return Quantity{value: n}, nil
+}</code></pre>
+
+<h3>6.2 — <code>LiquidityType</code>: enum fechado <code>daily | at_maturity</code> (D3)</h3>
+<p>A liquidez é um enum fechado, normalizado (trim + lower) no parse. Note que ela <strong>não</strong> guarda o nome do
+instrumento — "CDB", "Tesouro Direto", "caixinha" vão no campo <code>name</code>; o <code>LiquidityType</code> captura só
+<em>se o dinheiro está disponível diariamente ou travado até o vencimento</em>:</p>
+<pre><code>// internal/portfolio/liquiditytype.go
+const (
+    LiquidityDaily      LiquidityType = "daily"       // resgatável qualquer dia
+    LiquidityAtMaturity LiquidityType = "at_maturity" // travado até maturity_date
+)
+
+func ParseLiquidityType(s string) (LiquidityType, error) {
+    lt := LiquidityType(strings.ToLower(strings.TrimSpace(s)))
+    if !validLiquidityTypes[lt] {
+        return "", fmt.Errorf("parse liquidity type %q: %w", s, ErrInvalidLiquidityType)
+    }
+    return lt, nil
+}
+
+// RequiresMaturity diz se este tipo PRECISA de uma data de vencimento.
+func (l LiquidityType) RequiresMaturity() bool { return l == LiquidityAtMaturity }</code></pre>
+
+<h3>6.3 — As regras de vencimento: <code>at_maturity</code> exige data futura <em>na criação</em>; <code>daily</code> normaliza para <code>nil</code></h3>
+<p>Aqui mora uma lógica de negócio fina, no serviço. Um instrumento <code>at_maturity</code> <strong>precisa</strong> de uma
+data de vencimento, e essa data não pode estar no passado <strong>no momento da criação</strong> (PRD Epic 1). Um
+instrumento <code>daily</code> não tem vencimento — a data é normalizada para <code>nil</code>. E o "hoje" da comparação vem
+do <strong><code>Clock</code> injetado</strong>, nunca de <code>time.Now()</code>:</p>
+<pre><code>// internal/portfolio/service.go — buildFixedIncomeHolding(in, isCreate)
+if lt.RequiresMaturity() {
+    if in.MaturityDate == nil {
+        return FixedIncomeHolding{}, fmt.Errorf("build fixed income holding: %w", ErrMaturityRequired)
+    }
+    maturity := in.MaturityDate.UTC()
+    if isCreate &amp;&amp; maturity.Before(s.today()) {   // ← só na CRIAÇÃO; s.today() vem do Clock
+        return FixedIncomeHolding{}, fmt.Errorf("build fixed income holding: %w", ErrPastMaturity)
+    }
+    h.MaturityDate = &amp;maturity
+}
+// Um holding daily NUNCA carrega data de vencimento (normalizado para nil).
+
+func (s *Service) today() time.Time {
+    n := s.clock.Now().UTC()   // ← Clock, não time.Now()
+    return time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, time.UTC)
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que a regra de "data futura" só vale na CRIAÇÃO — e por que via <code>Clock</code></span>
+  <strong>Só na criação</strong> porque o tempo passa: um CDB criado hoje com vencimento daqui a 1 ano um dia vai
+  ter o vencimento "no passado" (quando vencer). Bloquear o <em>update</em> por isso seria absurdo — você não
+  conseguiria mais editar um holding vencido. Por isso o <code>buildFixedIncomeHolding</code> recebe um booleano
+  <code>isCreate</code> e só aplica a regra de passado quando é criação.<br>
+  <strong>Via <code>Clock</code></strong> porque "o que é o passado?" depende de "que dia é hoje?" — e amarrar isso a
+  <code>time.Now()</code> tornaria o teste <strong>não determinístico</strong> (passaria hoje, falharia amanhã com a mesma
+  fixture). Com um <code>Clock</code> falso, o teste fixa "hoje" e a regra fica reproduzível para sempre.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="modelo">7. Duas tabelas (D2), o upsert com <code>RETURNING</code> e o port <code>Reader</code></h2>
+
+<h3>7.1 — Por que duas tabelas (D2)</h3>
+<p>FII e renda fixa têm campos bem diferentes. Havia dois caminhos: <strong>uma tabela polimórfica</strong> com um
+discriminador <code>type</code> e muitas colunas anuláveis (campos de FII nulos nas linhas de renda fixa e
+vice-versa), ou <strong>duas tabelas</strong>, uma por tipo, cada uma com campos limpos e <code>NOT NULL</code>. A decisão D2
+foi <strong>duas tabelas</strong> (<code>fii_holdings</code> e <code>fixed_income_holdings</code>):</p>
+
+<table>
+  <tr><th>Opção</th><th>Prós</th><th>Contras</th></tr>
+  <tr><td>Uma tabela polimórfica (<code>type</code> + colunas anuláveis)</td><td>Um só CRUD, um só <code>GET /holdings</code></td><td>Colunas semanticamente obrigatórias viram <strong>anuláveis</strong>; o banco não consegue garantir invariantes; consultas cheias de <code>CASE</code></td></tr>
+  <tr><td><strong>Duas tabelas (escolhido)</strong></td><td><strong>Type-safe</strong>: cada campo é <code>NOT NULL</code> de verdade; SQL limpo; o domínio reflete o banco 1-para-1</td><td>Dobra a superfície de CRUD (mitigado com testes table-driven simétricos e nomes de método simétricos)</td></tr>
+</table>
+
+<h3>7.2 — Create com <code>RETURNING</code>: a linha autoritativa sem re-leitura</h3>
+<p>O insert deixa o banco gerar o <code>id</code> (UUID) e os timestamps, e os devolve no <strong>mesmo round-trip</strong> com
+<code>RETURNING</code> — o mesmo padrão que o SPEC-101 usou para fechar a corrida do re-read:</p>
+<pre><code>// internal/portfolio/postgres/postgres.go — CreateFIIHolding
+INSERT INTO fii_holdings (user_id, ticker, quantity, average_price_centavos, created_at, updated_at)
+VALUES ($1::uuid, $2, $3, $4, $5, $6)
+RETURNING id::text, created_at, updated_at        -- id e timestamps gerados pelo banco, num só round-trip</code></pre>
+
+<p>E na <strong>leitura</strong>, o adaptador passa os valores guardados de volta pelos construtores
+(<code>marketdata.ParseTicker</code>, <code>portfolio.ParseQuantity</code>, <code>ParseLiquidityType</code>) — então uma linha
+corrompida no banco vira um <strong>erro explícito</strong>, não um value object inválido circulando solto:</p>
+<pre><code>// internal/portfolio/postgres/postgres.go — rebuildFII (chamado por ListFIIHoldingsByUserID)
+t, err := marketdata.ParseTicker(ticker)     // revalida o ticker lido do banco
+q, err := portfolio.ParseQuantity(quantity)  // revalida a quantidade</code></pre>
+
+<h3>7.3 — O port <code>Repository</code> (8 métodos) e o port consumidor <code>Reader</code></h3>
+<p>Há <strong>dois ports</strong>, com a mesma elegância do SPEC-101. O <code>Repository</code> tem 8 métodos (4 por tipo) — o
+que o <strong>serviço usa</strong> para falar com o banco:</p>
+<pre><code>// internal/portfolio/ports.go
+type Repository interface {
+    CreateFIIHolding(ctx, h FIIHolding) (FIIHolding, error)
+    ListFIIHoldingsByUserID(ctx, userID string) ([]FIIHolding, error)
+    UpdateFIIHolding(ctx, h FIIHolding) (FIIHolding, error)   // scoped (id, user_id); ErrHoldingNotFound
+    DeleteFIIHolding(ctx, userID, id string) error            // scoped; ErrHoldingNotFound
+    // … os mesmos quatro para FixedIncomeHolding …
+}</code></pre>
+
+<p>E o <code>Reader</code> é o <strong>seam de leitura voltado ao consumidor</strong> — o que as features de SPEC-103/104/107
+vão usar. Ele expõe um só método que devolve o <strong>agregado</strong> <code>Holdings{FII, FixedIncome}</code>, nada de
+escrita. O próprio <code>Service</code> o satisfaz:</p>
+<pre><code>// internal/portfolio/ports.go
+type Reader interface {
+    ListHoldings(ctx, userID string) (Holdings, error) // { FII []FIIHolding; FixedIncome []FixedIncomeHolding }
+}
+
+// internal/portfolio/service.go
+var _ Reader = (*Service)(nil)   // o Service satisfaz o Reader — provado em compile-time</code></pre>
+
+<div class="box why">
+  <span class="lbl">Cost basis vs. valor de mercado (BR-1024) — a fronteira mais importante do escopo</span>
+  Os holdings guardam <strong>o que o usuário pagou</strong>: <code>average_price_centavos</code>, <code>invested_amount_centavos</code>
+  — o <em>cost basis</em>. Eles <strong>nunca</strong> guardam nem calculam o <strong>valor de mercado atual</strong>, a alocação, a
+  renda passiva ou o rendimento. Isso é deliberado: o valor atual é <strong>computado a jusante</strong> (dashboard
+  SPEC-103, projeções SPEC-107) cruzando os holdings com as cotações do SPEC-006. Esta spec <strong>nunca inventa
+  número de mercado</strong> — ela é a fonte do que o investidor declarou ter pago, e nada além disso. Separar
+  "o que paguei" (fato declarado, imutável) de "quanto vale hoje" (derivado, volátil) mantém cada feature
+  com uma responsabilidade só.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="sem">8. Por que NÃO há IA aqui — mas as regras de dinheiro <em>se aplicam</em></h2>
+
+<p>Como no SPEC-101, vale ser explícito sobre quais regras binding <strong>se aplicam</strong> e quais <strong>não</strong>.
+Mas o contraste com o perfil é didático: o perfil não tinha <em>nem</em> dinheiro <em>nem</em> IA; aqui, IA continua
+fora, mas <strong>dinheiro entra com força total</strong>.</p>
+
+<table>
+  <tr><th>Regra binding</th><th>Perfil (SPEC-101)</th><th>Carteira (SPEC-102)</th></tr>
+  <tr>
+    <td><strong>Dinheiro em <code>int64</code> centavos / bps</strong></td>
+    <td><strong>N/A</strong> — perfil não tem valor monetário</td>
+    <td><strong>CENTRAL</strong> — preço médio, valor investido, taxa: tudo inteiro, no domínio, no banco e na wire (BR-1022). É a <em>primeira</em> feature com dinheiro.</td>
+  </tr>
+  <tr>
+    <td><strong>Explicabilidade (FR-013)</strong></td>
+    <td>N/A — sem saída de IA</td>
+    <td><strong>N/A</strong> — sem saída de IA aqui (BR-1025). Os holdings são fatos determinísticos que o Fact Builder vai entregar ao Insighter <em>depois</em>.</td>
+  </tr>
+  <tr>
+    <td><strong>Não-aconselhamento (FR-014)</strong></td>
+    <td>N/A — perfil não recomenda</td>
+    <td><strong>N/A</strong> — a carteira não produz recomendação nenhuma.</td>
+  </tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">A lição de design: cada regra tem um ESCOPO</span>
+  A disciplina de dinheiro protege <em>cálculo financeiro reproduzível</em>; os gates FR-013/014 protegem
+  <em>saída de IA</em>. O perfil não era nem um nem outro. A carteira é o <strong>primeiro</strong> caso de dinheiro —
+  então a regra de centavos finalmente "morde" — mas continua sem IA, então os gates seguem inertes.
+  Reconhecer <em>quando</em> cada regra se aplica evita tanto o erro de relaxar (usar <code>float</code> "porque é só
+  um preço") quanto o de cerimônia vazia (tentar anexar um disclaimer a um holding). É o oposto exato do
+  SPEC-006, onde dinheiro <em>e</em> IA-a-jusante conviviam.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">9. As 5 decisões (D1–D5) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Fonte do <code>Ticker</code> do FII?</td>
+    <td><strong>Reusar <code>marketdata.Ticker</code></strong></td>
+    <td>É value object puro — não arrasta SQL/HTTP, mantém o core puro. <code>marketdata</code> é foundational; feature→foundational é a direção pretendida (igual a <code>profile → auth</code>), grafo acíclico. Uma só definição de "ticker B3 válido" garante reconciliação com as cotações. 3º consumidor → promover a <code>internal/b3</code> (Regra de Três).</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Modelagem dos holdings?</td>
+    <td><strong>Duas entidades + duas tabelas</strong></td>
+    <td>Campos limpos e type-safe (<code>NOT NULL</code> de verdade) em vez de uma tabela polimórfica com colunas anuláveis. Dobra o CRUD, mas com nomes/Testes simétricos.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Semântica de <code>liquidity_type</code>?</td>
+    <td><strong>Enum de liquidez</strong> (<code>daily | at_maturity</code>)</td>
+    <td>O nome do instrumento (CDB/Tesouro/caixinha) vive em <code>name</code>; este campo captura só se o dinheiro está disponível diariamente ou travado. <code>maturity_date</code> obrigatório para <code>at_maturity</code>, nulo para <code>daily</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Formato dos endpoints?</td>
+    <td><strong>Rotas por tipo</strong> (<code>/holdings/fii</code>, <code>/holdings/fixed-income</code>)</td>
+    <td>DTOs e validação distintos por tipo, mais claros que um <code>/holdings</code> único com discriminador <code>type</code>. Um <code>Reader</code> unificado serve o agregado ao dashboard.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Forma da quantidade?</td>
+    <td><strong><code>Quantity</code> inteiro &gt; 0</strong></td>
+    <td>Cotas de FII são unidades inteiras; uma quantidade fracionária não faz sentido. Campo privado + construtor tornam o inválido inrepresentável.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">10. As 7 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core puro primeiro, borda depois, cada fase compilando e
+revisável sozinha. Com <strong>disciplina de dinheiro e posse como os dois fios condutores</strong>.</p>
+
+<h3>Fase 1 — Domínio &amp; ports</h3>
+<p>Os value objects com construtor: <code>Quantity</code> (&gt; 0, campo privado) e <code>LiquidityType</code>
+(<code>daily | at_maturity</code>), reusando <code>marketdata.Ticker</code> (D1). As entidades <code>FIIHolding</code> e
+<code>FixedIncomeHolding</code> (money <code>int64</code> centavos, rate int bps) e o agregado <code>Holdings</code>. Os sentinelas
+(<code>ErrHoldingNotFound</code>, <code>ErrInvalidQuantity</code>, <code>ErrInvalidLiquidityType</code>, <code>ErrPastMaturity</code>,
+<code>ErrMaturityRequired</code>, <code>ErrEmptyField</code>, <code>ErrInvalidAmount</code>, <code>ErrNegativeAmount</code>,
+<code>ErrInvalidRate</code>). Os dois ports: <code>Repository</code> (8 métodos) e <code>Reader</code> (consumidor).</p>
+
+<h3>Fase 2 — Persistência (migration + repositório)</h3>
+<p>A migration <code>0005_holdings</code> up/down: duas tabelas (UUID <code>id</code>, FK <code>ON DELETE CASCADE</code>, <strong>bigint
+centavos / integer bps, sem float</strong>, índice em <code>user_id</code>). O pacote <code>postgres/</code>: Create com
+<code>RETURNING</code>, <code>List…ByUserID</code> escopado, Update/Delete <strong>duplo-escopo</strong> (<code>id + user_id</code>,
+zero linhas → <code>ErrHoldingNotFound</code>), o tratamento de <code>22P02</code> → não-encontrado, o agregado do
+<code>Reader</code> e a asserção <code>var _ portfolio.Repository = Repository{}</code>.</p>
+
+<h3>Fase 3 — Aplicação (serviço)</h3>
+<p>O <code>portfolio.Service</code>: CRUD para os dois tipos (valida → constrói value objects → chamada escopada ao
+repo), a regra de vencimento-no-passado via <code>Clock</code> (só na criação), e a implementação do <code>Reader</code>. A
+identidade <strong>entra pelo parâmetro <code>userID</code></strong>, sempre do contexto do handler. Fakes escritos à mão.</p>
+
+<h3>Fase 4 — API (transporte)</h3>
+<p>O <code>transport/http/holdings.go</code>: os 8 handlers, com <strong>wildcards de path do Go 1.22</strong>
+(<code>PUT /holdings/fii/{id}</code> via <code>r.PathValue("id")</code>), DTOs separados do domínio com <strong>dinheiro
+inteiro</strong> (<code>*_centavos</code> / <code>*_bps</code>), o helper <code>callerID</code> (401 sem sessão), o mapeamento de erro
+<code>writeHoldingError</code> (sentinela → status), e o registro das rotas auto-protegidas + fiação no
+<code>cmd/api</code> (<code>Deps.Portfolio</code>).</p>
+
+<h3>Fase 5 — Observabilidade</h3>
+<p>Os endpoints herdam os spans nomeados por rota do <code>otelhttp</code> (<code>POST /holdings/fii</code>,
+<code>PUT /holdings/fii/{id}</code> — nomeados pelo <strong>padrão da rota, não pelo id cru</strong>, mantendo baixa
+cardinalidade); as chamadas ao banco viram span-filho de query (sem valores de argumento). Contador
+opcional <code>portfolio.mutations</code> por <code>{type, op, outcome}</code>; nenhum PII além do <code>user_id</code>.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: value objects (zero/negativo rejeitados, vencimento-no-passado com
+<code>Clock</code> falso); serviço com fake (create→list→update→delete, not-found, validação) para os dois tipos;
+handlers (validação de DTO, <strong>identidade-do-contexto</strong>, <strong>round-trip de dinheiro como centavos</strong>,
+<strong>ownership 404</strong>, 401, e um teste de que o span é nomeado <code>PUT /holdings/fii/{id}</code>, não pelo id
+cru, via <em>in-memory span exporter</em>). Integração <strong>gated</strong>: Postgres real (<code>TEST_DATABASE_URL</code>,
+<code>-p 1</code>) para o round-trip CRUD, o up/down da <code>0005</code>, o <strong>isolamento por usuário</strong>, o
+<strong>ownership escopado</strong> (B não toca a linha de A) e o <strong>cascade</strong>.</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (endpoints <code>/holdings/*</code>), <code>CHANGELOG.md</code>, SPEC-102 + PLAN-102 marcados
+<strong>Done</strong>, índices e status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">11. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o
+service importando o repositório <em>concreto</em>. O SPEC-102 é um caso lindo para a <strong>tradução</strong>, porque
+tem todas as peças clássicas — handler, DTO, service, repositório — só que rearranjadas pela inversão de
+dependência. (Para a teoria completa, veja a
+<a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>; aqui aplicamos
+ela ao SPEC-102.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-102</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>holdingsHandler</code> (<strong>driving adapter</strong> — traduz HTTP ↔ caso de uso)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO de request/response</td><td><code>fiiHoldingRequest</code> / <code>fixedIncomeResponse</code> etc. — continuam DTOs, na borda, com dinheiro inteiro</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>portfolio.Service</code> — o caso de uso "registrar/editar/listar holdings", mas <strong>vive no core</strong> e depende de <strong>ports</strong>, não de concretos</td><td>Core puro</td></tr>
+  <tr><td>Repository concreto</td><td>Quebra em <strong>port</strong> (<code>portfolio.Repository</code>, no core) + <strong>adapter</strong> (<code>postgres.Repository</code>, na borda)</td><td>Interface no core; SQL na borda</td></tr>
+  <tr><td>(novo, sem equivalente direto em camadas)</td><td><code>portfolio.Reader</code> — port de leitura para <em>outros</em> casos de uso (SPEC-103/104/107) lerem o agregado sem tocar HTTP/DB</td><td>Interface no core</td></tr>
+  <tr><td>Entidade de domínio</td><td><code>FIIHolding</code>, <code>FixedIncomeHolding</code>, <code>Quantity</code>, <code>LiquidityType</code>, <code>marketdata.Ticker</code> — puros, sem SQL/HTTP</td><td>Core (domínio puro)</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> o repositório concreto — a seta de dependência aponta <strong>para
+fora</strong>, do núcleo rumo à infra. No hexagonal, isso vira: o <strong>core define a interface</strong> e o <strong>adapter
+a implementa</strong> — a seta aponta <strong>para dentro</strong>. Veja com o par real desta spec:</p>
+
+<pre><code>// O CORE define o port (internal/portfolio/ports.go):
+type Repository interface {
+    CreateFIIHolding(ctx context.Context, h FIIHolding) (FIIHolding, error)
+    UpdateFIIHolding(ctx context.Context, h FIIHolding) (FIIHolding, error)  // scoped (id, user_id)
+    // … e os demais …
+}
+
+// A BORDA o implementa e PROVA isso em tempo de compilação
+// (internal/portfolio/postgres/postgres.go):
+var _ portfolio.Repository = Repository{}   // o adapter depende do core, não o contrário</code></pre>
+
+<p>O <code>postgres</code> importa <code>portfolio</code>; <code>portfolio</code> <strong>jamais</strong> importa <code>database/sql</code> nem
+<code>net/http</code> (importa só <code>marketdata.Ticker</code>, value object puro — ver <a href="#d1">D1</a>). É por isso que
+o <code>Service</code> é testável com um fake trivial (sem banco), e que trocar Postgres por outro armazenamento não
+toca uma linha do core.</p>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem <em>aciona</em> a aplicação): o <code>holdingsHandler</code> chama o serviço através
+  da interface <code>PortfolioService</code> definida no próprio transporte (consumer-defined). Fica à
+  <strong>esquerda</strong> do hexágono.</li>
+  <li><strong>Driven port</strong> (o que a aplicação <em>aciona</em>): <code>portfolio.Repository</code> (banco), implementado
+  pelo adaptador <code>postgres</code>. Fica à <strong>direita</strong>.</li>
+  <li><strong>Port de saída para outros casos de uso</strong>: <code>portfolio.Reader</code> — a fresta por onde <em>futuros</em>
+  casos de uso (dashboard, Fact Builder, projeções) leem o agregado de holdings.</li>
+  <li><strong>Domínio puro</strong>: <code>FIIHolding</code>, <code>FixedIncomeHolding</code>, <code>Quantity</code>, <code>LiquidityType</code>,
+  os sentinelas, o <code>Service</code>. <strong>Borda</strong>: tudo com HTTP ou SQL — o handler e o adaptador Postgres.</li>
+</ul>
+
+<div class="diagram">                 ┌──────────────── HEXÁGONO (core puro) ───────────────┐
+  HTTP  ──▶ holdingsHandler ──▶ │  portfolio.Service  (caso de uso)            │
+  (driving, via PortfolioService)│      │  depende de PORT, não de concreto    │
+                                │      └── portfolio.Repository ◀── postgres/   (driven)
+                                │                                              │
+   SPEC-103/104/107  ◀──────────│── portfolio.Reader  (port de leitura)        │
+   (futuros consumidores)       │  domínio: FIIHolding, FixedIncomeHolding, Quantity, LiquidityType, Ticker │
+                                └──────────────────────────────────────────────┘
+   Identidade (auth.UserID(ctx)) + POSSE entram pelo handler como PARÂMETRO — nunca pelo corpo/path.
+   Mutação é DUPLO-ESCOPO: WHERE id = $1 AND user_id = $2. A seta de dependência aponta PARA DENTRO.</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">12. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA
+trilhos que <strong>baixam a taxa de erro</strong>. Veja, no SPEC-102, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "faça a carteira" de uma vez. O PLAN-102 fatiou em 7 fases bottom-up (domínio →
+persistência → serviço → transporte → observabilidade → testes → docs), e cada uma fechava com
+<code>go build</code> + testes verdes antes da próxima. Construir o <strong>core puro primeiro</strong> (Fase 1) significa que,
+quando os 8 handlers foram montados (Fase 4), os value objects, o serviço e os dois ports já existiam e
+eram testáveis isoladamente — com <strong>dinheiro e posse como os dois fios condutores</strong> declarados no plano.</p>
+
+<h3>O novo hook determinístico <code>block-layering</code></h3>
+<p>Uma novidade do <code>[Unreleased]</code>: o hook <code>block-layering</code> (PostToolUse) foi <strong>promovido de uma
+checagem subjetiva do <code>hexagonal-reviewer</code> para um bloqueio duro</strong> (<code>exit 2</code>) — ele barra,
+mecanicamente, qualquer import de SQL/HTTP/SDK de vendor dentro de um core de feature. Foi esse hook que
+deu a resposta firme à pergunta da <a href="#d1">D1</a>: <code>portfolio</code> importar <code>marketdata.Ticker</code> (value
+object puro) <strong>passou</strong>; se a IA tivesse tentado meter um <code>database/sql</code> ou <code>net/http</code> no core
+<code>portfolio</code>, o hook teria <strong>bloqueado o commit</strong>, sem depender de revisão humana.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong> (o core
+<code>portfolio</code> não importa SQL/HTTP; só o subpacote <code>postgres</code> e o transporte o fazem) e, sobretudo, a
+<strong>identidade + posse do contexto</strong> (BR-1021). Foi a lente de revisão que firmou as quatro travas da
+<a href="#ownership">seção 4</a> — em especial o <strong>duplo-escopo</strong> <code>WHERE id = $1 AND user_id = $2</code> e a
+exigência de que um id de outro usuário seja <code>404</code>, nunca <code>403</code>.</p>
+
+<h3>O <code>go-correctness-reviewer</code> e a disciplina de dinheiro / borda</h3>
+<p>Sendo a <strong>primeira feature com dinheiro</strong>, a lente de correção vigiou o risco nº 1 do plano:
+<strong>vazamento de <code>float</code></strong>. Ela garantiu que <strong>nenhum</strong> DTO, coluna ou campo de domínio usasse
+<code>float64</code>, e que o round-trip de centavos fosse <em>exato</em> na integração. Também cobrou o tratamento do
+<code>22P02</code> (UUID malformado) → <code>404</code> em vez de <code>500</code> (<a href="#ownership">seção 4</a>), o <code>%w</code> +
+prefixo minúsculo em todos os erros, e a regra de vencimento amarrada ao <code>Clock</code>, não a <code>time.Now()</code>.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que o core ficou puro</span>
+  É mecânica e dupla: <strong>(1)</strong> <code>internal/portfolio</code> (core) importa só stdlib + <code>context</code> + o port
+  <code>Clock</code> + o value object puro <code>marketdata.Ticker</code> — <strong>nenhum import de <code>database/sql</code> ou
+  <code>net/http</code></strong>, o que o hook <code>block-layering</code> agora <em>garante</em>; e <strong>(2)</strong> a asserção
+  <code>var _ portfolio.Repository = Repository{}</code> em <code>postgres.go</code> faz o compilador <strong>provar</strong> que o
+  adapter satisfaz os 8 métodos do port. Esqueça um método ou inverta uma assinatura, e o build barra.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>block-layering</strong>: o bloqueio duro que provou que o core <code>portfolio</code> ficou livre de SQL/HTTP,
+  ao mesmo tempo que <em>permitiu</em> o reuso do <code>marketdata.Ticker</code> (domínio puro).</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-102 referencia o ADR-0002 mas <strong>não o edita</strong> — se a IA
+  tentasse "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code>
+  limpos — e os testes têm que passar <strong>sem rede e sem DB</strong>. Os testes de integração (isolamento,
+  ownership, cascade) ficam atrás do gate de <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo no CI.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-102</th><th>Por que baixa erro</th></tr>
+  <tr><td>Dinheiro nunca é <code>float64</code> (incl. a wire)</td><td><code>int64</code> centavos / int bps no domínio, <code>bigint</code>/<code>integer</code> no banco, <code>*_centavos</code>/<code>*_bps</code> no JSON</td><td>Saldos exatos e reproduzíveis — nenhum erro de arredondamento corrompe um balanço.</td></tr>
+  <tr><td>Identidade + posse do contexto, nunca do payload</td><td>Sem <code>user_id</code> no DTO + <code>DisallowUnknownFields</code> + <code>callerID</code> + <code>WHERE id = $1 AND user_id = $2</code></td><td>Cross-user vira 404 (não 403): sem IDOR, sem oracle de existência — por construção.</td></tr>
+  <tr><td>Parse-don't-validate</td><td><code>ParseQuantity</code>/<code>ParseLiquidityType</code>/<code>marketdata.ParseTicker</code> validam no construtor</td><td>Um holding inválido é inrepresentável; a garantia viaja no tipo.</td></tr>
+  <tr><td>Erros são sentinelas, checados com <code>errors.Is</code></td><td><code>ErrHoldingNotFound</code>, <code>ErrPastMaturity</code> etc.; <code>writeHoldingError</code> mapeia cada um a um status</td><td>O handler distingue 400 de 404 de 500 sem comparar strings.</td></tr>
+  <tr><td>Tempo vem do <code>Clock</code>, nunca <code>time.Now()</code></td><td><code>s.today()</code> usa <code>s.clock.Now()</code> na regra de vencimento</td><td>Teste determinístico do vencimento-no-passado — sem fixture que quebra amanhã.</td></tr>
+  <tr><td>Reads nomeiam a operação; ausência = sentinela</td><td><code>ListFIIHoldingsByUserID</code>; update/delete → <code>ErrHoldingNotFound</code></td><td>Contrato de leitura previsível, igual em toda a base.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>PortfolioService</code> no <code>transport/http</code>; <code>Reader</code> para os consumidores a jusante</td><td>Fakes triviais nos testes; baixo acoplamento.</td></tr>
+  <tr><td>Sem stutter de nome de pacote</td><td><code>portfolio.Repository</code>, <code>portfolio.Reader</code> (não <code>portfolio.PortfolioRepository</code>)</td><td>API limpa; convenção do <code>[Unreleased]</code> aplicada.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só a stack existente</td><td>Zero download novo; superfície de ataque e manutenção mínimas.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">13. Conexão com AI Engineering</h2>
+
+<p>O SPEC-102 <strong>não</strong> é uma feature de IA — é o <strong>substrato de fatos</strong> sobre o qual a IA vai raciocinar.
+Vale conectar este alicerce à arquitetura de IA futura.</p>
+
+<table>
+  <tr><th>O que construímos agora</th><th>Como serve a IA depois</th></tr>
+  <tr>
+    <td><strong>O port <code>portfolio.Reader</code></strong></td>
+    <td>É o <strong>mesmo formato de costura</strong> do <code>ProfileReader</code> (SPEC-101), do <code>Insighter</code> (SPEC-005) e do <code>MarketDataProvider</code> (SPEC-006): interface pequena, definida pelo domínio. O Fact Builder (SPEC-104) vai receber um <code>Reader</code> e ler o agregado <code>Holdings</code> <strong>sem saber</strong> que existe HTTP ou SQL — exatamente como recebe o <code>Insighter</code> sem saber qual LLM está por trás.</td>
+  </tr>
+  <tr>
+    <td><strong>Holdings como fatos determinísticos (BR-1024)</strong></td>
+    <td>A regra de ouro da IA confiável é "o modelo raciocina sobre fatos, não os inventa". A carteira é a metade desses fatos (a outra é o mercado, SPEC-006): o que o usuário possui e pagou, exato em centavos. O LLM os recebe como parte do <code>Facts</code> opaco; nunca os adivinha nem reescreve um saldo.</td>
+  </tr>
+  <tr>
+    <td><strong>Posse + isolamento por <code>user_id</code> do contexto</strong></td>
+    <td>O Fact Builder vai computar fatos da carteira <em>de um usuário só</em> e juntá-los ao perfil <em>daquele mesmo usuário</em>. O duplo-escopo de hoje é o que garante que o holding (e logo o insight) de A nunca vaze para B. Um insight personalizado sem esse isolamento seria um vazamento de dados.</td>
+  </tr>
+  <tr>
+    <td><strong>Dinheiro exato → reprodutibilidade</strong></td>
+    <td><code>int64</code> centavos garante que "mesmos inputs → mesmo Health Score" (PRD §6). Sem isso, o mesmo prompt produziria scores ligeiramente diferentes a cada rodada — e a explicabilidade (FR-013) perderia o chão, porque a explicação descreveria um número que muda sozinho.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA orientada a objetivo precisa de <strong>fatos exatos sobre o investidor</strong>. O SPEC-101 instalou o fato de
+  <em>quem ele é</em>; o SPEC-102 instala o fato de <em>o que ele tem</em> — preciso (centavos), isolado por
+  usuário (duplo-escopo), e exposto por um port de leitura (<code>Reader</code>). Quando o Fact Builder chegar
+  (SPEC-104), ele lê os holdings pelo <code>Reader</code>, lê o perfil pelo <code>ProfileReader</code>, cruza com o mercado,
+  e entrega ao <code>Insighter</code> um pacote de <code>Facts</code> determinístico — finalmente respondendo: <em>"sua
+  carteira está alinhada aos seus objetivos?"</em>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">14. O que vem a seguir</h2>
+
+<p>Com a carteira persistida e exposta atrás do <code>Reader</code>, as features que <strong>computam sobre o que o
+investidor tem</strong> agora têm onde se apoiar. Repare como cada uma pluga no port que o SPEC-102 já deixou
+pronto.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como usa o SPEC-102</th></tr>
+  <tr><td>SPEC-006</td><td>Market Data (já feito)</td><td>A carteira fornecerá uma <code>TickerSource</code> real (os tickers que o usuário possui) — substituindo a watchlist estática do worker de ingestão.</td></tr>
+  <tr><td>SPEC-103</td><td>Dashboard</td><td><strong>Lê os holdings pelo <code>Reader</code></strong> e cruza com as cotações (SPEC-006) para computar valor atual, alocação e renda passiva — o que esta spec deliberadamente NÃO calcula (BR-1024).</td></tr>
+  <tr><td>SPEC-104</td><td>Fact Builder + Insighter</td><td>Junta os holdings (via <code>Reader</code>) + o perfil (via <code>ProfileReader</code>) + o mercado, e entrega ao <code>Insighter</code> como <code>Facts</code> — o grounding determinístico.</td></tr>
+  <tr><td>SPEC-105</td><td>Assistente de Rebalanceamento</td><td>Usa a alocação atual (derivada dos holdings) contra o perfil de risco para sugerir <em>áreas</em> de ajuste — nunca ordens específicas (FR-014).</td></tr>
+  <tr><td>SPEC-106</td><td>Health Score</td><td>Pontua a carteira (concentração, diversificação) contra os objetivos do perfil — "saudável <em>para esse investidor</em>".</td></tr>
+  <tr><td>SPEC-107</td><td>Projeções</td><td>Projeta renda passiva e patrimônio a partir do cost basis dos holdings + as taxas/séries macro.</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…004</td><td>Esqueleto, persistência, auth, observabilidade</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptador de LLM</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101</td><td>Perfil do investidor (escopado por <code>user_id</code>)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-102</td><td>Carteira (FIIs + renda fixa, por usuário, com dinheiro)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-103</td><td>Dashboard (lê a carteira pelo <code>Reader</code>)</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O <code>Reader</code> como seam do multi-agente CIO + MCP</span>
+  Olhando longe: assim como o <code>Insighter</code> é a fronteira por onde o futuro sistema multi-agente (o
+  "CIO") raciocina, o <code>portfolio.Reader</code> é uma das fronteiras por onde ele <strong>obtém o estado da
+  carteira</strong>. Cada agente que precisar saber "o que este usuário possui" lê pelo mesmo port — sem
+  acoplamento a HTTP/SQL, com posse e identidade isoladas por usuário. Quando o CIO chegar, ele herda essa
+  costura intacta: os holdings já são fatos prontos, exatos, privados e versáteis, esperando para serem
+  lidos — e, no mundo MCP, cada port desses vira uma "ferramenta" plugável.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-102 o YieldForge ganhou seu <strong>sistema de registro da carteira</strong>: holdings de FII e renda fixa,
+  value objects válidos por construção, com <strong>dinheiro em <code>int64</code> centavos de ponta a ponta (até na
+  wire)</strong>, escopados por <code>user_id</code> vindo <strong>sempre do contexto</strong> e protegidos por <strong>mutações
+  duplo-escopo</strong> (<code>id + user_id</code>, onde cross-user é 404, nunca 403), em duas tabelas com Create
+  <code>RETURNING</code>, expostos pelo port <code>Reader</code> que o dashboard, o Fact Builder e as projeções vão ler a
+  seguir.
+</div>
+
+<footer>
+  YieldForge · Aula 102 (SPEC-102) · gerada como material de estudo. Veja também a
+  <a href="SPEC-101-aula.html">Aula 101</a> (perfil — a costura de identidade que esta estende para posse), a
+  <a href="SPEC-006-aula.html">Aula 06</a> (dinheiro em centavos &amp; o <code>Ticker</code> reusado), a
+  <a href="SPEC-005-aula.html">Aula 05</a>, a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-102-portfolio-management.md">SPEC-102</a>
+  e o <a href="../03-plans/PLAN-102-portfolio-management.md">PLAN-102</a>.
+</footer>
+
+</div>
+</body>
+</html>

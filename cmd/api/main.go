@@ -20,6 +20,8 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/platform/httpserver"
 	"github.com/biel-ferreira/yield-forge/internal/platform/logging"
 	"github.com/biel-ferreira/yield-forge/internal/platform/observability"
+	"github.com/biel-ferreira/yield-forge/internal/portfolio"
+	portfoliopostgres "github.com/biel-ferreira/yield-forge/internal/portfolio/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/profile"
 	profilepostgres "github.com/biel-ferreira/yield-forge/internal/profile/postgres"
 	transporthttp "github.com/biel-ferreira/yield-forge/internal/transport/http"
@@ -111,12 +113,16 @@ func run() error {
 	// Investor Profile (SPEC-101): the service over its Postgres repository.
 	profileService := profile.NewService(profilepostgres.NewProfileRepository(db), clock.System{})
 
+	// Portfolio (SPEC-102): holdings CRUD over its Postgres repository.
+	portfolioService := portfolio.NewService(portfoliopostgres.New(db), clock.System{})
+
 	router := transporthttp.NewRouter(transporthttp.Deps{
 		Logger:       logger,
 		Build:        buildinfo.Get(),
 		Ready:        db,
 		Auth:         authService,
 		Profile:      profileService,
+		Portfolio:    portfolioService,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,
