@@ -6,7 +6,8 @@ documents — not the other way around.
 
 > **Product:** YieldForge — an AI-powered Investment Copilot for Brazilian retail
 > investors (FIIs and Fixed Income first).
-> **Status:** Pre-development (defining the PRD).
+> **Status:** In development — foundations (SPEC-001…006) and the first feature
+> (SPEC-101 investor profile) are Done. See the [specs index](02-specs/README.md).
 
 ---
 
@@ -46,6 +47,8 @@ documents — not the other way around.
 | [`02-specs/`](02-specs/) | Feature Specifications. One file per feature (`SPEC-XXX-name.md`). |
 | [`03-plans/`](03-plans/) | Implementation Plans. One file per spec (`PLAN-XXX-name.md`). |
 | [`04-architecture/`](04-architecture/) | System architecture overview + Architecture Decision Records (ADRs). |
+| [`TECH-DEBT.md`](TECH-DEBT.md) | Accepted shortcuts / idiom deviations to pay down later. |
+| [`lessons/`](lessons/) | PT-BR didactic HTML lessons, one per closed spec. |
 | [`../templates/`](../templates/) | The source templates for PRD / SPEC / PLAN. |
 
 ---

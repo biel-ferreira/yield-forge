@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Harness: `block-layering` PostToolUse hook — deterministic gate enforcing the core
+  architecture rule (a feature core package must not import SQL/HTTP/vendor SDKs),
+  promoting it from subjective `hexagonal-reviewer` checks to a hard `exit 2` block.
+- Code conventions (`CLAUDE.md`): closed-enum idiom (typed `string` + `ParseX`),
+  money across the JSON boundary as integer centavos (never float), concurrency
+  (owned + `ctx`-cancellable goroutines, `errgroup`), structured `log/slog`, and
+  avoid package-name stutter.
+- `docs/TECH-DEBT.md` backlog, with TD-001 (rename stutter in core types).
 - Spec-Driven Development (SDD) workspace under `docs/` — README/process guide,
   product, specs, plans, and architecture folders.
 - Product Requirements Document (PRD) for YieldForge — Investment Copilot: vision,

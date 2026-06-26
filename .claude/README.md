@@ -74,10 +74,15 @@ The practical trigger for each piece:
 **Memory & config** (root + here)
 - [`../CLAUDE.md`](../CLAUDE.md) — project memory (binding constraints, layering, conventions, commands).
 - `settings.json` — versioned (shared) permissions + hook registration. **Committed.**
-- `settings.local.json` — your machine's overrides (Read paths). **Gitignored.**
+- `settings.local.json` — your machine's local allowlist (Read paths + recurring local
+  Bash/WebFetch you've approved). Machine-specific; prune one-off/debug entries periodically. **Gitignored.**
 
 **Hooks** (`hooks/`) — the 3 modes
 - `block-immutable.ps1` — `PreToolUse`: **blocks** editing a committed migration/ADR (`exit 2`).
+- `block-layering.ps1` — `PostToolUse`: **blocks** (`exit 2`) a feature *core* file
+  (`internal/<feature>/<file>.go`) that imports SQL/HTTP/vendor — the #1 architecture rule
+  promoted from the `hexagonal-reviewer` (subjective) to a deterministic gate. Adapter
+  subpackages, `platform/`, and `transport/` are skipped.
 - `gofmt-edited.ps1` — `PostToolUse`: **acts**, runs `gofmt` on the just-edited `.go` file.
 - `on-stop.ps1` — `Stop`: **warns** (non-blocking) with `go vet` + a CHANGELOG reminder when `.go` changed.
 

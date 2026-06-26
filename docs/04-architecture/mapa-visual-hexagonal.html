@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YieldForge — Mapa visual da arquitetura hexagonal</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d2129; --ink:#e7ebf0; --muted:#9aa4b2;
+    --line:#2a2f3a;
+    /* zonas */
+    --domain:#34d399;   --domain-bg:#0e2a22;
+    --port:#a78bfa;     --port-bg:#221c39;
+    --adapter:#fb923c;  --adapter-bg:#2c1d10;
+    --root:#60a5fa;     --root-bg:#10243f;
+    --platform:#94a3b8; --platform-bg:#1c222b;
+    --warn:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 80px}
+  h1{font-size:30px;line-height:1.2;margin:0 0 6px}
+  h2{font-size:23px;margin:46px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:18px;margin:26px 0 8px}
+  p{margin:10px 0}
+  code{font-family:"SF Mono", "JetBrains Mono",Consolas,monospace;font-size:.9em;
+    background:#000;padding:1.5px 6px;border-radius:5px;color:#dfe6ee}
+  .lead{color:var(--muted);font-size:18px;max-width:80ch}
+  .kicker{letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--port);font-weight:700}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0}
+  .muted{color:var(--muted)}
+  .big-aha{background:linear-gradient(135deg,#221c39,#10243f);border:1px solid var(--port);
+    border-radius:14px;padding:22px 24px;margin:20px 0;font-size:18px}
+  .big-aha b{color:#fff}
+
+  /* legenda de zonas */
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+  .chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;
+    padding:6px 12px;border-radius:999px;border:1px solid var(--line)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .z-domain{color:var(--domain)} .z-domain .dot{background:var(--domain)}
+  .z-port{color:var(--port)} .z-port .dot{background:var(--port)}
+  .z-adapter{color:var(--adapter)} .z-adapter .dot{background:var(--adapter)}
+  .z-root{color:var(--root)} .z-root .dot{background:var(--root)}
+  .z-platform{color:var(--platform)} .z-platform .dot{background:var(--platform)}
+
+  /* diagrama lado-a-lado */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .stack{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel2)}
+  .stack h4{margin:0;padding:12px 16px;font-size:14px;letter-spacing:.04em;
+    background:#10141b;border-bottom:1px solid var(--line);color:var(--muted)}
+  .layer{padding:13px 16px;border-bottom:1px solid var(--line);font-size:14.5px}
+  .layer:last-child{border-bottom:0}
+  .layer small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+  .arrow{text-align:center;color:var(--muted);font-size:13px;padding:3px 0}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;margin-left:6px;vertical-align:middle}
+  .tag.domain{background:var(--domain-bg);color:var(--domain)}
+  .tag.port{background:var(--port-bg);color:var(--port)}
+  .tag.adapter{background:var(--adapter-bg);color:var(--adapter)}
+  .tag.root{background:var(--root-bg);color:var(--root)}
+
+  /* hexágono esquemático */
+  .hex{border:1px solid var(--line);border-radius:14px;background:
+    radial-gradient(120% 130% at 50% 0%, #141b27 0%, var(--panel) 60%);padding:22px}
+  .hexrow{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:14px;align-items:stretch}
+  @media(max-width:760px){.hexrow{grid-template-columns:1fr}}
+  .side{display:flex;flex-direction:column;gap:10px;justify-content:center}
+  .core{background:var(--domain-bg);border:1.5px solid var(--domain);border-radius:14px;
+    padding:18px;text-align:center}
+  .core b{color:var(--domain)}
+  .box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel2);font-size:13.5px}
+  .box.in{border-left:3px solid var(--root)}
+  .box.out{border-right:3px solid var(--adapter)}
+  .sidelabel{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:2px}
+
+  /* tabelas */
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14.5px}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase}
+  tr:hover td{background:#12161d}
+  td code{font-size:.85em;white-space:nowrap}
+  .role{font-weight:700}
+
+  /* blocos de código */
+  pre{background:#0a0c10;border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+    overflow:auto;font-size:13.5px;line-height:1.6}
+  pre code{background:none;padding:0;color:#cdd6e0}
+  .c-key{color:#c792ea}.c-typ{color:#7fdbca}.c-str{color:#ecc48d}.c-com{color:#5c6573;font-style:italic}
+  .c-fn{color:#82aaff}.c-pkg{color:#f78c6c}
+
+  .pill{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:2px 9px}
+  .pro{background:var(--domain-bg);color:var(--domain)}
+  .con{background:#2c1416;color:var(--warn)}
+
+  .filetree{font-family:"SF Mono",Consolas,monospace;font-size:13.5px;line-height:1.85;
+    background:#0a0c10;border:1px solid var(--line);border-radius:12px;padding:18px 20px;overflow:auto}
+  .filetree .c-domain{color:var(--domain)}
+  .filetree .c-port{color:var(--port)}
+  .filetree .c-adapter{color:var(--adapter)}
+  .filetree .c-root{color:var(--root)}
+  .filetree .c-platform{color:var(--platform)}
+  .filetree .cm{color:#5c6573}
+  .num{display:inline-block;width:24px;height:24px;line-height:24px;text-align:center;border-radius:50%;
+    background:var(--port-bg);color:var(--port);font-weight:700;font-size:13px;margin-right:8px}
+  .step{display:flex;gap:4px;align-items:flex-start;margin:10px 0}
+  .footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">YieldForge · guia de orientação (não é uma aula)</span>
+  <h1>Mapa visual da arquitetura hexagonal</h1>
+  <p class="lead">Você não está perdido num monte de arquivos jogados. É <b>a mesma pilha em
+  camadas que você já conhece</b> — handler → DTO → service → repository — só que reorganizada
+  e com uma regra a mais. Este documento te dá um mapa pra achar cada coisa no projeto real.</p>
+
+  <div class="big-aha">
+    💡 <b>A frase que destrava tudo:</b> hexagonal = arquitetura em camadas + uma regra
+    (<i>“o núcleo nunca depende da borda”</i>) + um lugar novo onde tudo é montado (o
+    <code>main.go</code>). Se você guardar só isso, o resto encaixa.
+  </div>
+
+  <!-- LEGENDA -->
+  <h2>As 5 zonas (decore as cores)</h2>
+  <p>Todo arquivo do projeto cai em uma destas cinco zonas. Quando abrir um arquivo e ficar
+  perdido, a primeira pergunta é: <b>“em qual zona isso vive?”</b></p>
+  <div class="legend">
+    <span class="chip z-domain"><span class="dot"></span>DOMAIN — regras puras</span>
+    <span class="chip z-port"><span class="dot"></span>PORT — interface (contrato)</span>
+    <span class="chip z-adapter"><span class="dot"></span>ADAPTER — implementação na borda</span>
+    <span class="chip z-root"><span class="dot"></span>COMPOSITION ROOT — main.go monta tudo</span>
+    <span class="chip z-platform"><span class="dot"></span>PLATFORM — utilitários transversais</span>
+  </div>
+  <div class="card">
+    <table>
+      <tr><th>Zona</th><th>O que é</th><th>Equivalente em “camadas”</th><th>Pode importar…</th></tr>
+      <tr>
+        <td><span class="z-domain role">DOMAIN</span></td>
+        <td>Tipos e regras de negócio puros. Sem SQL, sem HTTP, sem <code>time.Now()</code>.</td>
+        <td>As <i>entidades</i> + a lógica que normalmente vaza pro service.</td>
+        <td class="muted">só o stdlib e ele mesmo</td>
+      </tr>
+      <tr>
+        <td><span class="z-port role">PORT</span></td>
+        <td>Uma <code>interface</code> Go. Diz <i>o que</i> precisa acontecer, não <i>como</i>.</td>
+        <td>A <i>assinatura</i> do seu repository / client — mas declarada pelo núcleo.</td>
+        <td class="muted">tipos do domínio</td>
+      </tr>
+      <tr>
+        <td><span class="z-adapter role">ADAPTER</span></td>
+        <td>O código “sujo” que fala com o mundo: Postgres, HTTP externo, bcrypt.</td>
+        <td>A <i>implementação concreta</i> do repository / o client HTTP.</td>
+        <td class="muted">domínio + ports + libs externas</td>
+      </tr>
+      <tr>
+        <td><span class="z-root role">COMPOSITION ROOT</span></td>
+        <td>O <code>main()</code>. O único lugar que conhece as implementações concretas e as
+        “pluga” nas interfaces.</td>
+        <td class="muted">— (em camadas isso fica espalhado / num framework de DI)</td>
+        <td class="muted">tudo</td>
+      </tr>
+      <tr>
+        <td><span class="z-platform role">PLATFORM</span></td>
+        <td>Config, logger, clock, pool de DB, servidor HTTP. Apoio que todos usam.</td>
+        <td>Sua pasta <code>infra/</code> ou <code>common/</code>.</td>
+        <td class="muted">stdlib + libs</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- O HEXÁGONO -->
+  <h2>Por que “hexágono”? Esquerda chama, direita é chamado</h2>
+  <p>Esqueça a forma geométrica — o hexágono só serve pra mostrar que a aplicação tem
+  <b>dois lados</b>. À esquerda quem <i>aciona</i> a app (driving); à direita o que a app
+  <i>aciona</i> (driven). No meio, o núcleo, que só conhece <span class="z-port">ports</span>.</p>
+
+  <div class="hex">
+    <div class="hexrow">
+      <div class="side">
+        <div class="sidelabel">⟶ Driving (quem chama)</div>
+        <div class="box in">Handler HTTP<br><span class="muted">transport/http/auth.go</span></div>
+        <div class="box in">Scheduler / Worker<br><span class="muted">marketdata/ingest</span></div>
+      </div>
+      <div class="core">
+        <div class="sidelabel" style="color:var(--domain)">núcleo</div>
+        <b>DOMAIN + SERVICE</b><br>
+        <span class="muted">regras puras + casos de uso</span><br><br>
+        <span style="color:var(--port);font-weight:700">conhece só PORTS ↔</span>
+      </div>
+      <div class="side">
+        <div class="sidelabel" style="text-align:right">Driven (o que é chamado) ⟶</div>
+        <div class="box out">Repositório Postgres<br><span class="muted">*/postgres</span></div>
+        <div class="box out">Clients externos<br><span class="muted">fundamentus · yahoo · bcb</span></div>
+        <div class="box out">Clock / bcrypt<br><span class="muted">platform/clock · auth/bcrypt</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="muted">Repare: as duas pontas são <span class="z-adapter">adapters</span>. A diferença
+  é a direção da seta — o handler chama o núcleo; o núcleo chama o repositório/cliente
+  (através de um port).</p>
+
+  <!-- LADO A LADO -->
+  <h2>Camadas × Hexagonal, lado a lado</h2>
+  <p>Mesmas peças, mesma ordem de execução. A <b>única</b> diferença está na linha do
+  repository (em vermelho na coluna da direita).</p>
+  <div class="cols">
+    <div class="stack">
+      <h4>O QUE VOCÊ JÁ CONHECE — em camadas</h4>
+      <div class="layer">Handler / Controller<small>recebe o request</small></div>
+      <div class="arrow">▼</div>
+      <div class="layer">DTO<small>valida o corpo</small></div>
+      <div class="arrow">▼</div>
+      <div class="layer">Service<small>regra de negócio · <b>importa o repository concreto</b></small></div>
+      <div class="arrow">▼</div>
+      <div class="layer">Repository (struct)<small>fala com o Postgres</small></div>
+    </div>
+    <div class="stack">
+      <h4>O MESMO — em hexagonal</h4>
+      <div class="layer">Handler <span class="tag adapter">driving adapter</span><small>transport/http</small></div>
+      <div class="arrow">▼</div>
+      <div class="layer">DTO <span class="tag adapter">borda</span><small>continua DTO; traduz pra value object</small></div>
+      <div class="arrow">▼</div>
+      <div class="layer">Service <span class="tag domain">núcleo</span><small>regra de negócio · <b>importa só a interface</b></small></div>
+      <div class="arrow">▼</div>
+      <div class="layer" style="border-left:3px solid var(--warn)">
+        Port (interface) <span class="tag port">contrato</span>
+        <small style="color:var(--warn)">↑ a struct Postgres vira ADAPTER e <b>implementa</b> esta interface — a seta inverte</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="big-aha" style="background:linear-gradient(135deg,#2c1416,#221c39);border-color:var(--warn)">
+    🔑 <b>A “grande virada” (inversão de dependência).</b> Em camadas, o <i>service</i> dá
+    <code>import</code> no pacote do repositório concreto — ele depende “pra fora”. No
+    hexagonal, o <i>service</i> declara a <code>interface</code> que precisa, e é o adapter
+    Postgres que dá <code>import</code> no núcleo pra implementá-la. <b>A seta de dependência
+    aponta pra dentro.</b> Por isso o domínio “não sabe” que Postgres existe.
+  </div>
+
+  <!-- ONDE FICA CADA COISA -->
+  <h2>“Onde fica a service / repository / DTO de cada coisa?”</h2>
+  <p>Aqui está a tabela que você queria. Cada papel da arquitetura em camadas, com o
+  <b>arquivo real</b> no YieldForge. Dois exemplos: <code>marketdata</code> (o que você estava
+  olhando) e <code>auth</code> (um CRUD mais clássico, bom pra comparar).</p>
+
+  <div class="card">
+    <h3 class="z-adapter">Feature <code>marketdata</code> — dados de mercado (SPEC-006)</h3>
+    <table>
+      <tr><th>Papel (camadas)</th><th>Zona</th><th>Arquivo real</th><th>O nome que você procura</th></tr>
+      <tr><td class="role">Entidades</td><td><span class="z-domain">domain</span></td>
+        <td><code>marketdata/ticker.go</code>, <code>quote.go</code>, <code>macro.go</code></td>
+        <td><code>Ticker</code>, <code>FIIQuote</code>, <code>MacroIndicator</code></td></tr>
+      <tr><td class="role">Erros de negócio</td><td><span class="z-domain">domain</span></td>
+        <td><code>marketdata/errors.go</code></td>
+        <td><code>ErrProviderUnavailable</code>, <code>ErrFIIQuoteNotFound</code></td></tr>
+      <tr><td class="role">Interfaces (ports)</td><td><span class="z-port">port</span></td>
+        <td><code>marketdata/ports.go</code></td>
+        <td><code>MarketDataProvider</code>, <code>FIIQuoteRepository</code>, <code>MacroRepository</code>, <code>TickerSource</code></td></tr>
+      <tr><td class="role">Service / caso de uso</td><td><span class="z-domain">núcleo*</span></td>
+        <td><code>marketdata/ingest/worker.go</code></td>
+        <td><code>Worker</code> · método <code>RunOnce</code></td></tr>
+      <tr><td class="role">Repository (Postgres)</td><td><span class="z-adapter">adapter</span></td>
+        <td><code>marketdata/postgres/postgres.go</code></td>
+        <td><code>NewFIIQuoteRepository</code>, <code>NewMacroRepository</code></td></tr>
+      <tr><td class="role">Clients HTTP externos</td><td><span class="z-adapter">adapter</span></td>
+        <td><code>marketdata/fundamentus/</code>, <code>yahoo/</code>, <code>bcb/</code></td>
+        <td><code>fundamentus.New</code>, <code>yahoo.New</code>, <code>bcb.New</code></td></tr>
+      <tr><td class="role">Composição de fontes</td><td><span class="z-adapter">adapter</span></td>
+        <td><code>marketdata/fii/composite.go</code></td>
+        <td><code>Composite</code> (junta Fundamentus + Yahoo)</td></tr>
+      <tr><td class="role">Fake p/ testes</td><td><span class="z-adapter">adapter</span></td>
+        <td><code>marketdata/fake.go</code></td>
+        <td><code>Fake</code> (implementa o port, sem rede)</td></tr>
+      <tr><td class="role">Montagem (DI)</td><td><span class="z-root">root</span></td>
+        <td><code>marketdata/ingest/factory.go</code></td>
+        <td><code>New</code>, <code>buildProvider</code></td></tr>
+    </table>
+    <p class="muted" style="font-size:13.5px">* Detalhe que confunde: aqui o “service” <b>não se
+    chama Service</b> — chama <code>Worker</code>, porque o caso de uso é uma ingestão agendada,
+    não um endpoint. O <i>papel</i> é o mesmo: orquestra o domínio falando com os ports.</p>
+  </div>
+
+  <div class="card">
+    <h3 class="z-adapter">Feature <code>auth</code> — login/sessão (SPEC-003)</h3>
+    <table>
+      <tr><th>Papel (camadas)</th><th>Zona</th><th>Arquivo real</th><th>O nome que você procura</th></tr>
+      <tr><td class="role">Entidades</td><td><span class="z-domain">domain</span></td>
+        <td><code>auth/auth.go</code>, <code>token.go</code></td>
+        <td><code>User</code>, <code>Session</code></td></tr>
+      <tr><td class="role">Interfaces (ports)</td><td><span class="z-port">port</span></td>
+        <td><code>auth/ports.go</code></td>
+        <td><code>UserRepository</code>, <code>SessionRepository</code>, <code>PasswordHasher</code></td></tr>
+      <tr><td class="role">Service / caso de uso</td><td><span class="z-domain">núcleo</span></td>
+        <td><code>auth/service.go</code></td>
+        <td><code>Service</code>, <code>NewService</code></td></tr>
+      <tr><td class="role">Repository (Postgres)</td><td><span class="z-adapter">adapter</span></td>
+        <td><code>auth/postgres/postgres.go</code></td>
+        <td><code>NewUserRepository</code>, <code>NewSessionRepository</code></td></tr>
+      <tr><td class="role">Hasher (bcrypt)</td><td><span class="z-adapter">adapter</span></td>
+        <td><code>auth/bcrypt/bcrypt.go</code></td>
+        <td><code>bcrypt.New</code> (implementa <code>PasswordHasher</code>)</td></tr>
+      <tr><td class="role">Handler HTTP</td><td><span class="z-adapter">driving adapter</span></td>
+        <td><code>transport/http/auth.go</code></td>
+        <td><code>authHandler</code> · <code>register</code>/<code>login</code></td></tr>
+      <tr><td class="role">DTO (request/response)</td><td><span class="z-adapter">borda</span></td>
+        <td><code>transport/http/auth.go</code></td>
+        <td><code>credentialsRequest</code>, <code>userResponse</code></td></tr>
+      <tr><td class="role">Helper de resposta</td><td><span class="z-platform">platform</span></td>
+        <td><code>transport/http/response.go</code></td>
+        <td><code>writeJSON</code>, <code>writeError</code></td></tr>
+    </table>
+  </div>
+
+  <!-- A INVERSÃO EM CÓDIGO REAL -->
+  <h2>A inversão, em código real do projeto</h2>
+  <p>O núcleo de <code>marketdata</code> declara <b>o que precisa</b> — sem citar Postgres,
+  Fundamentus ou Yahoo:</p>
+  <pre><code><span class="c-com">// internal/marketdata/ports.go  — ZONA: PORT (só uma interface)</span>
+<span class="c-key">type</span> <span class="c-typ">MarketDataProvider</span> <span class="c-key">interface</span> {
+    <span class="c-fn">FetchFIIQuotes</span>(ctx context.Context, tickers []<span class="c-typ">Ticker</span>) (<span class="c-key">map</span>[<span class="c-typ">Ticker</span>]<span class="c-typ">FIIQuote</span>, <span class="c-typ">error</span>)
+    <span class="c-fn">FetchMacroIndicator</span>(ctx context.Context, ind <span class="c-typ">Indicator</span>) (<span class="c-typ">MacroIndicator</span>, <span class="c-typ">error</span>)
+}</code></pre>
+  <p>O <code>Worker</code> (o caso de uso) guarda <b>a interface</b>, nunca a implementação.
+  Ele não tem ideia se os dados vêm de Postgres, de HTTP ou de um fake:</p>
+  <pre><code><span class="c-com">// internal/marketdata/ingest/worker.go  — ZONA: núcleo (depende só de ports)</span>
+<span class="c-key">type</span> <span class="c-typ">Worker</span> <span class="c-key">struct</span> {
+    provider  marketdata.<span class="c-typ">MarketDataProvider</span>  <span class="c-com">// ← interface</span>
+    fiiRepo   marketdata.<span class="c-typ">FIIQuoteRepository</span>   <span class="c-com">// ← interface</span>
+    macroRepo marketdata.<span class="c-typ">MacroRepository</span>      <span class="c-com">// ← interface</span>
+    tickers   marketdata.<span class="c-typ">TickerSource</span>        <span class="c-com">// ← interface</span>
+}</code></pre>
+  <p>E é o <span class="z-adapter">adapter</span> que “puxa” a dependência pra dentro — ele
+  importa o domínio e se compromete a satisfazer o contrato:</p>
+  <pre><code><span class="c-com">// internal/marketdata/fii/composite.go  — ZONA: ADAPTER</span>
+<span class="c-key">type</span> <span class="c-typ">Composite</span> <span class="c-key">struct</span> { fundamentals <span class="c-typ">Fundamentals</span>; dividends <span class="c-typ">LastDividends</span> }
+
+<span class="c-com">// Satisfaz a metade FII do port MarketDataProvider — junta Fundamentus + Yahoo.</span>
+<span class="c-key">func</span> (c <span class="c-typ">Composite</span>) <span class="c-fn">FetchFIIQuotes</span>(ctx context.Context, tickers []marketdata.<span class="c-typ">Ticker</span>) (...) { ... }</code></pre>
+  <p class="muted">Note o padrão de Go aqui: <b>“aceite interfaces, retorne structs”</b>. O
+  <code>Composite</code> nem depende dos clients concretos — depende de mini-interfaces
+  <code>Fundamentals</code>/<code>LastDividends</code> definidas por ele mesmo. É port &amp;
+  adapter em escala de função.</p>
+
+  <!-- MAIN.GO -->
+  <h2>O <code>main.go</code> desmistificado — é aqui que tudo se conecta</h2>
+  <p>Esse arquivo te confunde porque ele faz <b>um trabalho que em camadas costuma ficar
+  escondido</b> num container de injeção de dependência ou em anotações. No hexagonal ele é
+  explícito e tem nome: <b>Composition Root</b>. É o <i>único</i> lugar que conhece as
+  implementações concretas e as encaixa nos ports. Leia <code>cmd/api/main.go</code> como uma
+  receita de montagem em 4 passos:</p>
+
+  <div class="card">
+    <div class="step"><span class="num">1</span><div>
+      <b>Liga a infra (platform).</b> Config, logger, telemetria e o pool do Postgres.
+      <pre style="margin-top:8px"><code>cfg, _ := config.<span class="c-fn">Load</span>()
+logger := logging.<span class="c-fn">New</span>(cfg)
+db, _ := database.<span class="c-fn">Connect</span>(ctx, cfg)   <span class="c-com">// *sql.DB — um adapter de infra</span></code></pre>
+    </div></div>
+
+    <div class="step"><span class="num">2</span><div>
+      <b>Monta a feature <code>auth</code>:</b> cria os adapters concretos e os injeta no
+      <code>Service</code>. <i>Aqui</i> os ports recebem suas implementações.
+      <pre style="margin-top:8px"><code>authService := auth.<span class="c-fn">NewService</span>(
+    authpostgres.<span class="c-fn">NewUserRepository</span>(db),    <span class="c-com">// adapter → port UserRepository</span>
+    authpostgres.<span class="c-fn">NewSessionRepository</span>(db), <span class="c-com">// adapter → port SessionRepository</span>
+    authbcrypt.<span class="c-fn">New</span>(),                     <span class="c-com">// adapter → port PasswordHasher</span>
+    clock.<span class="c-typ">System</span>{},                      <span class="c-com">// adapter → port Clock</span>
+    cfg.SessionTTL,
+)</code></pre>
+      <p class="muted" style="margin:6px 0 0">Troque <code>authpostgres</code> por
+      <code>authmemory</code> e <b>nada</b> no <code>Service</code> muda. Esse é o ponto
+      inteiro da arquitetura.</p>
+    </div></div>
+
+    <div class="step"><span class="num">3</span><div>
+      <b>Monta o transporte (driving):</b> entrega o service pronto ao router HTTP.
+      <pre style="margin-top:8px"><code>router := transporthttp.<span class="c-fn">NewRouter</span>(transporthttp.<span class="c-typ">Deps</span>{
+    Logger: logger, Auth: authService, ...   <span class="c-com">// o handler recebe a interface AuthService</span>
+})</code></pre>
+    </div></div>
+
+    <div class="step"><span class="num">4</span><div>
+      <b>Monta <code>marketdata</code> e sobe tudo.</b> A factory esconde a fiação interna
+      (qual provider, quais repos); o <code>main</code> só decide rodar.
+      <pre style="margin-top:8px"><code>mdWorker, _ := ingest.<span class="c-fn">New</span>(cfg, db, logger, clock.<span class="c-typ">System</span>{}) <span class="c-com">// factory.go escolhe fake|live</span>
+<span class="c-com">// ... scheduler opcional em goroutine ...</span>
+serveErr := httpserver.<span class="c-fn">Run</span>(ctx, cfg, router, logger)</code></pre>
+    </div></div>
+  </div>
+  <p>Resumo mental do <code>main.go</code>: <b>“crio as peças concretas → plugo nos buracos
+  (ports) → mando rodar”</b>. Se você ler procurando <i>regra de negócio</i> vai se perder —
+  não tem nenhuma aqui de propósito. É só montagem.</p>
+
+  <!-- ROTEIRO DE LEITURA -->
+  <h2>Roteiro: como ler uma feature sem se perder</h2>
+  <p>Quando abrir uma pasta nova (ex.: <code>internal/profile/</code>), leia <b>nesta ordem</b>
+  — de dentro pra fora, seguindo a direção das dependências:</p>
+  <div class="card">
+    <div class="step"><span class="num">1</span><div><b>O domínio primeiro.</b> Os arquivos soltos na raiz do pacote (<code>ticker.go</code>, <code>quote.go</code>). São os substantivos do negócio. <span class="muted">→ entende o “o quê”.</span></div></div>
+    <div class="step"><span class="num">2</span><div><b><code>ports.go</code>.</b> A lista de interfaces. É o índice do que essa feature precisa do mundo externo. <span class="muted">→ entende as “tomadas”.</span></div></div>
+    <div class="step"><span class="num">3</span><div><b>O service / worker.</b> Como as regras usam os ports. O coração do caso de uso. <span class="muted">→ entende o “como”.</span></div></div>
+    <div class="step"><span class="num">4</span><div><b>As subpastas = adapters.</b> <code>postgres/</code>, <code>fundamentus/</code>, <code>bcrypt/</code>. Cada uma é um “plugue”. Só leia quando precisar do detalhe técnico. <span class="muted">→ o “com o quê”.</span></div></div>
+    <div class="step"><span class="num">5</span><div><b><code>cmd/api/main.go</code> por último.</b> Pra ver quem foi plugado em quem. <span class="muted">→ o “montado como”.</span></div></div>
+  </div>
+  <p class="muted">Regra prática: <b>subpasta = adapter</b> (detalhe externo); <b>arquivo na raiz
+  do pacote = domínio ou port</b> (núcleo). Só essa heurística já te localiza em 90% dos casos.</p>
+
+  <!-- ÁRVORE -->
+  <h3>O projeto inteiro, colorido por zona</h3>
+  <div class="filetree">
+internal/
+├─ <span class="c-adapter">transport/http/</span>        <span class="cm"># driving adapters: handlers, router, DTOs, middleware</span>
+├─ <span class="c-platform">platform/</span>             <span class="cm"># PLATFORM: config, logging, clock, database, httpserver, money</span>
+├─ auth/
+│  ├─ <span class="c-domain">auth.go, token.go</span>    <span class="cm"># DOMAIN (User, Session)</span>
+│  ├─ <span class="c-port">ports.go</span>             <span class="cm"># PORTS (UserRepository, PasswordHasher...)</span>
+│  ├─ <span class="c-domain">service.go</span>           <span class="cm"># SERVICE (caso de uso)</span>
+│  ├─ <span class="c-adapter">postgres/</span>            <span class="cm"># ADAPTER (driven)</span>
+│  └─ <span class="c-adapter">bcrypt/</span>              <span class="cm"># ADAPTER (driven)</span>
+├─ marketdata/
+│  ├─ <span class="c-domain">ticker.go, quote.go...</span><span class="cm"># DOMAIN</span>
+│  ├─ <span class="c-port">ports.go</span>             <span class="cm"># PORTS (MarketDataProvider, FIIQuoteRepository...)</span>
+│  ├─ <span class="c-adapter">postgres/ fundamentus/ yahoo/ bcb/ fii/</span>  <span class="cm"># ADAPTERS (driven)</span>
+│  ├─ <span class="c-adapter">fake.go</span>              <span class="cm"># ADAPTER de teste</span>
+│  └─ <span class="c-adapter">ingest/</span>              <span class="cm"># worker (caso de uso) + scheduler + factory</span>
+└─ insight/, portfolio/, profile/, projection/   <span class="cm"># mesma forma se repete</span>
+cmd/
+├─ <span class="c-root">api/main.go</span>            <span class="cm"># COMPOSITION ROOT (monta a API)</span>
+├─ <span class="c-root">ingest/main.go</span>         <span class="cm"># COMPOSITION ROOT (ingestão via cron)</span>
+└─ <span class="c-root">migrate/main.go</span>        <span class="cm"># COMPOSITION ROOT (migrações)</span>
+  </div>
+
+  <!-- VALE A PENA -->
+  <h2>Essa arquitetura é boa mesmo? Vale a pena?</h2>
+  <p>Resposta honesta: <b>depende do projeto — e pra <i>este</i> projeto, vale.</b> Não é
+  hype; tem trade-off real. Vou ser direto dos dois lados.</p>
+
+  <div class="cols">
+    <div class="card">
+      <p><span class="pill pro">A FAVOR</span></p>
+      <ul>
+        <li><b>Trocar provedor por config.</b> A meta “custo zero” do YieldForge exige trocar
+        LLM / fonte de dados / DB sem reescrever nada. O <code>buildProvider</code> alterna
+        <code>fake</code>↔<code>live</code> numa linha. Isso <i>só</i> é barato por causa dos ports.</li>
+        <li><b>Testes triviais e sem rede.</b> O <code>Fake</code> implementa o mesmo port —
+        os testes do <code>Worker</code> rodam offline, determinísticos. Sem mock framework.</li>
+        <li><b>Domínio protegido.</b> Regra de negócio não “pega carona” em detalhe de
+        Postgres/HTTP. Mais fácil de raciocinar e de manter determinístico (mesmo input →
+        mesmo Health Score, exigência do produto).</li>
+        <li><b>Costura pro futuro.</b> O port <code>Insighter</code> é o mesmo seam por onde o
+        multi-agent CIO + MCP vão entrar depois. Você troca o motor sem mexer no resto.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p><span class="pill con">O CUSTO</span></p>
+      <ul>
+        <li><b>Mais arquivos e indireção.</b> O que era 1 service + 1 repo vira domínio + port
+        + adapter + factory. Pra um CRUD bobo, é cerimônia a mais — exatamente a sensação de
+        “arquivos jogados” que você teve.</li>
+        <li><b>Curva de aprendizado.</b> A inversão de dependência não é intuitiva no começo
+        (você está sentindo isso agora). Depois que “vira a chave”, some.</li>
+        <li><b>Fácil exagerar.</b> Criar port pra coisa que nunca vai ter 2 implementações é
+        over-engineering. A regra sã: <b>port só quando há uma fronteira externa de verdade</b>
+        (DB, rede, relógio, LLM) — que é justamente onde o YieldForge usa.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="big-aha">
+    🎯 <b>Veredito.</b> Hexagonal compensa quando o projeto tem <i>muitas fronteiras externas
+    que precisam ser trocáveis e testáveis</i> — e o YieldForge é a definição disso (vários
+    provedores de dados, LLM swappable, postura custo-zero, scores determinísticos). Pra uma
+    API CRUD simples e descartável, seria peso morto. Aqui, <b>é a escolha certa</b> — e a
+    confusão que você sente é só o pedágio de entrada, não um defeito do desenho.
+  </div>
+
+  <div class="footer">
+    Documento de orientação gerado a partir do código real em
+    <code>internal/marketdata</code>, <code>internal/auth</code>, <code>internal/transport/http</code>
+    e <code>cmd/api/main.go</code>. Para a teoria aprofundada, veja a aula conceitual em
+    <code>docs/lessons/arquitetura-hexagonal-aula.html</code> e as regras canônicas em
+    <code>CLAUDE.md › Architecture rules</code> + <code>docs/04-architecture/</code>.
+  </div>
+
+</div>
+</body>
+</html>

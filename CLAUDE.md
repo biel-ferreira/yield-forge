@@ -64,17 +64,31 @@ Deliberately chosen (not accidental). Apply to all new Go code:
   (`var ErrInvalidTicker = errors.New("...")`); check with `errors.Is`/`errors.As`.
 - **Parse, don't validate.** Value objects (`Ticker`, `Money`, `Email`) validate in
   their constructor and return an error — an invalid instance must be unrepresentable.
+- **Closed enums are typed string constants.** A domain enumeration is `type X string`
+  with a `const` block and a `ParseX(s string) (X, error)` that normalizes (trim +
+  lower-case) and returns a sentinel via `%w` on an unknown value (e.g. `RiskProfile`,
+  `Objective`, `Sector`, `Indicator`). It's parse-don't-validate applied to enums.
 - **Domain is pure:** no SQL, HTTP, time, or I/O in domain/service core (enforced by
   the layering rules above).
 - **Context:** `ctx context.Context` is always the first parameter and is propagated;
   `context.Background()` only in `main` and tests.
 - **Time is UTC** and comes from the injected **`Clock`** port, never `time.Now()`
   directly — keeps projections and tests deterministic.
+- **Concurrency is owned and cancellable.** No naked `go` statements: every goroutine has
+  a clear lifecycle owner and exits on `ctx` cancellation. Prefer `errgroup` over a raw
+  `sync.WaitGroup` when goroutines can fail; guard shared state with a mutex or a channel.
+- **Logging is structured via `log/slog`** — never `fmt.Print*` / `log.Print*`. Log at the
+  edges (adapters / transport / platform), never inside the domain core (that's I/O);
+  never log secrets or PII.
 - **Interfaces small + consumer-defined**: "accept interfaces, return structs." Keeps
   ports tiny so fakes stay trivial.
 - **Repository methods name their operation:** reads are `Get<Entity>By<Attr>`
   (e.g. `GetUserByEmail`, `GetUserByID`); writes use `Create*` / `Update*` / `Delete*`.
   A read that can be absent returns a `…NotFound` sentinel.
+- **Avoid package-name stutter.** Name types for how they read at the call site: in
+  package `profile` it's `Repository` / `Reader`, so callers write `profile.Repository`,
+  not `profile.ProfileRepository`. Disambiguating names inside an adapter/transport
+  package (`postgres.ProfileRepository`, `http.ProfileService`) are fine.
 - **Tests:** standard `testing` + **table-driven** structure; **`testify/require`** for
   assertions; **hand-written fakes** for ports — no `gomock`/`mockery`. Integration
   tests gated by `testing.Short()` + `TEST_DATABASE_URL` (skip cleanly without a DB).
@@ -84,6 +98,9 @@ Deliberately chosen (not accidental). Apply to all new Go code:
   `handlers.go` endpoint lives in `handlers_integration_test.go`.
 - **HTTP:** request/response DTOs are separate from domain types; validate at the edge;
   errors use the generic `{"error":"..."}` envelope via the `writeJSON` helper.
+- **Money crosses the JSON boundary as integer minor units (centavos), never a float** —
+  serialize `int64` centavos (or a documented decimal string); parse inbound provider
+  amounts via `json.Number` or string, never `float64`. The `float64` ban extends to the wire.
 - **Doc comments cite the governing SPEC/BR** they implement (e.g. `(SPEC-002 BR-201)`)
   — keeps SDD traceability from doc to code.
 - **Language:** code, docs (PRD/SPEC/PLAN/ADR/README), comments, and commit messages are
