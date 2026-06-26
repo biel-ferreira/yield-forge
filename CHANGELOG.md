@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenAPI 3.1 API documentation** — a hand-maintained spec at [`api/openapi.yaml`](api/openapi.yaml),
+  embedded into the binary and served as interactive **Swagger UI at `GET /docs`** plus the
+  raw contract at `GET /openapi.yaml` (both public; Swagger UI from a pinned CDN, so **no new
+  Go dependency** and no vendored asset bundle — ADR-0003). All 17 endpoints documented with
+  request/response schemas, status codes, the cookie security scheme, and the centavos/bps
+  money convention.
+- **OpenAPI drift guard** — the HTTP route surface is now declared once in a `routeTable`
+  (`internal/transport/http/routes.go`), and a dependency-free unit test (`openapi_test.go`)
+  fails the build if a registered route is undocumented **or** a documented route no longer
+  exists, keeping the spec in lockstep with the router.
+- Code conventions / SDD working agreement (`CLAUDE.md`): a binding rule to update
+  `api/openapi.yaml` in the same change as any endpoint addition/change, and to refresh it on
+  spec closeout.
 - Harness: `block-layering` PostToolUse hook — deterministic gate enforcing the core
   architecture rule (a feature core package must not import SQL/HTTP/vendor SDKs),
   promoting it from subjective `hexagonal-reviewer` checks to a hard `exit 2` block.

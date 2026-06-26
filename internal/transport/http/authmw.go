@@ -44,11 +44,12 @@ func requireAuth(authn AuthService, cookieName string, logger *slog.Logger) func
 }
 
 // isPublicRoute is the allowlist of routes reachable without authentication. Health
-// and version are public for probes; register and login must be public to bootstrap
-// a session. Everything else (including unknown routes) requires auth (BR-301).
+// and version are public for probes; the API docs (spec + Swagger UI) expose only the
+// schema, never data, so they are public too; register and login must be public to
+// bootstrap a session. Everything else (including unknown routes) requires auth (BR-301).
 func isPublicRoute(method, path string) bool {
 	switch path {
-	case "/healthz", "/readyz", "/version":
+	case "/healthz", "/readyz", "/version", "/docs", "/openapi.yaml":
 		return true
 	case "/auth/register", "/auth/login":
 		return method == http.MethodPost
