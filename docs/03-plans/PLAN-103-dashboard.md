@@ -8,7 +8,7 @@
 | Related Feature | SPEC-103 — the first read-across/compute feature; the patrimony view |
 | Related Spec    | [SPEC-103](../02-specs/SPEC-103-dashboard.md)               |
 | Version         | 0.1.0                                                        |
-| Status          | Approved (decisions D1–D5 resolved)                          |
+| Status          | Done (decisions D1–D5 resolved)                             |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-26                                                   |
 

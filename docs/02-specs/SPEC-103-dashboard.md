@@ -9,7 +9,7 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — FR-004, FR-005, Epic 3, §6 Principles, §11 A4/A5, §13 Dependencies |
 | Related ADRs | [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md) (layering) |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
+| Status       | Done                                                   |
 | Plan         | [PLAN-103](../03-plans/PLAN-103-dashboard.md)          |
 
 ---

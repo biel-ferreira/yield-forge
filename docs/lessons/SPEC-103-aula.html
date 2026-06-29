@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 103 — SPEC-103: Dashboard (Patrimônio Computado) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 103 · O Dashboard · A 1ª Feature que COMPUTA</span>
+    <h1>SPEC-103 — Dashboard (Resumo, Alocação &amp; Exposição Setorial)</h1>
+    <p>A <strong>primeira feature que lê ATRAVÉS de outras features e COMPUTA</strong>: ela cruza os holdings (SPEC-102) com o mercado (SPEC-006) e deriva totais, alocação e exposição setorial. O valor atual que ela calcula <strong>É o patrimônio completo</strong> (<em>net worth</em>) — o ponto de partida que a projeção (SPEC-107) fará crescer. E a lição central é a regra binding nº 3 do PRD: <strong>"fatos são computados, não gerados"</strong> — uma função <em>pura e determinística</em>: mesmos inputs → mesmas figuras, sempre.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: a primeira feature que LÊ ATRAVÉS e COMPUTA</a></li>
+    <li><a href="#problema">O problema: "totais, alocação e exposição de relance" (Epic 3)</a></li>
+    <li><a href="#puro">LIÇÃO PRINCIPAL — "fatos são computados, não gerados": a função PURA e DETERMINÍSTICA</a></li>
+    <li><a href="#dinheiro">Dinheiro, de novo mas mais fundo: divisão (<code>ShareBps</code>) e a acumulação com <code>big.Int</code></a></li>
+    <li><a href="#degrada">Degradação graciosa: a cotação que falta vira <em>cost basis</em> + <code>stale_tickers</code></a></li>
+    <li><a href="#arq">A arquitetura (D1): uma feature de leitura "acima" de portfolio + marketdata</a></li>
+    <li><a href="#persist">Sem persistência aqui — e o lockstep do OpenAPI</a></li>
+    <li><a href="#decisoes">As 5 decisões (D1–D5) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: a primeira feature que LÊ ATRAVÉS e COMPUTA</h2>
+
+<p>Até agora cada feature era <strong>autocontida</strong>: o perfil (SPEC-101) guardava quem é o investidor; a
+carteira (SPEC-102) guardava o que ele tem; o mercado (SPEC-006) guardava as cotações. O SPEC-103 é
+diferente em natureza: ele é a <strong>primeira feature que lê <em>através</em> de duas features ao mesmo tempo e
+<em>computa</em></strong> — pega os holdings persistidos (SPEC-102) e as cotações ingeridas (SPEC-006) e os transforma
+em <strong>figuras derivadas</strong> que nenhuma das duas guarda.</p>
+
+<p>Lembre da fronteira que o SPEC-102 cravou (BR-1024): os holdings guardam <strong>o que o usuário pagou</strong> (o
+<em>cost basis</em>) — e <strong>nunca</strong> o valor de mercado, a alocação ou a renda. Isso foi deliberado: esses números
+são <strong>computados a jusante</strong>. O SPEC-103 é esse "a jusante". E o número-chave que ele computa — o
+<code>current_value_centavos</code> — <strong>é o patrimônio completo do investidor</strong> (a soma do valor atual de cada
+posição), o exato ponto de partida que a feature de projeção (SPEC-107) vai fazer crescer no horizonte.</p>
+
+<p>O que ele entrega é o pacote <code>internal/dashboard</code> com o domínio do read-model (<code>AssetClass</code>,
+<code>Summary</code>, <code>ClassSlice</code>, <code>SectorSlice</code>, <code>Dashboard</code>), a <strong>computação pura e determinística</strong>
+(<code>Compute</code>), o serviço que orquestra as leituras, os dois <strong>ports consumidores</strong> (<code>HoldingsReader</code> e
+<code>QuoteSource</code>), dois helpers novos de dinheiro (<code>money.ShareBps</code> e <code>money.AccrueSimpleInterest</code>) e
+<strong>um único endpoint</strong> <code>GET /dashboard</code>. <strong>Nenhuma tabela, nenhuma migration, nenhuma escrita.</strong></p>
+
+<div class="diagram">ANTES (SPEC-102 / SPEC-006)                DEPOIS (SPEC-103)
+  carteira: o que o usuário PAGOU         dashboard: o que a carteira VALE HOJE — computado
+  cost basis guardado, valor NÃO          current_value = patrimônio completo (net worth)
+  cotações ingeridas (worker)             holdings × cotações → totais, alocação, setores
+  cada feature é autocontida              1ª feature que LÊ ATRAVÉS de duas features
+  guarda fatos (I/O)                      COMPUTA fatos: Compute(holdings, quotes, now) PURO
+  Reader / GetFIIQuoteByTicker (seams)    consome esses seams via ports HoldingsReader/QuoteSource</div>
+
+<p>O endpoint novo (atrás da auth deny-by-default, fora da allowlist pública):</p>
+<pre><code>GET /dashboard   → 200 { summary, allocation[], fii_sectors[], stale_tickers[] } | 401</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que o dashboard é o "primeiro a computar" e por que isso importa tanto?</span>
+  Porque a regra binding nº 3 do PRD diz que <strong>"fatos são computados, não gerados"</strong> — a IA raciocina
+  <em>sobre</em> números, nunca os inventa. Mas alguém precisa <em>computar</em> esses fatos de forma confiável. O
+  SPEC-103 é a primeira feature a fazê-lo: ela cruza carteira × mercado e produz o valor atual, a alocação
+  e a renda passiva. Quando o Fact Builder (SPEC-104) montar o pacote que o Insighter recebe, ele vai
+  reusar <strong>exatamente</strong> esta computação determinística. Se as figuras daqui mudassem sozinhas, todo o
+  grounding da IA — e o Health Score "reprodutível" do PRD — perderia o chão.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="problema">2. O problema: "totais, alocação e exposição de relance"</h2>
+
+<p>O SPEC-103 resolve o enunciado central da experiência de leitura do produto (Epic 3): o investidor quer
+ver, <strong>de relance</strong>, três coisas. E cada uma é uma figura <em>derivada</em>, não armazenada:</p>
+
+<table>
+  <tr><th>Bloco</th><th>O que computa</th><th>De onde tira</th></tr>
+  <tr>
+    <td><strong>Summary</strong> (FR-1031)</td>
+    <td>total investido (cost basis), <strong>valor atual = patrimônio</strong>, renda passiva mensal, crescimento (centavos + bps)</td>
+    <td>Σ holdings × cotações (FII) + acumulação de juros (renda fixa)</td>
+  </tr>
+  <tr>
+    <td><strong>Allocation</strong> (FR-1032)</td>
+    <td>fatia de cada classe — <code>fii</code>, <code>fixed_income</code>, <code>stocks</code>, <code>etfs</code> — em valor e em <strong>bps do total</strong></td>
+    <td>valor atual agrupado por classe</td>
+  </tr>
+  <tr>
+    <td><strong>FII Sectors</strong> (FR-1033)</td>
+    <td>exposição por setor de FII (Logística, Lajes, Shopping, Híbrido, Papel, Outros) em valor e <strong>bps do total de FII</strong></td>
+    <td>valor atual de FII agrupado por setor da cotação</td>
+  </tr>
+</table>
+
+<p>Repare a grande diferença em relação a tudo que veio antes: o SPEC-102 era um <strong>CRUD</strong> (guarda e devolve
+o que recebeu); o SPEC-103 não guarda nada — ele <strong>lê, cruza e calcula</strong>. É a primeira vez que o produto
+produz um número que <em>não estava em lugar nenhum</em>. Por isso a lição central desta aula não é sobre HTTP
+nem sobre SQL: é sobre <strong>como fazer esse cálculo ser exato, auditável e reproduzível</strong>.</p>
+
+<!-- ============================================================ -->
+<h2 id="puro">3. LIÇÃO PRINCIPAL — "fatos são computados, não gerados": a função PURA e DETERMINÍSTICA</h2>
+
+<p>A peça central do SPEC-103 é uma única função, <code>dashboard.Compute</code>, e ela é o exemplo mais limpo do
+projeto inteiro da regra binding nº 3. Sua assinatura conta a história toda:</p>
+
+<pre><code>// internal/dashboard/compute.go
+// Compute é uma função PURA, sem efeitos colaterais, DETERMINÍSTICA (SPEC-103 BR-1031):
+// os mesmos inputs sempre produzem as mesmas figuras.
+func Compute(
+    holdings portfolio.Holdings,
+    quotes   map[marketdata.Ticker]marketdata.FIIQuote,
+    now      time.Time,
+) Dashboard</code></pre>
+
+<h3>3.1 — O que torna uma função "pura e determinística" (e por que importa aqui)</h3>
+
+<p>Uma função é <strong>pura</strong> quando seu resultado depende <em>só</em> dos argumentos e ela não causa nenhum efeito
+colateral (não lê banco, não chama rede, não escreve log, não mexe em estado global). É
+<strong>determinística</strong> quando os mesmos argumentos <em>sempre</em> dão o mesmo resultado. Veja como a
+<code>Compute</code> garante as duas coisas, ponto a ponto:</p>
+
+<table>
+  <tr><th>Fonte de não-determinismo</th><th>Como a <code>Compute</code> a elimina</th></tr>
+  <tr><td><code>time.Now()</code> escondido</td><td>O "agora" é o <strong>parâmetro <code>now</code></strong>, injetado pelo serviço a partir do <code>Clock</code>. A função nunca lê o relógio.</td></tr>
+  <tr><td>I/O (ler o banco / a rede lá dentro)</td><td>Os holdings e as cotações chegam <strong>já lidos</strong>, como argumentos. A função não faz nenhuma chamada externa.</td></tr>
+  <tr><td>Ordem aleatória de iteração de <code>map</code></td><td>Em Go, iterar um <code>map</code> é <strong>propositalmente aleatório</strong>. A computação dos setores itera uma <strong>lista de ordem fixa</strong> (<code>sectorOrder</code>), não o map.</td></tr>
+  <tr><td><code>float64</code> (arredondamento não-reprodutível)</td><td><strong>Zero <code>float</code></strong>: tudo é <code>int64</code> centavos / int bps, com divisão half-up centralizada.</td></tr>
+</table>
+
+<p>O detalhe da ordem dos setores é sutil e vale ver no código — é o tipo de bug que passa despercebido por
+meses e quebra um teste "às vezes":</p>
+
+<pre><code>// internal/dashboard/compute.go
+// sectorOrder fixa a ordem de iteração do breakdown de setores para a saída ser
+// determinística (um map NÃO seria — BR-1031).
+var sectorOrder = []marketdata.Sector{
+    marketdata.SectorLogistics, marketdata.SectorOffices, marketdata.SectorShopping,
+    marketdata.SectorHybrid, marketdata.SectorPaper, marketdata.SectorOther,
+}
+
+// sectors acumula valor num map, mas EMITE percorrendo a lista de ordem fixa:
+func sectors(value map[marketdata.Sector]int64, fiiTotal int64) []SectorSlice {
+    var out []SectorSlice
+    for _, s := range sectorOrder {            // ← ordem FIXA, não range value
+        if v, ok := value[s]; ok {
+            out = append(out, SectorSlice{Sector: s, ValueCentavos: v, ShareBps: money.ShareBps(v, fiiTotal)})
+        }
+    }
+    return out
+}</code></pre>
+
+<div class="box bug">
+  <span class="lbl">Por que <code>for _, s := range sectorMap</code> seria um BUG de não-determinismo</span>
+  Em Go, a ordem de iteração de um <code>map</code> é <strong>deliberadamente randomizada</strong> a cada execução (o runtime
+  faz isso de propósito, para você não depender da ordem por acidente). Se a <code>Compute</code> percorresse o
+  <code>map</code> de setores direto, a <em>mesma</em> carteira produziria o array de setores em <strong>ordens diferentes</strong> a
+  cada chamada. Os <em>valores</em> seriam iguais, mas a <strong>sequência</strong> não — e um teste que compara o resultado
+  esperado falharia esporadicamente ("flaky"), e a saída da API mudaria de ordem sem motivo. Acumular no
+  <code>map</code> (que é cômodo) mas <strong>emitir percorrendo uma lista fixa</strong> resolve: rápido para somar, estável para
+  exibir.
+</div>
+
+<h3>3.2 — RECONCILIAÇÃO: as figuras são auditáveis contra os holdings (BR-1034)</h3>
+
+<p>A segunda metade da confiança é a <strong>reconciliação</strong>. Não basta o cálculo ser determinístico; ele tem que
+<strong>bater consigo mesmo</strong>. A regra: <strong>Σ valores das classes = valor total</strong>, e <strong>Σ valores dos setores =
+total de FII</strong>. Veja como o laço principal garante isso por construção — toda peça que entra num total
+também entra no breakdown correspondente:</p>
+
+<pre><code>// internal/dashboard/compute.go — o coração do Compute
+for _, h := range holdings.FII {
+    qty := int64(h.Quantity.Value())
+    invested := h.AveragePriceCentavos * qty
+    totalInvested += invested
+
+    var current int64
+    var sector marketdata.Sector
+    if q, ok := quotes[h.Ticker]; ok {
+        current = q.PriceCentavos * qty            // valor de mercado
+        sector = q.Sector
+        monthlyIncome += q.LastDividendCentavos * qty   // renda passiva (D3)
+    } else {
+        current = invested                          // FALLBACK cost basis (FR-1036)
+        sector = marketdata.SectorOther
+        stale = append(stale, h.Ticker.String())
+    }
+    fiiCurrent  += current             // entra no total de FII...
+    sectorValue[sector] += current     // ...E no breakdown de setor — por isso reconcilia
+}
+
+for _, h := range holdings.FixedIncome {
+    totalInvested += h.InvestedAmountCentavos
+    accrued := money.AccrueSimpleInterest(h.InvestedAmountCentavos, h.AnnualRateBps, daysBetween(h.CreatedAt, now))
+    fiCurrent += h.InvestedAmountCentavos + accrued
+}
+
+totalCurrent := fiiCurrent + fiCurrent           // o PATRIMÔNIO completo (net worth)
+growth := totalCurrent - totalInvested</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que reconciliação é a base de TODA a confiança a jusante</span>
+  O Epic 3 exige que o investidor possa <strong>auditar</strong> os números: "a soma das partes tem que dar o todo". Se
+  a alocação de FII fosse computada por um caminho e o total por outro, eles poderiam divergir por um erro
+  de arredondamento — e o investidor veria "65% FII + 40% renda fixa = 105%". Aqui, <strong>cada centavo que
+  entra num total entra também no seu breakdown</strong>, pelo mesmo caminho, na mesma linha do laço. Não há como
+  divergir. Essa propriedade é o que os testes table-driven provam explicitamente (Σ slices = total), e é o
+  que torna o futuro Health Score (SPEC-106) confiável: ele pontua números que <em>fecham</em>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="dinheiro">4. Dinheiro, de novo — mas mais fundo: divisão e <code>big.Int</code></h2>
+
+<p>O SPEC-102 firmou a regra <code>int64</code> centavos / int bps em <strong>soma e produto</strong>. O SPEC-103 leva a
+disciplina a duas operações novas e mais traiçoeiras: <strong>divisão</strong> (para percentuais) e a <strong>acumulação de
+juros</strong> (que multiplica três números grandes). Ambas ganharam um helper centralizado em
+<code>internal/platform/money</code>, com <strong>uma regra de arredondamento documentada</strong> (half-up).</p>
+
+<h3>4.1 — <code>money.ShareBps</code>: parte/todo → basis points, half-up, sem divisão por zero</h3>
+
+<pre><code>// internal/platform/money/ratio.go
+// ShareBps devolve part/whole em basis points (×10000), arredondado half-up.
+// whole &lt;= 0 devolve 0 (divisão por zero é impossível). part pode ser negativo (uma perda).
+func ShareBps(part, whole int64) int {
+    if whole &lt;= 0 {
+        return 0
+    }
+    if part &lt; 0 {
+        return -ShareBps(-part, whole)
+    }
+    // floor(part*10000/whole + 1/2) = (2*part*10000 + whole) / (2*whole)
+    return int((2*part*10000 + whole) / (2 * whole))
+}</code></pre>
+
+<p>Dois detalhes de engenharia escondidos nessas quatro linhas:</p>
+<ul>
+  <li><strong>O guard <code>whole &lt;= 0</code> → 0</strong> não é defensivo por acaso: uma carteira vazia tem total 0, e sem
+  esse guard cada <code>ShareBps</code> dividiria por zero (panic). O mesmo guard protege o <code>GrowthBps</code> quando o
+  investido é 0. A spec lista esses casos de borda explicitamente.</li>
+  <li><strong>O truque <code>(2*part*10000 + whole) / (2*whole)</code></strong> faz arredondamento <em>half-up</em> usando só
+  inteiros — somar metade do divisor antes de truncar é o equivalente inteiro de "arredondar para o mais
+  próximo". É a mesma regra do <code>DecimalToMinor</code> (SPEC-006), garantindo <strong>uma única regra de
+  arredondamento</strong> no projeto.</li>
+</ul>
+
+<div class="box tip">
+  <span class="lbl">Os bps podem NÃO somar exatamente 10000 — e está tudo bem (o valor é a verdade)</span>
+  Como cada fatia é arredondada <strong>independentemente</strong> (half-up), os <code>share_bps</code> podem somar 9999 ou
+  10001 por resíduo de arredondamento — três fatias de 33,33% somam 9999 bps, não 10000. A decisão
+  consciente (PLAN-103, risco "Low") foi: <strong>os VALORES (centavos) reconciliam exatamente — eles são a fonte
+  da verdade; os bps são só exibição</strong>. Forçar Σ = 10000 exigiria o algoritmo "largest remainder", que foi
+  <em>deferido</em> até a UI realmente precisar de um "100%" exato. Saber <em>o que</em> precisa ser exato (o dinheiro)
+  e <em>o que</em> pode arredondar (a porcentagem exibida) é a disciplina aqui.
+</div>
+
+<h3>4.2 — <code>money.AccrueSimpleInterest</code>: por que <code>big.Int</code>, e por que juros simples (A4)</h3>
+
+<p>O valor atual de uma posição de renda fixa não é o cost basis cru — ele <strong>rende juros até hoje</strong>. A
+fórmula (D2): <code>principal × rateBps × dias / (10000 × 365)</code>. O perigo está no <strong>numerador</strong>:</p>
+
+<pre><code>// internal/platform/money/ratio.go
+// AccrueSimpleInterest computa o produto com big.Int para o intermediário NUNCA estourar
+// int64, depois arredonda half-up (SPEC-103 D2). O ano de 365 dias é aproximação de MVP (PRD A4).
+func AccrueSimpleInterest(principalCentavos int64, rateBps, elapsedDays int) int64 {
+    if principalCentavos &lt;= 0 || rateBps &lt;= 0 || elapsedDays &lt;= 0 {
+        return 0
+    }
+    num := new(big.Int).Mul(big.NewInt(principalCentavos), big.NewInt(int64(rateBps)))
+    num.Mul(num, big.NewInt(int64(elapsedDays)))   // principal × rate × dias
+    den := big.NewInt(10000 * 365)
+    // half-up para valores não-negativos: (2*num + den) / (2*den)
+    twoNum := new(big.Int).Lsh(num, 1)
+    twoNum.Add(twoNum, den)
+    q := new(big.Int).Quo(twoNum, new(big.Int).Lsh(den, 1))
+    return q.Int64()
+}</code></pre>
+
+<div class="box bug">
+  <span class="lbl">O risco de overflow: por que <code>int64</code> puro NÃO serve aqui</span>
+  Um <code>int64</code> vai até ~9,2 × 10<sup>18</sup>. Pegue uma posição de R$ 1 milhão (10<sup>8</sup> centavos), taxa
+  de 15% (1500 bps) e 3650 dias (10 anos): o produto intermediário <code>principal × rateBps × dias</code> é
+  10<sup>8</sup> × 1500 × 3650 ≈ <strong>5,5 × 10<sup>14</sup></strong> — ainda cabe. Mas suba para uma carteira maior ou um
+  horizonte longo e o intermediário <strong>estoura silenciosamente</strong> (em Go, overflow de inteiro <em>não</em> dá
+  panic — ele dá a volta e produz um número errado, negativo até). Um saldo subitamente negativo seria
+  catastrófico. A solução é <code>math/big.Int</code>: precisão arbitrária no produto, e só no final se converte de
+  volta a <code>int64</code> (quando o resultado, em centavos, já cabe folgado). Contraste com o <code>ShareBps</code>, cujo
+  intermediário <code>2·part·10000</code> só estouraria acima de ~R$ 4,6 trilhões — fora de qualquer carteira de
+  varejo — então ali o <code>int64</code> puro é seguro. <strong>Saber qual operação precisa de <code>big.Int</code> e qual não
+  precisa é a engenharia.</strong>
+</div>
+
+<div class="box tip">
+  <span class="lbl">Por que JUROS SIMPLES (e não compostos) — uma aproximação consciente de MVP</span>
+  A renda fixa real rende juros <em>compostos</em>. Aqui usamos juros <strong>simples</strong> de propósito: é a aproximação
+  A4 do PRD para o MVP. Por quê? Porque o objetivo do dashboard é dar uma estimativa "de relance", não um
+  extrato bancário exato — e juros simples são mais fáceis de explicar e de auditar. A dívida técnica está
+  <strong>rastreada</strong> no PLAN-103: revisitar (composto / helper compartilhado) junto com as projeções (SPEC-107),
+  que provavelmente vão reusar exatamente este helper de acumulação. Aproximar conscientemente, e
+  <em>registrar</em> a aproximação, é diferente de errar por descuido.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="degrada">5. Degradação graciosa: a cotação que falta vira cost basis</h2>
+
+<p>O mundo real é imperfeito: o worker de ingestão (SPEC-006) pode não ter uma cotação para um FII que o
+usuário possui (ticker novo, falha de fonte, dado velho). O que o dashboard faz? A pior resposta seria
+<strong>quebrar o total inteiro</strong> ou devolver erro. A decisão D4 / FR-1036 é a <strong>degradação graciosa</strong>: o FII
+sem cotação cai para o <strong>cost basis</strong> (o que o usuário pagou) e seu ticker é listado em
+<code>stale_tickers</code> — então o <strong>total ainda reconcilia</strong>, e o investidor é avisado de que aquele número é uma
+estimativa baseada no custo.</p>
+
+<p>Isso acontece em <strong>dois pontos</strong>, com uma divisão de responsabilidade elegante. Primeiro, o <strong>serviço</strong>
+trata a ausência da cotação como "não erro" — ele simplesmente <em>não coloca</em> aquele ticker no map de
+cotações:</p>
+
+<pre><code>// internal/dashboard/service.go
+q, err := s.quotes.GetFIIQuoteByTicker(ctx, h.Ticker)
+if errors.Is(err, marketdata.ErrFIIQuoteNotFound) {
+    continue   // stale — Compute cai para cost basis; NÃO é erro
+}
+if err != nil {
+    return Dashboard{}, fmt.Errorf("get dashboard: quote %s: %w", h.Ticker.String(), err)  // erro REAL borbulha
+}
+quotes[h.Ticker] = q</code></pre>
+
+<p>Depois, a <strong>função pura</strong> reage à ausência: se o ticker não está no map, usa o invested como current e
+marca o ticker como stale (veja o <code>else</code> do laço na <a href="#puro">seção 3.2</a>). A fronteira é limpa:
+<strong>"cotação ausente" não é um erro a propagar, é um estado a representar</strong> (cost basis + stale).</p>
+
+<div class="box why">
+  <span class="lbl">Cost basis vs. valor de mercado (BR-1035) — a fronteira que o SPEC-102 preparou</span>
+  Lembra que o SPEC-102 guardou só o cost basis e <strong>recusou</strong> calcular valor de mercado? Agora colhemos o
+  fruto: o dashboard usa o <strong>preço de mercado</strong> (cotação × qty) quando ele existe, e <strong>cai para o cost
+  basis</strong> quando não existe. Os dois são distintos por design — "o que paguei" (fato declarado, imutável)
+  vs. "quanto vale hoje" (derivado, volátil). O fallback não inventa um número de mercado fictício: na
+  pior das hipóteses, ele honestamente diz "estou usando o que você pagou, e te avisei via
+  <code>stale_tickers</code>". Isso é coerente com a regra binding nº 3: <strong>nunca inventar números de mercado</strong>.
+</div>
+
+<p>Há ainda um cuidado de eficiência no serviço: ele busca a cotação <strong>uma vez por ticker distinto</strong> (um
+usuário pode ter o mesmo FII em duas linhas), via um <code>map[Ticker]bool</code> de <em>já buscados</em> — evitando
+queries repetidas sem mudar o resultado.</p>
+
+<!-- ============================================================ -->
+<h2 id="arq">6. A arquitetura (D1): uma feature de leitura "acima" das outras</h2>
+
+<p>A decisão D1 foi criar um <strong>novo pacote de feature</strong>, <code>internal/dashboard</code>, que <strong>depende de</strong>
+<code>portfolio</code> e <code>marketdata</code> — mas <em>não</em> importando seus internos, e sim <strong>consumindo os seams
+publicados</strong> através de <strong>ports definidos pelo próprio consumidor</strong>. É uma dependência <strong>feature →
+feature</strong>, e a pergunta natural é: isso não cria acoplamento ruim?</p>
+
+<pre><code>// internal/dashboard/ports.go
+// HoldingsReader e QuoteSource são interfaces definidas PELO dashboard (accept interfaces).
+// portfolio.Service (via seu Reader) e o repo de cotações do marketdata as satisfazem.
+type HoldingsReader interface {
+    ListHoldings(ctx context.Context, userID string) (portfolio.Holdings, error)
+}
+type QuoteSource interface {
+    GetFIIQuoteByTicker(ctx context.Context, t marketdata.Ticker) (marketdata.FIIQuote, error)
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que isso é dependência LIMPA — o dashboard fica "acima" no grafo, acíclico</span>
+  Três coisas tornam essa dependência saudável: <strong>(1)</strong> o dashboard <strong>define</strong> as interfaces de que precisa
+  (<code>HoldingsReader</code>, <code>QuoteSource</code>) — ele depende de <em>contratos pequenos que ele mesmo desenha</em>, não
+  dos tipos concretos de <code>portfolio</code>/<code>marketdata</code>. Os ports <code>Reader</code> e <code>GetFIIQuoteByTicker</code> foram
+  <strong>publicados precisamente para consumidores a jusante</strong> (o próprio SPEC-102 anunciou o <code>Reader</code> "para
+  SPEC-103/104/107"). <strong>(2)</strong> O grafo é <strong>acíclico</strong>: <code>dashboard</code> importa <code>portfolio</code> e
+  <code>marketdata</code>; nenhum deles importa <code>dashboard</code> de volta. O dashboard fica <strong>"acima"</strong> — é um read-model
+  que compõe camadas mais baixas. <strong>(3)</strong> O core continua <strong>puro</strong>: <code>internal/dashboard</code> não importa
+  <code>database/sql</code> nem <code>net/http</code> — só os tipos de domínio (puros) das outras features e o helper de
+  <code>money</code>. O hook <code>block-layering</code> garante isso mecanicamente.
+</div>
+
+<p>E há a separação interna mais importante do pacote: a <strong>computação pura</strong> (<code>Compute</code>, sem I/O) é
+<strong>separada</strong> do <strong>serviço com I/O</strong> (<code>GetDashboard</code>, que lê pelos ports). O serviço faz o trabalho sujo
+(buscar holdings, buscar cotações), monta os argumentos e <strong>chama a função pura</strong>:</p>
+
+<pre><code>// internal/dashboard/service.go — o serviço orquestra o I/O; a função pura computa
+func (s *Service) GetDashboard(ctx context.Context, userID string) (Dashboard, error) {
+    holdings, err := s.holdings.ListHoldings(ctx, userID)   // I/O
+    // ... busca cada cotação (I/O), tratando ausência como stale ...
+    return Compute(holdings, quotes, s.clock.Now()), nil    // ← computação PURA, now do Clock
+}</code></pre>
+
+<div class="diagram">           ┌─────────── internal/dashboard (feature de leitura, "acima") ──────────┐
+ HTTP ─▶ getDashboard ─▶ │  Service.GetDashboard  (I/O: lê pelos ports)                  │
+ (driving)               │        │  ListHoldings ◀── HoldingsReader  ◀── portfolio.Service │
+                         │        │  GetFIIQuoteByTicker ◀── QuoteSource ◀── marketdata repo │
+                         │        └─▶ Compute(holdings, quotes, now)  ← PURA, determinística │
+                         │            (sem I/O, sem time.Now, sem map-range)               │
+                         └──────────────────────────────────────────────────────────────────┘
+   Grafo acíclico: dashboard → {portfolio, marketdata}.  Nenhum import de SQL/HTTP no core.</div>
+
+<!-- ============================================================ -->
+<h2 id="persist">7. Sem persistência aqui — e o lockstep do OpenAPI</h2>
+
+<p>O SPEC-103 é a primeira feature de usuário <strong>sem tabela, sem migration, sem escrita</strong> (BR-1037). Ele é
+<strong>read-only</strong>: compõe seams de leitura existentes (<code>portfolio.Reader</code> + o repo de cotações) e devolve um
+JSON computado. Isso é deliberado e mantém cada feature com uma responsabilidade só — a carteira é dona da
+escrita; o dashboard é dono da <em>vista</em>.</p>
+
+<p>Mas "sem migration" não quer dizer "sem contrato". Adicionar <code>GET /dashboard</code> exigiu tocar <strong>dois</strong>
+lugares no mesmo change, e um <strong>teste de drift</strong> falha o build se eles divergirem:</p>
+
+<table>
+  <tr><th>Onde</th><th>O quê</th></tr>
+  <tr><td><code>internal/transport/http/routes.go</code> (a <code>routeTable</code>)</td><td>A rota registrada: método, path, e o fato de estar atrás da auth (fora da allowlist).</td></tr>
+  <tr><td><code>api/openapi.yaml</code> (o contrato)</td><td>O path <code>/dashboard</code>, o <code>operationId</code>, o schema <code>DashboardResponse</code> (money como inteiro <code>*_centavos</code>, share como <code>*_bps</code>), e o <code>401</code>.</td></tr>
+</table>
+
+<pre><code># api/openapi.yaml
+  /dashboard:
+    get:
+      operationId: getDashboard
+      description: |-
+        Read-only computed view over the caller's holdings and the latest market data.
+        Money is integer centavos and shares integer basis points (never a float); a held
+        FII with no current quote is valued at cost basis and listed in `stale_tickers`.
+      responses:
+        "200": { ... $ref DashboardResponse ... }
+        "401": { $ref: Unauthorized }</code></pre>
+
+<div class="box why">
+  <span class="lbl">"OpenAPI é o contrato da API — em lockstep" — por que o teste de drift baixa erro</span>
+  O <code>openapi_test.go</code> parseia o <code>openapi.yaml</code> por indentação e cruza com a <code>routeTable</code>: se uma rota
+  registrada <strong>não está documentada</strong>, ou um path documentado <strong>não existe mais</strong>, o build <strong>falha</strong>. Isso
+  transforma "manter a doc atualizada" de uma boa intenção (que sempre apodrece) em uma <strong>invariante
+  mecânica</strong>. Como o teste lê por indentação, o arquivo tem um <em>contrato de formatação</em> (paths a 2 espaços,
+  métodos a 4) que precisa ser respeitado. E a proibição de <code>float</code> <strong>se estende ao contrato</strong>: dinheiro
+  aparece como <code>*_centavos</code> e taxa como <code>*_bps</code>, nunca um número decimal — o ban da wire vale também para a
+  especificação.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">8. As 5 decisões (D1–D5) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Onde mora o dashboard?</td>
+    <td><strong>Novo pacote <code>internal/dashboard</code></strong> compondo <code>portfolio.Reader</code> + port de cotação</td>
+    <td>Os seams de leitura existem precisamente para consumidores a jusante; a dependência é acíclica (um read-model "acima" de portfolio + marketdata). A <code>Compute</code> pura mantém o core desacoplado.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Valor atual da renda fixa?</td>
+    <td><strong>Acumulação de juros simples até hoje</strong></td>
+    <td><code>invested + invested × rate_bps × dias / (10000 × 365)</code>, half-up — a aproximação A4 do PRD. Com <code>big.Int</code> contra overflow. (Alternativa: só cost basis, deferindo a SPEC-107.)</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Renda passiva mensal?</td>
+    <td><strong>Σ FII <code>last_dividend × quantity</code></strong></td>
+    <td>FIIs distribuem mensalmente — direto e "mensal". O juro da renda fixa não é uma distribuição mensal e fica de fora dessa figura.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>FII sem cotação?</td>
+    <td><strong>Fallback para cost basis + lista em <code>stale_tickers</code></strong></td>
+    <td>O total ainda reconcilia, em vez de excluir o holding ou dar erro. O investidor é avisado de que aquele valor é uma estimativa pelo custo.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Quais classes de alocação?</td>
+    <td><strong>Todas as quatro</strong> (<code>fii</code>, <code>fixed_income</code>, <code>stocks</code>, <code>etfs</code>)</td>
+    <td>Stocks/ETFs sempre 0 no MVP (sem holdings desses tipos), mas presentes para compatibilidade futura — casa com a enumeração do FR-005.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">9. As 7 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core puro primeiro, borda depois, cada fase compilando e
+revisável sozinha. Com <strong>determinismo e reconciliação como os dois fios condutores</strong>.</p>
+
+<h3>Fase 1 — Domínio &amp; ports</h3>
+<p>O enum fechado <code>AssetClass</code> (<code>fii | fixed_income | stocks | etfs</code>) com a lista de ordem fixa
+<code>AllAssetClasses</code>; os structs computados (<code>Summary</code>, <code>ClassSlice</code>, <code>SectorSlice</code>, <code>Dashboard</code>)
+— money <code>int64</code> centavos, shares int bps, reusando <code>marketdata.Sector</code>/<code>Ticker</code>; e os dois ports
+consumidores (<code>HoldingsReader</code>, <code>QuoteSource</code>). Core puro, sem SQL/HTTP, compilando contra os tipos
+existentes de portfolio/marketdata.</p>
+
+<h3>Fase 2 — Helpers de dinheiro + a computação pura (o coração)</h3>
+<p>Os helpers em <code>internal/platform/money</code>: <code>ShareBps(part, whole) int</code> (half-up, <code>whole &lt;= 0</code> → 0) e
+<code>AccrueSimpleInterest</code> (overflow-safe com <code>big.Int</code>). E a função <code>Compute(holdings, quotes, now)</code> —
+pura: valor atual por FII (cotação × qty, ou fallback cost basis → <code>StaleTickers</code>), por renda fixa (cost
+basis + acumulação até <code>now</code>), totais, renda mensal, crescimento (centavos + bps), alocação por classe,
+agrupamento por setor em ordem fixa. Testes table-driven provando <strong>reconciliação, determinismo, fallback
+stale, vazio e guards de divisão-por-zero</strong> — sem banco nem HTTP.</p>
+
+<h3>Fase 3 — Aplicação (serviço)</h3>
+<p>O <code>dashboard.Service</code>: <code>GetDashboard(ctx, userID)</code> lê holdings via <code>HoldingsReader</code>; para cada
+ticker distinto, busca a cotação via <code>QuoteSource</code>, mapeando <code>ErrFIIQuoteNotFound</code> para "stale"
+(<code>continue</code>, não erro); chama <code>Compute</code> com o <code>now</code> do <code>Clock</code> injetado. Fakes escritos à mão (reader de
+holdings + quote source, incluindo cotação ausente).</p>
+
+<h3>Fase 4 — API (transporte)</h3>
+<p>O <code>transport/http/dashboard.go</code>: <code>GET /dashboard</code> → DTO de resposta (money inteiro <code>*_centavos</code>,
+shares <code>*_bps</code>, <code>stale_tickers []string</code> emitido como <code>[]</code> e não <code>null</code>), envelope <code>writeJSON</code>,
+identidade via <code>auth.UserID(ctx)</code> (o helper <code>callerID</code>), erro de serviço → 500, carteira vazia → 200
+zerado. <code>Deps.Dashboard</code>, registro da rota auto-protegida e fiação no <code>cmd/api</code> (reader de portfolio +
+repo de cotação + clock).</p>
+
+<h3>Fase 5 — Observabilidade</h3>
+<p>O endpoint herda o span de rota do <code>otelhttp</code> (<code>GET /dashboard</code>); as leituras de holdings/cotação
+viram spans-filho de query (só o statement, sem valores de argumento). Um teste garante <strong>nenhum valor de
+dinheiro/figura no span</strong> — nada de PII além do <code>user_id</code>.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: a computação table-driven (reconciliação, determinismo, stale, vazio,
+zero-guards, acumulação de renda fixa via <code>Clock</code> falso) — o coração da spec; os helpers de dinheiro;
+serviço com fakes (happy, cotação ausente, vazio); handler (round-trip de money como centavos, vazio →
+200, identidade-do-contexto, 401). Integração <strong>gated</strong>: Postgres real (<code>TEST_DATABASE_URL</code>, <code>-p 1</code>)
+semeando holdings (repo do SPEC-102) + <code>fii_quotes</code> (repo do SPEC-006), chamando o serviço end-to-end e
+assertando que as figuras <strong>reconciliam através dos dados de duas features</strong>.</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (endpoint <code>/dashboard</code>), <code>CHANGELOG.md</code>, <code>api/openapi.yaml</code> (o path + schema),
+SPEC-103 + PLAN-103 marcados <strong>Done</strong>, índices e status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">10. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o
+service importando o repositório <em>concreto</em>. O SPEC-103 é um caso interessante para a <strong>tradução</strong> porque
+ele <strong>não tem repositório próprio</strong> — ele é um <em>consumidor</em>: o "repository" dele são os seams de leitura de
+<em>outras</em> features. (Para a teoria completa, veja a
+<a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>; aqui aplicamos
+ela ao SPEC-103.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-103</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>dashboardHandler</code> (<strong>driving adapter</strong> — traduz HTTP ↔ caso de uso)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO de response</td><td><code>dashboardResponse</code> / <code>summaryResponse</code> / <code>classSliceResponse</code> — continuam DTOs, na borda, com dinheiro inteiro</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>dashboard.Service</code> — o caso de uso "computar o dashboard", que <strong>vive no core</strong> e depende de <strong>ports</strong>; ele orquestra o I/O e chama a função pura</td><td>Core (aplicação)</td></tr>
+  <tr><td>Repository concreto</td><td><strong>Não há um!</strong> Vira dois <strong>ports consumidores</strong> (<code>HoldingsReader</code>, <code>QuoteSource</code>, no core do dashboard) satisfeitos por adapters de <em>outras</em> features (<code>portfolio.Service</code>, repo de cotação)</td><td>Interfaces no core; implementações nas outras features</td></tr>
+  <tr><td>(novo, sem equivalente direto em camadas)</td><td><code>Compute</code> — a <strong>função pura e determinística</strong>, o "domínio" do read-model: sem I/O, sem tempo, sem map-range</td><td>Core (domínio puro)</td></tr>
+  <tr><td>Entidade de domínio</td><td><code>Summary</code>, <code>ClassSlice</code>, <code>SectorSlice</code>, <code>AssetClass</code>, <code>Dashboard</code> — puros, sem SQL/HTTP</td><td>Core (domínio puro)</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> o repositório concreto — a seta aponta <strong>para fora</strong>, rumo à infra. No
+SPEC-103 a virada é ainda mais visível, porque o dashboard <strong>define as interfaces que precisa</strong> e features
+<em>vizinhas</em> as satisfazem — a seta aponta <strong>para dentro</strong>:</p>
+
+<pre><code>// O CORE do dashboard DEFINE os ports (internal/dashboard/ports.go):
+type HoldingsReader interface {
+    ListHoldings(ctx context.Context, userID string) (portfolio.Holdings, error)
+}
+type QuoteSource interface {
+    GetFIIQuoteByTicker(ctx context.Context, t marketdata.Ticker) (marketdata.FIIQuote, error)
+}
+
+// As OUTRAS features os satisfazem — sem saber que o dashboard existe:
+//   portfolio.Service  já tem ListHoldings           → satisfaz HoldingsReader
+//   o repo de cotação  já tem GetFIIQuoteByTicker     → satisfaz QuoteSource
+// A fiação acontece só no cmd/api (a composição). A seta de dependência aponta PARA DENTRO.</code></pre>
+
+<p>O <code>internal/dashboard</code> importa só os <strong>tipos de domínio puros</strong> de <code>portfolio</code> e <code>marketdata</code> (mais o
+helper de <code>money</code>); <strong>jamais</strong> importa <code>database/sql</code> nem <code>net/http</code>. É por isso que tanto o
+<code>Service</code> quanto a <code>Compute</code> são testáveis com fakes triviais (sem banco) — e trocar Postgres por outro
+armazenamento, ou o handler HTTP por gRPC, não toca uma linha do core.</p>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem <em>aciona</em> a aplicação): o <code>dashboardHandler</code> chama o serviço através da
+  interface <code>DashboardService</code> definida no próprio transporte (consumer-defined). Fica à <strong>esquerda</strong> do
+  hexágono.</li>
+  <li><strong>Driven ports</strong> (o que a aplicação <em>aciona</em>): <code>HoldingsReader</code> e <code>QuoteSource</code>, implementados
+  por <code>portfolio.Service</code> e pelo repo de cotação. Ficam à <strong>direita</strong>.</li>
+  <li><strong>Domínio puro</strong>: a função <code>Compute</code> e os structs <code>Summary</code>/<code>ClassSlice</code>/<code>SectorSlice</code>/
+  <code>Dashboard</code>/<code>AssetClass</code>. <strong>Aplicação</strong>: o <code>Service</code> (orquestra o I/O). <strong>Borda</strong>: tudo com HTTP — o
+  handler e os DTOs.</li>
+  <li><strong>Sem driven port de escrita</strong>: ao contrário do SPEC-102, o dashboard <strong>não tem um <code>Repository</code></strong>
+  próprio — ele é puro consumidor, e não publica nenhum seam para outras features (mas a <code>Compute</code> foi
+  desenhada para o Fact Builder do SPEC-104 reusar).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA
+trilhos que <strong>baixam a taxa de erro</strong>. Veja, no SPEC-103, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "faça o dashboard" de uma vez. O PLAN-103 fatiou em 7 fases bottom-up (domínio →
+helpers+computação pura → serviço → transporte → observabilidade → testes → docs), e cada uma fechava com
+<code>go build</code> + testes verdes antes da próxima. Construir o <strong>core puro primeiro</strong> e, em especial, a
+<strong>Fase 2 (a <code>Compute</code> pura) antes do serviço e do handler</strong> significa que o coração da spec — o cálculo
+determinístico — foi escrito e <strong>provado por testes table-driven</strong> (reconciliação, determinismo, fallback,
+zero-guards) <em>sem nenhum I/O por perto</em>. Quando o serviço e o HTTP entraram (Fases 3–4), eles só
+<em>orquestravam</em> uma função já comprovada.</p>
+
+<h3>O hook determinístico <code>block-layering</code></h3>
+<p>Este foi o hook decisivo para a pergunta de arquitetura da <a href="#arq">D1</a>: <code>dashboard</code> importa
+<code>portfolio</code> e <code>marketdata</code> — isso é permitido? O hook <code>block-layering</code> (PostToolUse, <code>exit 2</code>) barra
+<strong>mecanicamente</strong> qualquer import de SQL/HTTP/SDK de vendor dentro de um core de feature. Importar os
+<strong>tipos de domínio puros</strong> de outra feature (<code>portfolio.Holdings</code>, <code>marketdata.FIIQuote</code>, o helper de
+<code>money</code>) <strong>passa</strong>; se a IA tivesse tentado meter um <code>database/sql</code> ou um <code>net/http</code> dentro de
+<code>internal/dashboard</code>, o hook teria <strong>bloqueado o commit</strong> — sem depender de revisão humana. É o que
+garante, na prática, que a feature de leitura ficou "acima" e o core ficou puro.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong> (o grafo
+acíclico <code>dashboard → {portfolio, marketdata}</code>, sem ciclo de volta) e, sobretudo, o uso de <strong>ports
+definidos pelo consumidor</strong> (BR-1035) em vez de acoplar aos internos de portfolio/marketdata. Foi a lente
+que firmou a separação <strong>computação pura vs. serviço com I/O</strong> e a identidade vinda só de
+<code>auth.UserID(ctx)</code>.</p>
+
+<h3>O <code>go-correctness-reviewer</code> e a disciplina de dinheiro / determinismo</h3>
+<p>Sendo a feature que <strong>computa dinheiro</strong>, a lente de correção vigiou o risco nº 1 do plano (PLAN-103
+§8): <strong>não-determinismo de arredondamento / vazamento de <code>float</code></strong>. Ela garantiu que <strong>nenhuma</strong> figura,
+DTO ou cálculo usasse <code>float64</code>; que toda razão passasse pelo <code>money.ShareBps</code> half-up; que a
+<strong>acumulação usasse <code>big.Int</code></strong> contra overflow (o risco "Medium" do plano); e — crítico — que os setores
+fossem emitidos em <strong>ordem fixa</strong>, não por <code>range</code> de map. Também cobrou o <code>%w</code> + prefixo minúsculo nos
+erros e o <code>Clock</code> no lugar de <code>time.Now()</code>.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que a <code>Compute</code> é pura — e por que isso é a melhor garantia possível</span>
+  É a <strong>assinatura</strong> que prova: <code>Compute(holdings, quotes, now) Dashboard</code> não recebe um <code>ctx</code>, não
+  recebe um repo, não recebe um logger — <strong>não tem como fazer I/O nem ler o relógio</strong>, porque não recebeu
+  nada que permita isso. O <code>now</code> entra como valor. O compilador <em>impede</em> um efeito colateral que a função
+  não tem ferramenta para causar. Some a isso o hook <code>block-layering</code> (sem import de SQL/HTTP no pacote) e
+  você tem a determinismo <strong>garantido por construção</strong>, não por boa-fé — exatamente o que o PRD exige para
+  "mesmos inputs → mesmo resultado".
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>block-layering</strong>: o bloqueio duro que provou que o core <code>dashboard</code> ficou livre de SQL/HTTP, ao
+  mesmo tempo que <em>permitiu</em> o consumo dos tipos de domínio puros de <code>portfolio</code>/<code>marketdata</code>.</li>
+  <li><strong>O teste de drift do OpenAPI</strong>: ao adicionar <code>GET /dashboard</code> na <code>routeTable</code>, o
+  <code>openapi_test.go</code> <em>exigiu</em> a entrada correspondente em <code>api/openapi.yaml</code> — senão o build falharia
+  (<a href="#persist">seção 7</a>).</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-103 referencia o ADR-0002 mas <strong>não o edita</strong> — se a IA
+  tentasse "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos — e os
+  testes têm que passar <strong>sem rede e sem DB</strong>. A integração (seed de holdings + cotações, reconciliação
+  end-to-end) fica atrás do gate de <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo no CI.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-103</th><th>Por que baixa erro</th></tr>
+  <tr><td>Fatos são computados, não gerados</td><td><code>Compute</code> pura e determinística; setores em ordem fixa; sem <code>float</code></td><td>Mesmos inputs → mesmas figuras; o grounding da IA a jusante é confiável.</td></tr>
+  <tr><td>Dinheiro nunca é <code>float64</code> (incl. a wire)</td><td><code>int64</code> centavos / int bps no domínio e no JSON (<code>*_centavos</code>/<code>*_bps</code>); <code>ShareBps</code>/<code>AccrueSimpleInterest</code> half-up</td><td>Saldos exatos e reproduzíveis; nenhum drift de arredondamento corrompe o patrimônio.</td></tr>
+  <tr><td>Tempo vem do <code>Clock</code>, nunca <code>time.Now()</code></td><td>O <code>now</code> da <code>Compute</code> e a acumulação de renda fixa usam <code>s.clock.Now()</code></td><td>A acumulação de juros é testável de forma determinística — sem fixture que muda amanhã.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>HoldingsReader</code> e <code>QuoteSource</code> no <code>dashboard</code>; <code>DashboardService</code> no transporte</td><td>Fakes triviais nos testes; o dashboard depende de contratos que ele desenha, não dos internos alheios.</td></tr>
+  <tr><td>Identidade do contexto, nunca do payload</td><td><code>callerID</code> lê <code>auth.UserID(ctx)</code>; nenhum <code>user_id</code> na request</td><td>Cada usuário só vê figuras derivadas dos próprios holdings — sem vazamento.</td></tr>
+  <tr><td>Erros são sentinelas, checados com <code>errors.Is</code></td><td><code>errors.Is(err, marketdata.ErrFIIQuoteNotFound)</code> distingue "stale" de erro real</td><td>Cotação ausente é estado (cost basis), não falha — sem confundir os dois.</td></tr>
+  <tr><td>OpenAPI em lockstep</td><td><code>GET /dashboard</code> na <code>routeTable</code> + em <code>api/openapi.yaml</code>, guardado pelo teste de drift</td><td>O contrato nunca apodrece; doc e código não divergem.</td></tr>
+  <tr><td>Sem stutter de nome de pacote</td><td><code>dashboard.Service</code>, <code>dashboard.Compute</code> (não <code>dashboard.DashboardService</code>)</td><td>API limpa no call site.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só <code>math/big</code> da stdlib para a acumulação</td><td>Zero download novo; superfície de ataque e manutenção mínimas.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering</h2>
+
+<p>O SPEC-103 <strong>não</strong> é uma feature de IA (FR-013/FR-014 não se aplicam — não há saída de LLM aqui). Mas ele
+é, mais do que qualquer spec anterior, o <strong>substrato de fatos</strong> sobre o qual a IA vai raciocinar. É o
+<em>Fact Builder em embrião</em>.</p>
+
+<table>
+  <tr><th>O que construímos agora</th><th>Como serve a IA depois</th></tr>
+  <tr>
+    <td><strong>A função pura <code>Compute</code> (BR-1031)</strong></td>
+    <td>A regra de ouro da IA confiável é "o modelo raciocina sobre fatos, não os inventa". O <code>Compute</code> é a <strong>máquina que produz esses fatos</strong>: valor atual, alocação, exposição setorial, renda passiva. O Fact Builder (SPEC-104) vai <strong>reusar exatamente esta computação</strong> (ou suas partes) para montar o pacote <code>Facts</code> que o Insighter recebe. O LLM nunca calcula um saldo; ele recebe o resultado determinístico daqui.</td>
+  </tr>
+  <tr>
+    <td><strong>Determinismo → reprodutibilidade</strong></td>
+    <td>"Mesmos inputs → mesmo Health Score" (PRD §6) só é possível porque as figuras-base são determinísticas. Sem isso, o mesmo prompt produziria scores ligeiramente diferentes a cada rodada — e a <strong>explicabilidade (FR-013)</strong> perderia o chão, porque a explicação descreveria um número que muda sozinho.</td>
+  </tr>
+  <tr>
+    <td><strong>Reconciliação (BR-1034)</strong></td>
+    <td>O Health Score (SPEC-106) e o rebalanceamento (SPEC-105) vão pontuar concentração e diversificação <em>a partir da alocação</em>. Se as fatias não fechassem com o total, o score seria construído sobre areia. A reconciliação garantida aqui é o alicerce auditável desses julgamentos.</td>
+  </tr>
+  <tr>
+    <td><strong>Degradação graciosa + <code>stale_tickers</code></strong></td>
+    <td>Quando o Insighter raciocinar sobre a carteira, ele precisa saber <strong>quais fatos são firmes e quais são estimativas</strong>. O <code>stale_tickers</code> é exatamente esse sinal de proveniência: um insight honesto pode dizer "esta análise usou cost basis para X, pois faltava cotação" — em vez de fingir certeza sobre um número incerto.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA orientada a objetivo precisa de <strong>fatos exatos e auditáveis sobre o investidor</strong>. O SPEC-101 instalou
+  <em>quem ele é</em>; o SPEC-102, <em>o que ele tem</em> (o cost basis); o SPEC-103 é o primeiro a <strong>computar</strong> — o
+  que a carteira <em>vale hoje</em>, como está alocada, quanto rende. Tudo de forma pura, determinística e
+  reconciliável. Quando o Fact Builder chegar (SPEC-104), ele reusa esta <code>Compute</code>, cruza com o perfil e
+  com o mercado, e entrega ao <code>Insighter</code> um pacote de <code>Facts</code> que <em>não muda sozinho</em> — finalmente
+  respondendo, com explicação: <em>"sua carteira está alinhada aos seus objetivos?"</em>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir</h2>
+
+<p>Com o dashboard computando o patrimônio atual de forma determinística, as features de IA que <strong>raciocinam
+sobre a carteira</strong> agora têm o substrato pronto. Repare como cada uma se apoia na <code>Compute</code> e nas figuras
+que ela produz.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como usa o SPEC-103</th></tr>
+  <tr><td>SPEC-104</td><td>Fact Builder + Insighter</td><td><strong>Reusa a <code>Compute</code></strong> (ou suas partes) como o core do Fact Builder — junta o valor atual/alocação/renda + o perfil + o mercado, e entrega ao <code>Insighter</code> como <code>Facts</code> determinísticos. O grounding.</td></tr>
+  <tr><td>SPEC-105</td><td>Assistente de Rebalanceamento</td><td>Usa a <strong>alocação atual</strong> (deste dashboard) contra o perfil de risco para sugerir <em>áreas</em> de ajuste — nunca ordens específicas (FR-014).</td></tr>
+  <tr><td>SPEC-106</td><td>Health Score</td><td>Pontua a carteira (concentração, diversificação) a partir da <strong>alocação e exposição setorial</strong> reconciliadas aqui — "saudável <em>para esse investidor</em>".</td></tr>
+  <tr><td>SPEC-107</td><td>Projeções</td><td><strong>Cresce o patrimônio para a frente</strong>: parte do <code>current_value_centavos</code> (o net worth deste dashboard) + um plano de aportes + cenários (otimista/moderado/pessimista). Provavelmente reusa o helper <code>AccrueSimpleInterest</code>.</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…004</td><td>Esqueleto, persistência, auth, observabilidade</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptador de LLM</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101</td><td>Perfil do investidor (escopado por <code>user_id</code>)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-102</td><td>Carteira (FIIs + renda fixa, por usuário, com dinheiro)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-103</td><td>Dashboard (computa patrimônio, alocação, setores)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-104</td><td>Fact Builder + Insighter (reusa a <code>Compute</code>)</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">A <code>Compute</code> como semente do multi-agente CIO + MCP</span>
+  Olhando longe: o futuro sistema multi-agente (o "CIO") precisa de uma <strong>vista única e confiável do estado
+  da carteira</strong> para raciocinar. A <code>Compute</code> é exatamente isso — uma função pura que, dado o que o usuário
+  tem e o que o mercado diz, devolve o retrato completo e auditável. Cada agente que precisar saber "quanto
+  vale e como está alocada a carteira deste usuário" passa pela mesma computação determinística — sem
+  acoplamento a HTTP/SQL, isolada por usuário. Quando o CIO chegar, ele herda essa costura intacta; e, no
+  mundo MCP, a <code>Compute</code> (ou o serviço que a expõe) vira uma "ferramenta" plugável que produz fatos
+  reprodutíveis para qualquer agente consultar.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-103 o YieldForge ganhou sua <strong>primeira feature que lê através de outras e COMPUTA</strong>: o dashboard
+  cruza holdings (SPEC-102) com cotações (SPEC-006) numa <strong>função pura e determinística</strong>
+  (<code>Compute(holdings, quotes, now)</code>) que deriva o <strong>patrimônio completo</strong>, a alocação e a exposição
+  setorial — tudo em <code>int64</code> centavos / int bps (com <code>ShareBps</code> half-up e acumulação <code>big.Int</code>
+  overflow-safe), <strong>reconciliando</strong> contra os holdings, com <strong>fallback gracioso</strong> para cost basis +
+  <code>stale_tickers</code>, sem nenhuma tabela nova — o substrato de fatos que o Fact Builder, o Health Score e as
+  projeções vão reusar a seguir.
+</div>
+
+<footer>
+  YieldForge · Aula 103 (SPEC-103) · gerada como material de estudo. Veja também a
+  <a href="SPEC-102-aula.html">Aula 102</a> (a carteira — o cost basis que esta computa), a
+  <a href="SPEC-006-aula.html">Aula 06</a> (dinheiro em centavos &amp; as cotações que esta cruza), a
+  <a href="SPEC-101-aula.html">Aula 101</a> (perfil — a outra metade do grounding), a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-103-dashboard.md">SPEC-103</a>
+  e o <a href="../03-plans/PLAN-103-dashboard.md">PLAN-103</a>.
+</footer>
+
+</div>
+</body>
+</html>
