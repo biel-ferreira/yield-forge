@@ -5,8 +5,9 @@ import "math/big"
 // ShareBps returns part/whole expressed in basis points (×10000), rounded half-away-from-zero
 // — the project's documented rule, consistent with DecimalToMinor (SPEC-103 BR-1032). A whole
 // of 0 (or negative) yields 0, so a divide-by-zero is impossible. part may be negative (e.g. a
-// loss); whole is expected non-negative (a total). For realistic centavos magnitudes the
-// intermediate product stays well within int64.
+// loss); whole is expected non-negative (a total). The intermediate `2*part*10000` overflows
+// int64 only for |part| > ~4.6e14 centavos (≈ R$4.6 trillion) — far beyond any retail
+// portfolio, so int64 arithmetic is safe here (unlike the accrual, which needs big.Int).
 //
 //	ShareBps(70, 100) -> 7000   // 70.00%
 //	ShareBps(1, 3)    -> 3333    // 33.33%, half-up

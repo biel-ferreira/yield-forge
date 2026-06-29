@@ -106,6 +106,17 @@ func TestCompute_Empty(t *testing.T) {
 	require.Len(t, d.Allocation, 4, "all four classes always present, at 0")
 }
 
+func TestCompute_Loss(t *testing.T) {
+	// Bought at 200,00; the market dropped to 150,00 → a loss, with negative growth bps.
+	holdings := portfolio.Holdings{FII: []portfolio.FIIHolding{mustFII(t, "HGLG11", 10, 20_000)}} // cost 200_000
+	quotes := map[marketdata.Ticker]marketdata.FIIQuote{
+		marketdata.MustParseTicker("HGLG11"): quote("HGLG11", 15_000, marketdata.SectorLogistics, 0), // current 150_000
+	}
+	d := Compute(holdings, quotes, time.Now())
+	require.Equal(t, int64(-50_000), d.Summary.GrowthCentavos)
+	require.Equal(t, -2_500, d.Summary.GrowthBps, "a 25% loss → -2500 bps")
+}
+
 func TestCompute_ZeroTotalNoPanic(t *testing.T) {
 	// A holding with 0 average price and no quote → all values 0, shares 0, no divide-by-zero.
 	holdings := portfolio.Holdings{FII: []portfolio.FIIHolding{mustFII(t, "HGLG11", 100, 0)}}
