@@ -8,7 +8,7 @@
 | Related Feature | SPEC-105 — second consumer of the published Fact Builder seam |
 | Related Spec    | [SPEC-105](../02-specs/SPEC-105-ai-rebalancing-assistant.md) |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                       |
+| Status          | Done                                                        |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-29                                                   |
 

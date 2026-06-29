@@ -7,7 +7,7 @@
 | Feature Name | AI Rebalancing Assistant                               |
 | Feature ID   | SPEC-105                                                |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
+| Status       | Done                                                   |
 | Author       | Gabigol                                                |
 | Last Updated | 2026-06-29                                             |
 | Related PRD  | [PRD](../01-product/PRD.md) §Epic 6, FR-011, FR-013, FR-014 |
