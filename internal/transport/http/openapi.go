@@ -14,7 +14,8 @@ const swaggerUIVersion = "5.17.14"
 // swaggerUITemplate renders the embedded OpenAPI spec with Swagger UI loaded from a
 // pinned CDN build — no Go dependency and no vendored multi-megabyte asset bundle
 // (ADR-0003 zero-cost / stdlib-first). The spec itself is served locally at
-// /openapi.yaml, so the API contract never leaves the deployment.
+// /openapi.yaml, so the API contract never leaves the deployment; only the rendering
+// UI is fetched from the CDN.
 const swaggerUITemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -50,7 +51,7 @@ func serveOpenAPISpec(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(api.OpenAPISpec)
 }
 
-// serveSwaggerUI serves the Swagger UI HTML that renders /openapi.yaml.
+// serveSwaggerUI serves the Swagger UI host page that renders /openapi.yaml.
 func serveSwaggerUI(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)

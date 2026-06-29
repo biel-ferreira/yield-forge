@@ -564,3 +564,26 @@ func TestLoadDotEnvIfPresent_MissingFileIsNoop(t *testing.T) {
 	// Must not panic or error on a missing file.
 	loadDotEnvIfPresent(filepath.Join(t.TempDir(), "does-not-exist.env"))
 }
+
+func TestParseDotEnvValue(t *testing.T) {
+	cases := []struct {
+		name, raw, want string
+	}{
+		{"plain", "fromfile", "fromfile"},
+		{"inline comment", "10                   # default: 10", "10"},
+		{"inline comment tab", "5s\t# bounded", "5s"},
+		{"hash without leading space is kept", "secret#1", "secret#1"},
+		{"url with query is kept", "postgres://u:p@h:5433/db?sslmode=disable", "postgres://u:p@h:5433/db?sslmode=disable"},
+		{"double quoted strips quotes and trailing comment", "\"quoted value\"   # note", "quoted value"},
+		{"single quoted keeps inner hash", "'a # b'", "a # b"},
+		{"leading whitespace trimmed", "   spaced   # c", "spaced"},
+		{"empty", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseDotEnvValue(tc.raw); got != tc.want {
+				t.Errorf("parseDotEnvValue(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}

@@ -203,6 +203,10 @@ embedded into the binary and served two public ways:
 | GET    | `/docs`         | Interactive **Swagger UI** (renders the spec)        |
 | GET    | `/openapi.yaml` | The raw OpenAPI 3.1 document                          |
 
+The spec is served locally (embedded); `/docs` loads the Swagger UI rendering assets from a
+pinned CDN build, so there is no extra Go dependency. (The `/docs` page therefore needs
+internet to render; the spec at `/openapi.yaml` is fully local.)
+
 The spec is kept in lockstep with the router by a build-failing drift test
 (`internal/transport/http/openapi_test.go`): every registered route must be documented, and
 vice-versa. Adding or changing an endpoint **requires** updating `api/openapi.yaml` in the

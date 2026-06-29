@@ -16,10 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **OpenAPI 3.1 API documentation** — a hand-maintained spec at [`api/openapi.yaml`](api/openapi.yaml),
   embedded into the binary and served as interactive **Swagger UI at `GET /docs`** plus the
-  raw contract at `GET /openapi.yaml` (both public; Swagger UI from a pinned CDN, so **no new
-  Go dependency** and no vendored asset bundle — ADR-0003). All 17 endpoints documented with
-  request/response schemas, status codes, the cookie security scheme, and the centavos/bps
-  money convention.
+  raw contract at `GET /openapi.yaml` (both public). The spec is served locally; the Swagger UI
+  rendering assets load from a pinned CDN build (`swagger-ui-dist@5.17.14`), so there is **no new
+  Go dependency** (ADR-0003). All 17 endpoints documented with request/response schemas, status
+  codes, the cookie security scheme, and the centavos/bps money convention.
 - **OpenAPI drift guard** — the HTTP route surface is now declared once in a `routeTable`
   (`internal/transport/http/routes.go`), and a dependency-free unit test (`openapi_test.go`)
   fails the build if a registered route is undocumented **or** a documented route no longer
@@ -327,6 +327,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `.env` loader now strips inline `# comments` from values (respecting quotes), so
+  `.env.example`'s annotated lines (`DB_MAX_OPEN_CONNS=10   # default: 10`) can be copied
+  verbatim into a working `.env` instead of being parsed as invalid values.
 - `.gitignore` had been overwritten with a literal PowerShell here-string, leaving all
   ignore rules inert; restored to plain patterns so `.env`, `/bin/`, and build
   artifacts are ignored again.

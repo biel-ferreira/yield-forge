@@ -519,13 +519,7 @@ func loadDotEnvIfPresent(path string) {
 			continue
 		}
 		key = strings.TrimSpace(key)
-		val = strings.TrimSpace(val)
-		if len(val) >= 2 {
-			first, last := val[0], val[len(val)-1]
-			if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
-				val = val[1 : len(val)-1]
-			}
-		}
+		val = parseDotEnvValue(val)
 		if key == "" {
 			continue
 		}
@@ -533,4 +527,32 @@ func loadDotEnvIfPresent(path string) {
 			_ = os.Setenv(key, val)
 		}
 	}
+}
+
+// parseDotEnvValue extracts the value from the right-hand side of a KEY=VALUE line.
+// A quoted value ("..." or '...') is taken verbatim between the quotes, and anything
+// after the closing quote (e.g. an inline comment) is dropped. An unquoted value has
+// any inline comment — a '#' introduced by whitespace — stripped, then is trimmed.
+// This lets `.env.example`'s annotated lines (`KEY=10   # default: 10`) be copied
+// verbatim into a working `.env`.
+func parseDotEnvValue(raw string) string {
+	v := strings.TrimLeft(raw, " \t")
+	if v == "" {
+		return ""
+	}
+	if q := v[0]; q == '"' || q == '\'' {
+		if end := strings.IndexByte(v[1:], q); end >= 0 {
+			return v[1 : 1+end]
+		}
+		// Unterminated quote: fall back to treating it as an unquoted value.
+	}
+	// Unquoted: an inline comment starts at the first '#' preceded by whitespace
+	// (so a '#' inside the value itself, e.g. a URL fragment, is preserved).
+	for i := 1; i < len(v); i++ {
+		if v[i] == '#' && (v[i-1] == ' ' || v[i-1] == '\t') {
+			v = v[:i]
+			break
+		}
+	}
+	return strings.TrimRight(v, " \t")
 }
