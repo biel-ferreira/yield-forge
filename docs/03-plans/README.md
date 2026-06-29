@@ -30,6 +30,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-006 | SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](PLAN-006-marketdata-port-and-ingestion-worker.md) | ✅ Done |
 | PLAN-101 | SPEC-101 | [Investor Profile](PLAN-101-investor-profile.md) | ✅ Done |
 | PLAN-102 | SPEC-102 | [Portfolio Management (FII + FI)](PLAN-102-portfolio-management.md) | ✅ Done |
+| PLAN-103 | SPEC-103 | [Dashboard](PLAN-103-dashboard.md) | 📋 Approved |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
 
