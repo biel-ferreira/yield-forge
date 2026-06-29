@@ -58,7 +58,7 @@ func documentedRoutes(t *testing.T) map[string]bool {
 
 func registeredRoutes() map[string]bool {
 	out := map[string]bool{}
-	for _, rt := range routeTable(apiHandler{}, authHandler{}, profileHandler{}, holdingsHandler{}, dashboardHandler{}, insightsHandler{}) {
+	for _, rt := range routeTable(apiHandler{}, authHandler{}, profileHandler{}, holdingsHandler{}, dashboardHandler{}, insightsHandler{}, rebalancingHandler{}) {
 		out[rt.method+" "+rt.pattern] = true
 	}
 	return out

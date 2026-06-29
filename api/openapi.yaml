@@ -423,6 +423,45 @@ paths:
                 $ref: "#/components/schemas/InsightsResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /rebalancing:
+    post:
+      tags: [rebalancing]
+      summary: Generate explainable contribution guidance (areas, computed split, candidates)
+      operationId: postRebalancing
+      description: |-
+        Given a contribution amount, suggest where to focus the new money: areas (each with a
+        deterministically computed `suggested_share_bps`, summing to 10000), with grounded named
+        FII candidates nested inside the FII area. The percentages are computed, not generated; the
+        gated Insighter only explains them — every area/candidate carries an explanation (FR-013)
+        and never a transaction order (FR-014); the response carries the non-advice disclaimer.
+        `available` is false on a full LLM outage. `include_asset_shares` opts into an illustrative
+        per-candidate share. Money is integer centavos; never a float.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contribution_centavos:
+                  type: integer
+                  format: int64
+                  description: The amount to allocate, in centavos (> 0).
+                include_asset_shares:
+                  type: boolean
+                  description: Opt into the illustrative per-candidate within-area share (default false).
+              required: [contribution_centavos]
+      responses:
+        "200":
+          description: The generated guidance (possibly degraded — see `available`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebalancingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     cookieAuth:
@@ -625,6 +664,59 @@ components:
           type: boolean
           description: False when the LLM was fully unavailable (insights empty).
       required: [insights, disclaimer, available]
+    RebalancingResponse:
+      type: object
+      description: Contribution guidance — areas with a computed split + grounded candidates.
+      properties:
+        areas:
+          type: array
+          items:
+            type: object
+            properties:
+              class:
+                type: string
+                enum: [fii, fixed_income]
+              suggested_share_bps:
+                type: integer
+                description: Computed share of the contribution, basis points (areas sum to 10000).
+              suggested_amount_centavos:
+                type: integer
+                format: int64
+              title:
+                type: string
+              detail:
+                type: string
+              explanation:
+                type: string
+                description: Always present — the explainability gate (FR-013) guarantees it.
+              candidates:
+                type: array
+                description: Grounded named candidates (FII area only); each a consideration, never an order.
+                items:
+                  type: object
+                  properties:
+                    ticker:
+                      type: string
+                    sector:
+                      type: string
+                    title:
+                      type: string
+                    detail:
+                      type: string
+                    explanation:
+                      type: string
+                    illustrative_share_bps:
+                      type: integer
+                      description: Present only when include_asset_shares was requested.
+                  required: [ticker, sector, title, detail, explanation]
+            required: [class, suggested_share_bps, suggested_amount_centavos, title, detail, explanation, candidates]
+        disclaimer:
+          type: string
+          description: The non-advice disclaimer (FR-014).
+        available:
+          type: boolean
+          description: False when the LLM was fully unavailable (areas empty).
+      required: [areas, disclaimer, available]
     DashboardResponse:
       type: object
       description: Computed portfolio dashboard. All money is integer centavos; all shares are basis points.

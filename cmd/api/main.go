@@ -28,6 +28,7 @@ import (
 	portfoliopostgres "github.com/biel-ferreira/yield-forge/internal/portfolio/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/profile"
 	profilepostgres "github.com/biel-ferreira/yield-forge/internal/profile/postgres"
+	"github.com/biel-ferreira/yield-forge/internal/rebalancing"
 	transporthttp "github.com/biel-ferreira/yield-forge/internal/transport/http"
 )
 
@@ -122,18 +123,17 @@ func run() error {
 
 	// Dashboard (SPEC-103): a read-only compute service over the portfolio holdings reader and
 	// the market-data FII quote repository.
-	dashboardService := dashboard.NewService(
-		portfolioService,
-		marketdatapostgres.NewFIIQuoteRepository(db),
-		clock.System{},
-	)
+	fiiQuoteRepo := marketdatapostgres.NewFIIQuoteRepository(db)
+	dashboardService := dashboard.NewService(portfolioService, fiiQuoteRepo, clock.System{})
 
-	// AI Insight Engine (SPEC-104): the Fact Builder (dashboard + profile + macro seams) feeding
-	// the gated Insighter (SPEC-005). The Insighter provider is config-selected; default `fake`.
-	insightEngine := insightengine.NewService(
-		insightengine.NewFactBuilder(dashboardService, profileService, marketdatapostgres.NewMacroRepository(db)),
-		insightfactory.New(cfg, logger, clock.System{}),
-	)
+	// The AI features share one Fact Builder (dashboard + profile + macro seams, SPEC-104) and one
+	// gated Insighter (SPEC-005; provider config-selected, default `fake`).
+	factBuilder := insightengine.NewFactBuilder(dashboardService, profileService, marketdatapostgres.NewMacroRepository(db))
+	insighter := insightfactory.New(cfg, logger, clock.System{})
+
+	// AI Insight Engine (SPEC-104) + AI Rebalancing Assistant (SPEC-105, grounded in the FII universe).
+	insightEngine := insightengine.NewService(factBuilder, insighter)
+	rebalancingEngine := rebalancing.NewService(factBuilder, fiiQuoteRepo, insighter)
 
 	router := transporthttp.NewRouter(transporthttp.Deps{
 		Logger:       logger,
@@ -144,6 +144,7 @@ func run() error {
 		Portfolio:    portfolioService,
 		Dashboard:    dashboardService,
 		Insights:     insightEngine,
+		Rebalancing:  rebalancingEngine,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,
