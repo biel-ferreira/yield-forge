@@ -53,6 +53,10 @@ func (s *Service) Insights(ctx context.Context, userID string) (Insights, error)
 			UserID: userID,
 		})
 		if err != nil {
+			// A cancelled/timed-out request must abort, not silently degrade to "unavailable".
+			if ctx.Err() != nil {
+				return Insights{}, fmt.Errorf("insights: %w", ctx.Err())
+			}
 			continue // this category degraded or was gate-rejected — skip it (FR-1047)
 		}
 		succeeded++

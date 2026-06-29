@@ -8,7 +8,7 @@
 | Related Feature | SPEC-104 — the capstone AI feature; the published Fact Builder seam |
 | Related Spec    | [SPEC-104](../02-specs/SPEC-104-ai-insight-engine.md)       |
 | Version         | 0.1.0                                                        |
-| Status          | Approved (decisions D1–D6 resolved)                          |
+| Status          | Done                                                         |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-29                                                   |
 

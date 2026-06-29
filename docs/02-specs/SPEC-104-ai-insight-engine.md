@@ -9,7 +9,7 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — FR-008, FR-009, FR-010, FR-013, FR-014, FR-019/020/021, Epic 5, §6 Principles |
 | Related ADRs | [ADR-0003](../04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md), [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md) |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
+| Status       | Done                                                   |
 | Plan         | [PLAN-104](../03-plans/PLAN-104-ai-insight-engine.md)  |
 
 ---

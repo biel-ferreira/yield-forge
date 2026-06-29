@@ -125,6 +125,9 @@ func (b *FactBuilder) addMacroFacts(ctx context.Context, facts insight.Facts) er
 
 // hasHoldings reports whether the facts describe a non-empty portfolio (something to analyse).
 // The engine uses it to short-circuit the empty-portfolio state without an LLM call (FR-1047).
+// The assertion type mirrors the int64 centavos written by BuildFacts; a portfolio whose every
+// position has zero cost basis AND zero current value has nothing to reason over, so reading it
+// as empty is intended.
 func hasHoldings(facts insight.Facts) bool {
 	invested, _ := facts["total_invested_centavos"].(int64)
 	current, _ := facts["current_value_centavos"].(int64)

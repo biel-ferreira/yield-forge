@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-104 — AI Insight Engine**: the first AI feature reaching users. A deterministic
+  **Fact Builder** (`engine.BuildFacts`) composes a structured snapshot from the dashboard
+  (SPEC-103), profile (SPEC-101), and macro (SPEC-006) seams — money as `int64` centavos and
+  rates as integer basis points, never a float — and the engine calls the gated `Insighter`
+  (SPEC-005) once per category (portfolio / allocation / market_context), so explainability
+  (FR-013) and non-advice (FR-014) hold **by construction**: user-facing AI text is emitted
+  only through the port. New `GET /insights` (auth-scoped) returns category-tagged insights —
+  each carrying an `explanation` — plus the non-advice `disclaimer`; an empty portfolio
+  short-circuits with no LLM call, and a full LLM outage degrades to `200 available:false`
+  (a partial result when only some categories fail). The Fact Builder is a **published,
+  reusable seam** the Conversational Copilot (SPEC-108) and SPEC-105/106 consume. No new
+  tables; documented in `api/openapi.yaml`; PT-BR lesson `docs/lessons/SPEC-104-aula.html`.
 - **SPEC-108 — Conversational Copilot (Chat)** (Draft): a multi-turn, fact-grounded chat where the
   investor asks free-form questions about their portfolio, allocation, market context, and the
   current month's contribution strategy ("tenho R$X pra aportar"). It introduces no new reasoning

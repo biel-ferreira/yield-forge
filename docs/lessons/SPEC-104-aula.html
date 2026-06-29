@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 104 — SPEC-104: AI Insight Engine (Fact Builder + Insights Explicáveis) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 104 · O Motor de Insights · A 1ª Feature de IA que CHEGA AO USUÁRIO</span>
+    <h1>SPEC-104 — AI Insight Engine (Fact Builder + Insights Explicáveis)</h1>
+    <p>É aqui que todo o stack vira <strong>produto</strong>: o motor pega os <strong>fatos determinísticos</strong> (carteira computada + perfil + macro), entrega ao <code>Insighter</code> (SPEC-005) e devolve insights explicáveis sobre <strong>carteira, alocação e contexto de mercado</strong> — sem nunca inventar um número. A lição central são as <strong>duas travas binding por construção</strong>: os fatos são <em>computados, não gerados</em> (o Fact Builder), e o texto de IA sai <em>só</em> pela porta com gates — então explicabilidade (FR-013) e não-aconselhamento (FR-014) são <strong>inevitáveis</strong>. Não há caminho que os burle.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: o motor que transforma fatos em insights explicáveis</a></li>
+    <li><a href="#fatos">O Fact Builder (o coração): <code>BuildFacts(ctx, userID)</code> — uma seam publicada</a></li>
+    <li><a href="#travas">LIÇÃO PRINCIPAL — as travas POR CONSTRUÇÃO: o texto de IA sai SÓ pelo Insighter</a></li>
+    <li><a href="#categorias">Um fato, N categorias: portfolio / allocation / market_context (D2)</a></li>
+    <li><a href="#estados">Estados graciosos: carteira vazia, outage total, resultado parcial</a></li>
+    <li><a href="#arq">A arquitetura (D1): o motor na borda, o core <code>insight</code> puro</a></li>
+    <li><a href="#endpoint">O endpoint <code>GET /insights</code> e o contrato</a></li>
+    <li><a href="#decisoes">As 6 decisões (D1–D6) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: o motor que transforma fatos em insights explicáveis</h2>
+
+<p>Tudo até aqui foi <strong>fundação</strong>. O perfil (SPEC-101) instalou <em>quem</em> é o investidor; a carteira (SPEC-102)
+guardou <em>o que</em> ele tem (o cost basis); o mercado (SPEC-006) ingeriu cotações e indicadores macro; o
+dashboard (SPEC-103) <strong>computou</strong> o patrimônio, a alocação e a exposição setorial; e o port <code>Insighter</code>
+(SPEC-005) plantou o <strong>seam único</strong> por onde o LLM fala, já com os <strong>gates</strong> de explicabilidade e
+não-aconselhamento embutidos. O SPEC-104 é a feature que <strong>amarra tudo</strong> e finalmente cumpre a promessa
+central do produto: <em>"detectar concentração, desequilíbrio e risco sem análise manual"</em>.</p>
+
+<p>O que ele entrega é o subpacote <code>internal/insight/engine</code> com três peças e um endpoint:</p>
+<ul>
+  <li>O <strong>Fact Builder</strong> (<code>FactBuilder.BuildFacts(ctx, userID)</code>) — compõe um <strong>snapshot determinístico</strong>
+  de fatos a partir dos seams do dashboard + perfil + macro. É a <strong>seam publicada</strong> que o chat (SPEC-108) e
+  o rebalanceamento/health score (SPEC-105/106) vão reusar.</li>
+  <li>O <strong>engine service</strong> (<code>engine.Service.Insights(ctx, userID)</code>) — constrói os fatos <strong>uma vez</strong> e chama
+  o <code>Insighter</code> <strong>uma vez por categoria</strong> (portfolio, allocation, market_context), agregando os resultados
+  <em>gated</em>.</li>
+  <li>O enum fechado <code>Category</code> que mapeia 1:1 para uma <code>insight.Task</code>, e os <strong>ports consumidores</strong>
+  (<code>DashboardReader</code>, <code>ProfileReader</code>, <code>MacroReader</code>).</li>
+  <li><strong>Um único endpoint</strong> <code>GET /insights</code>. <strong>Nenhuma tabela, nenhuma migration, nenhuma escrita.</strong></li>
+</ul>
+
+<div class="diagram">ANTES (SPEC-005 / 101 / 103 / 006)              DEPOIS (SPEC-104)
+  Insighter: seam do LLM + gates (pronto)       engine: orquestra fatos → Insighter → insights
+  dashboard: COMPUTA patrimônio/alocação        Fact Builder: junta dashboard + perfil + macro
+  perfil: quem é o investidor                   um fato determinístico, N chamadas por categoria
+  macro: SELIC/CDI/IPCA ingeridos               GET /insights → insights explicáveis + disclaimer
+  cada peça pronta, nada conversa               1ª feature de IA que CHEGA AO USUÁRIO
+  fatos computados (SPEC-103)                    fatos COMPUTADOS viram grounding do LLM</div>
+
+<p>O endpoint novo (atrás da auth deny-by-default, fora da allowlist pública):</p>
+<pre><code>GET /insights  → 200 { insights[]{category,title,detail,explanation}, disclaimer, available } | 401</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que esta é a spec "capstone" — e por que ela é mais sobre TRAVAS do que sobre IA</span>
+  Cada spec anterior existiu para tornar <em>esta</em> confiável. Os fatos são <strong>computados</strong> (SPEC-103), não
+  inventados; o LLM só <strong>raciocina sobre eles</strong>; e as <strong>guardas binding</strong> tornam a saída segura por
+  construção. O segredo do SPEC-104 é que ele <strong>quase não escreve código de IA</strong>: ele não constrói prompt,
+  não chama provider, não checa explicação nem disclaimer — tudo isso já mora no <code>Insighter</code> (SPEC-005). O
+  motor só <strong>monta fatos</strong> e <strong>passa pela porta certa</strong>. É justamente essa <em>economia</em> — fazer o mínimo, pela
+  única via gated — que torna as travas inescapáveis.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="fatos">2. O Fact Builder (o coração): <code>BuildFacts(ctx, userID)</code></h2>
+
+<p>A peça central do SPEC-104 é o <strong>Fact Builder</strong> — e ele é a encarnação direta da regra binding nº 3 do
+PRD: <strong>"fatos são computados, não gerados"</strong>. Sua única responsabilidade é compor um <code>insight.Facts</code> (um
+<code>map[string]any</code>) determinístico a partir de três seams de leitura, <strong>sem nenhum texto livre e sem nenhum
+<code>float</code></strong>. Dinheiro entra como <code>int64</code> centavos; taxas e fatias como <code>int</code> em basis points. O LLM recebe
+esse pacote e raciocina <em>sobre</em> ele — nunca calcula um saldo.</p>
+
+<pre><code>// internal/insight/engine/factbuilder.go
+// FactBuilder compõe o snapshot determinístico para um usuário a partir dos seams do dashboard,
+// perfil e macro (SPEC-104 FR-1041). É a seam PUBLICADA (BuildFacts) que SPEC-108/105/106 reusam.
+// Todo dinheiro é int64 centavos e toda taxa/fatia é int basis points — nunca float (BR-1044);
+// os mesmos inputs sempre dão os mesmos fatos (BR-1041). Só valores COMPUTADOS — sem invenção.
+func (b *FactBuilder) BuildFacts(ctx context.Context, userID string) (insight.Facts, error) {
+    d, err := b.dashboards.GetDashboard(ctx, userID)   // ← reusa a Compute do SPEC-103
+    if err != nil {
+        return nil, fmt.Errorf("build facts: dashboard: %w", err)
+    }
+
+    facts := insight.Facts{
+        "total_invested_centavos": d.Summary.TotalInvestedCentavos,
+        "current_value_centavos":  d.Summary.CurrentValueCentavos,
+        "monthly_income_centavos": d.Summary.MonthlyIncomeCentavos,
+        "growth_bps":              d.Summary.GrowthBps,
+    }
+    // ... allocation_bps, fii_sector_bps, largest_fii_sector_bps, stale_tickers ...
+    if err := b.addProfileFacts(ctx, userID, facts); err != nil { return nil, err }
+    if err := b.addMacroFacts(ctx, facts); err != nil { return nil, err }
+    return facts, nil
+}</code></pre>
+
+<h3>2.1 — O que entra no snapshot (e de onde vem)</h3>
+
+<table>
+  <tr><th>Fato</th><th>Chave(s)</th><th>Seam (spec)</th></tr>
+  <tr>
+    <td>Resumo da carteira</td>
+    <td><code>total_invested_centavos</code>, <code>current_value_centavos</code>, <code>monthly_income_centavos</code>, <code>growth_bps</code></td>
+    <td>dashboard <code>Summary</code> (SPEC-103)</td>
+  </tr>
+  <tr>
+    <td>Alocação por classe (só as que têm valor)</td>
+    <td><code>allocation_bps</code> (<code>{class → bps}</code>)</td>
+    <td>dashboard <code>Allocation</code> (SPEC-103)</td>
+  </tr>
+  <tr>
+    <td>Exposição setorial de FII + sinais de concentração</td>
+    <td><code>fii_sector_bps</code>, <code>fii_sector_count</code>, <code>largest_fii_sector_bps</code></td>
+    <td>dashboard <code>FIISectors</code> (SPEC-103)</td>
+  </tr>
+  <tr>
+    <td>Proveniência (o que é estimativa)</td>
+    <td><code>stale_tickers</code></td>
+    <td>dashboard (cotação ausente → cost basis)</td>
+  </tr>
+  <tr>
+    <td>Perfil do investidor</td>
+    <td><code>risk_profile</code>, <code>objectives</code>, <code>horizon_years</code></td>
+    <td>perfil <code>Profile</code> (SPEC-101)</td>
+  </tr>
+  <tr>
+    <td>Macro (em bps)</td>
+    <td><code>macro_bps</code> (<code>{selic_bps, cdi_bps, ipca_bps}</code>)</td>
+    <td>macro <code>MacroIndicator</code> (SPEC-006)</td>
+  </tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que o Fact Builder REUSA a <code>Compute</code> do dashboard em vez de recomputar (D3)</span>
+  O dashboard (SPEC-103) já cruza holdings × cotações numa <strong>função pura e determinística</strong> e produz valor
+  atual, alocação e exposição setorial — tudo reconciliado, em centavos e bps. O Fact Builder lê esse
+  resultado via <code>GetDashboard</code> em vez de refazer o cálculo. Por quê? Porque <strong>um único caminho de
+  computação</strong> significa que o que a tela mostra e o que a IA raciocina <strong>são o mesmo número</strong>. Se houvesse
+  dois caminhos, eles poderiam divergir por um arredondamento, e a explicação da IA descreveria um valor
+  diferente do que o usuário vê — a explicabilidade perderia o chão. A <code>Compute</code> do SPEC-103 foi desenhada,
+  desde sempre, para ser o substrato deste Fact Builder.
+</div>
+
+<h3>2.2 — Degradação graciosa NA COMPOSIÇÃO dos fatos</h3>
+
+<p>O dashboard é a <strong>espinha dorsal</strong> — se ele falha, o fato falha (o erro borbulha com <code>%w</code>). Mas o perfil
+e o macro são <strong>enriquecimentos opcionais</strong>: o investidor pode não ter preenchido o perfil ainda, ou um
+indicador macro pode estar faltando. A decisão é <strong>omitir graciosamente</strong>, nunca quebrar:</p>
+
+<pre><code>// internal/insight/engine/factbuilder.go — perfil ausente é ESTADO, não erro
+func (b *FactBuilder) addProfileFacts(ctx context.Context, userID string, facts insight.Facts) error {
+    p, err := b.profiles.GetProfile(ctx, userID)
+    if errors.Is(err, profile.ErrProfileNotFound) {
+        return nil   // perfil não setado → omite os campos de perfil, segue em frente
+    }
+    if err != nil {
+        return fmt.Errorf("build facts: profile: %w", err)   // erro REAL borbulha
+    }
+    facts["risk_profile"] = string(p.Risk)
+    facts["objectives"]   = objectives
+    facts["horizon_years"] = p.Horizon.Years()
+    return nil
+}
+
+// addMacroFacts: um indicador faltando (ErrMacroNotFound) é PULADO, não um erro:
+for _, ind := range macroFacts {  // SELIC, CDI, IPCA — IFIX é o gap documentado do SPEC-006
+    m, err := b.macro.GetLatestMacroIndicator(ctx, ind)
+    if errors.Is(err, marketdata.ErrMacroNotFound) { continue }   // omite ESTE fato
+    if err != nil { return fmt.Errorf("build facts: macro %s: %w", ind, err) }
+    macro[string(ind)+"_bps"] = m.Value
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">A disciplina do <code>errors.Is</code>: distinguir "não tem" de "deu erro"</span>
+  Repare no padrão, idêntico ao do dashboard com <code>ErrFIIQuoteNotFound</code>: a <strong>sentinela específica</strong>
+  (<code>ErrProfileNotFound</code>, <code>ErrMacroNotFound</code>) é tratada como <em>ausência graciosa</em> (omite o fato, segue), e
+  <strong>qualquer outro erro</strong> borbulha com <code>%w</code>. Confundir os dois seria desastroso: tratar um erro de banco
+  como "perfil ausente" esconderia uma falha real; tratar "perfil ausente" como erro quebraria os insights
+  de quem ainda não preencheu o perfil. A regra "erros são sentinelas, checadas com <code>errors.Is</code>" é o que
+  mantém essa fronteira limpa.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="travas">3. LIÇÃO PRINCIPAL — as travas POR CONSTRUÇÃO: o texto de IA sai SÓ pelo Insighter</h2>
+
+<p>Esta é a ideia mais importante da aula, e a razão de o SPEC-104 ser tão pequeno. As duas guardas binding
+do produto — <strong>explicabilidade (FR-013)</strong> e <strong>não-aconselhamento (FR-014)</strong> — <strong>não são re-implementadas
+aqui</strong>. Elas já vivem no <code>Insighter</code> (SPEC-005), como decorators de gate. O motor garante que elas valem
+não por <em>checá-las</em>, mas por uma propriedade arquitetural: <strong>ele só emite texto de usuário pela porta que
+tem os gates</strong>. Não existe outro caminho.</p>
+
+<pre><code>// internal/insight/engine/engine.go — o engine NUNCA constrói texto de IA; só passa pela porta
+for _, c := range AllCategories {
+    res, err := s.insighter.Generate(ctx, insight.InsightRequest{   // ← a ÚNICA via
+        Facts:  facts,
+        Task:   c.Task(),
+        UserID: userID,
+    })
+    if err != nil { /* trata degradação/rejeição — seção 5 */ continue }
+    for _, in := range res.Insights {
+        in.Category = string(c)   // só TAGUEIA a categoria; não toca no texto gerado
+        items = append(items, in)
+    }
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que "por construção" é mais forte que "por verificação"</span>
+  Há duas formas de garantir uma regra. A frágil: o motor gera um texto e depois <em>verifica</em> se ele tem
+  explicação e não tem conselho — fácil esquecer um caminho, fácil um novo dev adicionar um atalho que
+  pula a checagem. A robusta, escolhida aqui: o motor <strong>não tem como produzir texto de IA</strong> — a única coisa
+  que ele sabe fazer é <code>insighter.Generate(...)</code>, e essa chamada <em>já</em> passa por explicabilidade + não-conselho
+  + cache + telemetria (a cadeia de decorators do SPEC-005). A <code>Insight</code> que volta <strong>já está gated</strong>; o motor
+  apenas a tagueia com a categoria e a agrega. Como não existe um segundo gerador de strings, não existe um
+  caminho para burlar os gates. O <code>go-correctness-reviewer</code> e um teste dedicado provam exatamente isso:
+  <em>nenhum texto de usuário nasce fora do <code>Insighter</code></em>.
+</div>
+
+<div class="diagram">    O ÚNICO caminho do texto de IA até o usuário:
+
+    facts (computados) ─▶ insighter.Generate(facts, task, userID)
+                                     │
+                                     ▼   cadeia de decorators do SPEC-005
+                          ┌──────────────────────────────────────────┐
+                          │ cache → gate(FR-013 explica + FR-014 não  │
+                          │ aconselha) → telemetria → provider (LLM)  │
+                          └──────────────────────────────────────────┘
+                                     │
+                                     ▼  Insight JÁ gated (explanation + sem ordem)
+    engine: só TAGUEIA a categoria e agrega ─▶ GET /insights ─▶ usuário
+
+    Não há um segundo gerador de strings. Burlar os gates é IMPOSSÍVEL por construção.</div>
+
+<p>O endpoint reflete isso no DTO: cada item carrega um campo <code>explanation</code> que está <strong>sempre presente</strong>
+(o gate de explicabilidade o garante), e a resposta carrega o <code>disclaimer</code> de não-aconselhamento:</p>
+
+<pre><code>// internal/transport/http/insights.go
+type insightItemResponse struct {
+    Category    string `json:"category"`
+    Title       string `json:"title"`
+    Detail      string `json:"detail"`
+    Explanation string `json:"explanation"` // sempre presente — o gate de explicabilidade garante
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="categorias">4. Um fato, N categorias: portfolio / allocation / market_context (D2)</h2>
+
+<p>O motor produz três famílias de insight, cada uma respondendo a um FR do PRD. A decisão D2 foi:
+<strong>construir UM fato determinístico e chamar o <code>Insighter</code> uma vez por categoria</strong>, cada chamada com uma
+<code>Task</code> distinta. O enum <code>Category</code> mapeia 1:1 para a <code>insight.Task</code>:</p>
+
+<pre><code>// internal/insight/engine/category.go
+type Category string
+const (
+    CategoryPortfolio     Category = "portfolio"      // concentração, desequilíbrio setorial, risco (FR-008)
+    CategoryAllocation    Category = "allocation"     // alocação vs perfil, concentração (FR-009)
+    CategoryMarketContext Category = "market_context" // macro ligado à carteira (FR-010)
+)
+// AllCategories fixa a ordem em que o motor gera e a resposta apresenta.
+var AllCategories = []Category{CategoryPortfolio, CategoryAllocation, CategoryMarketContext}
+
+func (c Category) Task() insight.Task { return insight.Task(c) }   // mesma string</code></pre>
+
+<table>
+  <tr><th>Categoria</th><th>O que produz</th><th>FR</th></tr>
+  <tr><td><code>portfolio</code></td><td>Concentração, desequilíbrio setorial, exposição a risco e diversificação — sobre os fatos da carteira.</td><td>FR-008</td></tr>
+  <tr><td><code>allocation</code></td><td>Alinhamento da alocação (mix de classes vs perfil de risco/objetivos) e concentração em setor/ativo único.</td><td>FR-009</td></tr>
+  <tr><td><code>market_context</code></td><td>Liga condições macro (SELIC alta, inflação) ao split FI/FII da carteira — como <em>considerações</em>, nunca diretivas.</td><td>FR-010</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Por que 3 chamadas ao LLM não saem caras — o cache do SPEC-005</span>
+  "Um request, três chamadas ao LLM" soa lento e caro (e os free-tiers têm limite). Mas a cadeia do
+  SPEC-005 tem um <strong>cache que chaveia por <code>(user, task, facts)</code></strong>: como o Fact Builder produz fatos
+  <strong>determinísticos</strong>, dois requests seguidos com a mesma carteira batem no cache e <strong>não chamam o LLM de
+  novo</strong>. O determinismo do Fact Builder não é só sobre confiabilidade — é o que <strong>torna o cache possível</strong>.
+  Se os fatos mudassem sozinhos (um <code>float</code>, um <code>time.Now()</code> escondido, uma ordem de map), a chave do
+  cache mudaria a cada chamada e o cache nunca acertaria. Determinismo → cache → custo zero (a postura
+  binding nº 4 do PRD).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="estados">5. Estados graciosos: vazio, outage total, parcial</h2>
+
+<p>O mundo real falha de formas variadas, e o motor representa cada uma como um <strong>estado</strong>, não um erro 500.
+Há três casos, e o código de <code>Insights</code> os trata explicitamente.</p>
+
+<h3>5.1 — Carteira vazia → SEM chamada ao LLM</h3>
+
+<p>Se o investidor não tem holdings, não há nada sobre o que raciocinar — e seria desperdício (e custo)
+chamar o LLM. O motor faz <strong>short-circuit</strong> com um estado amigável <em>antes</em> de qualquer chamada:</p>
+
+<pre><code>// internal/insight/engine/engine.go
+facts, err := s.facts.BuildFacts(factCtx, userID)
+// ...
+// Carteira vazia: nada a analisar — estado amigável "available, mas sem itens", SEM LLM.
+if !hasHoldings(facts) {
+    return Insights{Disclaimer: insight.Disclaimer, Available: true}, nil
+}</code></pre>
+
+<pre><code>// hasHoldings lê os centavos que o BuildFacts escreveu — int64, nunca float.
+func hasHoldings(facts insight.Facts) bool {
+    invested, _ := facts["total_invested_centavos"].(int64)
+    current, _  := facts["current_value_centavos"].(int64)
+    return invested != 0 || current != 0
+}</code></pre>
+
+<h3>5.2 — Outage total → <code>200 available:false</code> (D5)</h3>
+
+<p>Se o LLM está totalmente fora (rate-limit, provider caído), o motor <strong>não devolve 503</strong>. A decisão D5 é
+mais amigável para a UI: devolve <strong><code>200</code> com <code>available:false</code></strong> e itens vazios — o dashboard e a carteira
+continuam usáveis; só a faixa de insights mostra "temporariamente indisponível".</p>
+
+<h3>5.3 — Resultado PARCIAL quando só algumas categorias falham</h3>
+
+<p>O ponto mais elegante: cada categoria é <strong>independente</strong>. Se a chamada de <code>market_context</code> degrada mas
+<code>portfolio</code> e <code>allocation</code> respondem, o motor devolve os <strong>dois que deram certo</strong> — um resultado parcial, não
+um tudo-ou-nada. O laço conta os sucessos:</p>
+
+<pre><code>// internal/insight/engine/engine.go — o coração da degradação parcial
+var items []insight.Insight
+succeeded := 0
+for _, c := range AllCategories {
+    res, err := s.insighter.Generate(ctx, insight.InsightRequest{Facts: facts, Task: c.Task(), UserID: userID})
+    if err != nil {
+        // Cancelamento/timeout do request ABORTA — não degrada silenciosamente.
+        if ctx.Err() != nil {
+            return Insights{}, fmt.Errorf("insights: %w", ctx.Err())
+        }
+        continue   // esta categoria degradou ou foi rejeitada pelo gate — pula (FR-1047)
+    }
+    succeeded++
+    for _, in := range res.Insights {
+        in.Category = string(c)
+        items = append(items, in)
+    }
+}
+return Insights{
+    Items:      items,
+    Disclaimer: insight.Disclaimer,
+    Available:  succeeded > 0,   // false SÓ quando TODAS as categorias falharam
+}, nil</code></pre>
+
+<div class="box bug">
+  <span class="lbl">O detalhe sutil: cancelamento NÃO é degradação</span>
+  Olhe o <code>if ctx.Err() != nil</code> dentro do tratamento de erro. Um erro da categoria normalmente vira
+  <code>continue</code> (degrada graciosamente). Mas se o <strong>contexto foi cancelado</strong> — o cliente desconectou, ou o
+  request estourou o timeout — isso <em>não</em> é "esta categoria está indisponível"; é "todo o request acabou".
+  Tratar um cancelamento como degradação faria o motor seguir tentando as próximas categorias num contexto
+  morto, e talvez devolver um "parcial" enganoso. A checagem distingue os dois: <strong>cancelamento aborta com o
+  erro do contexto; uma falha real da categoria pula para a próxima</strong>. É o tipo de cuidado que separa
+  degradação correta de degradação que esconde um problema.
+</div>
+
+<table>
+  <tr><th>Cenário</th><th><code>available</code></th><th><code>insights</code></th><th>Chamou o LLM?</th></tr>
+  <tr><td>Carteira vazia</td><td><code>true</code></td><td><code>[]</code></td><td>Não (short-circuit)</td></tr>
+  <tr><td>Tudo OK</td><td><code>true</code></td><td>itens das 3 categorias</td><td>Sim (3×, com cache)</td></tr>
+  <tr><td>Algumas categorias falham</td><td><code>true</code></td><td>itens das que deram certo</td><td>Sim (parcial)</td></tr>
+  <tr><td>LLM totalmente fora</td><td><code>false</code></td><td><code>[]</code></td><td>Tentou, degradou</td></tr>
+  <tr><td>Sem perfil / macro faltando</td><td><code>true</code></td><td>itens (fatos enriquecidos omitidos)</td><td>Sim</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="arq">6. A arquitetura (D1): o motor na borda, o core <code>insight</code> puro</h2>
+
+<p>A decisão D1 foi pôr o motor <strong>dentro</strong> da feature <code>internal/insight</code> (que já é dona do port <code>Insighter</code> +
+gates desde o SPEC-005), mas num <strong>subpacote <code>engine</code></strong>. Por quê essa separação? Porque o core de
+<code>insight</code> (o port, os gates, o domínio <code>Facts</code>/<code>Insight</code>) precisa continuar <strong>puro</strong> — sem importar
+dashboard, perfil ou macro. O subpacote <code>engine</code> é a <strong>camada de aplicação</strong> da feature: é ele que compõe os
+seams de outras features. O <code>doc.go</code> registra essa fronteira:</p>
+
+<pre><code>// internal/insight/engine/doc.go
+// Package engine é o AI Insight Engine (SPEC-104): constrói fatos determinísticos e os
+// transforma em insights explicáveis de Portfolio / Allocation / Market-Context.
+//
+// É a CAMADA DE APLICAÇÃO da feature insight — o core puro de insight (o port Insighter +
+// gates, SPEC-005) fica no pacote pai; este subpacote LÊ os seams do dashboard (SPEC-103),
+// perfil (SPEC-101) e macro (SPEC-006) e ORQUESTRA o Insighter.</code></pre>
+
+<p>O motor lê os seams através de <strong>ports consumidores</strong> — interfaces pequenas que o próprio <code>engine</code>
+define (accept interfaces), satisfeitas na fiação por <code>dashboard.Service</code>, <code>profile.Service</code> e o repo macro:</p>
+
+<pre><code>// internal/insight/engine/ports.go
+type DashboardReader interface {
+    GetDashboard(ctx context.Context, userID string) (dashboard.Dashboard, error)
+}
+type ProfileReader interface {
+    GetProfile(ctx context.Context, userID string) (profile.Profile, error)
+}
+type MacroReader interface {
+    GetLatestMacroIndicator(ctx context.Context, ind marketdata.Indicator) (marketdata.MacroIndicator, error)
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que <code>engine</code> é um subpacote e não a feature inteira — o grafo continua acíclico e puro</span>
+  Três coisas tornam essa estrutura saudável: <strong>(1)</strong> O core <code>insight</code> não ganha nenhum import novo de
+  dashboard/perfil/macro — ele continua a costura pura do LLM, reusável por qualquer um. É o subpacote
+  <code>engine</code> que importa essas features, e ele é a <em>aplicação</em>, não o domínio. <strong>(2)</strong> O grafo é <strong>acíclico</strong>:
+  <code>engine</code> → <code>{dashboard, profile, marketdata, insight}</code>; nenhum deles importa <code>engine</code> de volta. O motor
+  fica <strong>"acima"</strong> — um orquestrador que compõe camadas mais baixas. <strong>(3)</strong> Tanto o Fact Builder quanto o
+  Service importam só os <strong>tipos de domínio puros</strong> das outras features (e o port <code>Insighter</code>); <strong>jamais</strong>
+  <code>database/sql</code> ou <code>net/http</code>. O hook <code>block-layering</code> garante isso mecanicamente. A identidade vem
+  sempre de <code>auth.UserID(ctx)</code> — nunca do payload (BR-1043).
+</div>
+
+<div class="diagram">           ┌──────── internal/insight/engine (aplicação, "acima") ─────────┐
+ HTTP ─▶ getInsights ─▶ │  Service.Insights  (orquestra)                          │
+ (driving)              │      │                                                  │
+                        │      ├─▶ FactBuilder.BuildFacts(ctx, userID)            │
+                        │      │      GetDashboard ◀── DashboardReader ◀── dashboard.Service │
+                        │      │      GetProfile   ◀── ProfileReader   ◀── profile.Service   │
+                        │      │      GetLatestMacro◀─ MacroReader     ◀── macro repo (006)  │
+                        │      │                                                  │
+                        │      └─▶ insighter.Generate(facts, task)  (×N categorias) │
+                        │             ▲ a ÚNICA via do texto de IA (gates SPEC-005) │
+                        └────────────────────────────────────────────────────────────┘
+   Grafo acíclico: engine → {dashboard, profile, marketdata, insight}. Core insight PURO.</div>
+
+<!-- ============================================================ -->
+<h2 id="endpoint">7. O endpoint <code>GET /insights</code> e o contrato</h2>
+
+<p>O handler é deliberadamente magro: lê a identidade do contexto, chama o serviço, mapeia para o DTO. Repare
+que ele <strong>não conhece estados de erro de IA</strong> — vazio e degradado são ambos <code>200</code> (D5), distinguidos pelo
+<code>available</code> no corpo. Só um erro <em>real</em> de serviço vira 500.</p>
+
+<pre><code>// internal/transport/http/insights.go
+func (h insightsHandler) getInsights(w http.ResponseWriter, r *http.Request) {
+    userID, ok := callerID(w, r)   // identidade do contexto, nunca do payload (BR-1043)
+    if !ok { return }
+    res, err := h.service.Insights(r.Context(), userID)
+    if err != nil {
+        h.logger.ErrorContext(r.Context(), "get insights failed", slog.String("error", err.Error()))
+        writeError(w, http.StatusInternalServerError, "internal error")
+        return
+    }
+    writeJSON(w, http.StatusOK, toInsightsResponse(res))   // vazio E degradado → 200
+}</code></pre>
+
+<p>Como toda spec que toca um endpoint, o contrato vive em <strong>lockstep</strong> em dois lugares, guardados pelo teste
+de drift: a <code>routeTable</code> (<code>internal/transport/http/routes.go</code>) e <code>api/openapi.yaml</code>. O dinheiro aparece como
+inteiro (<code>*_centavos</code>) e taxa como <code>*_bps</code> — o ban do <code>float</code> se estende ao contrato:</p>
+
+<pre><code># api/openapi.yaml
+  /insights:
+    get:
+      operationId: getInsights
+      summary: Generate the caller's explainable portfolio insights
+      description: |-
+        AI insights across categories (portfolio, allocation, market_context), grounded in
+        computed facts and emitted only through the gated Insighter — every insight carries an
+        explanation (FR-013) and never a transaction order (FR-014); the response carries the
+        non-advice disclaimer. `available` is false when the LLM was fully unavailable; an empty
+        portfolio returns `available:true` with no insights.
+      responses:
+        "200": { ... $ref InsightsResponse ... }
+        "401": { $ref: Unauthorized }</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">8. As 6 decisões (D1–D6) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Onde mora o motor?</td>
+    <td><strong>Em <code>internal/insight</code></strong> (subpacote <code>engine</code>), a feature que já é dona do <code>Insighter</code> + gates</td>
+    <td>O motor é a camada de aplicação da feature insight; o core (port + gates) fica puro no pacote pai. Acíclico, sem SQL/HTTP no core.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Um fato ou N?</td>
+    <td><strong>Um fato determinístico, N chamadas por categoria</strong></td>
+    <td>Cada categoria tem uma <code>Task</code> distinta; o cache do SPEC-005 chaveia por <code>(user, task, facts)</code>, então repetições saem baratas.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Recomputar a carteira?</td>
+    <td><strong>Não — reusa <code>dashboard.GetDashboard</code></strong></td>
+    <td>Um único caminho de computação: a tela e a IA raciocinam sobre o mesmo número. Sem divergência de arredondamento.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Histórico de insights (FR-022)?</td>
+    <td><strong>Deferido</strong> a um follow-up focado</td>
+    <td>A memória conversacional que o usuário queria é o chat (SPEC-108, FR-025) — threads limitadas e limpáveis. Insight-history é concern separado; <code>BuildFacts</code> deixa pronto para reuso.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Forma do estado degradado?</td>
+    <td><strong><code>200</code> com <code>available:false</code></strong> + itens vazios</td>
+    <td>Mais amigável para a UI que um 503; parcial <code>200</code> quando só algumas categorias falham. Dashboard/carteira seguem usáveis.</td>
+  </tr>
+  <tr>
+    <td><strong>D6</strong></td><td>Fact Builder privado ou publicado?</td>
+    <td><strong>Exportado <code>FactBuilder</code> / <code>BuildFacts(ctx, userID)</code></strong></td>
+    <td>É a seam de grounding que SPEC-108 (via <code>FactSource</code>) e SPEC-105/106 reusam — não um passo privado do motor. Estável e exportada.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">9. As 7 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core/domínio primeiro, borda depois, cada fase compilando e
+revisável sozinha. Com <strong>"fatos computados, não gerados" e "guardas por construção" como os dois fios
+condutores</strong>.</p>
+
+<h3>Fase 1 — Domínio, tasks &amp; ports de entrada</h3>
+<p>O enum fechado <code>Category</code> (<code>portfolio | allocation | market_context</code>) mapeando 1:1 para <code>insight.Task</code>,
+com a lista de ordem fixa <code>AllCategories</code>; o tipo de resultado <code>Insights{ Items, Disclaimer, Available }</code>;
+e os três ports consumidores (<code>DashboardReader</code>, <code>ProfileReader</code>, <code>MacroReader</code>). Adições puras a
+<code>internal/insight/engine</code>, compilando contra os tipos existentes de dashboard/profile/marketdata/insight.</p>
+
+<h3>Fase 2 — O Fact Builder (o coração)</h3>
+<p><code>BuildFacts(ctx, userID)</code>: lê o dashboard (valor atual, alocação bps, exposição setorial bps,
+concentração do maior setor, stale tickers), o perfil (risco/objetivos/horizonte) e o macro
+(SELIC/CDI/IPCA) → monta um <code>insight.Facts</code> determinístico (money centavos / rates bps). Carteira vazia
+→ fatos de estado vazio; perfil não setado → omite campos de perfil; macro faltando → omite o fato. Testes
+table-driven provando <strong>fatos determinísticos esperados, vazio, sem-perfil, macro-faltante e NENHUM
+<code>float</code></strong> em qualquer valor — sem banco nem HTTP.</p>
+
+<h3>Fase 3 — O Engine (guardas por construção)</h3>
+<p>O <code>Service.Insights(ctx, userID)</code>: short-circuit da carteira vazia (sem LLM); senão, <code>BuildFacts</code> uma
+vez, depois <code>Insighter.Generate</code> por categoria (taguendo cada insight), agregando os resultados <em>gated</em> +
+disclaimer; categoria degradada/rejeitada → pulada (parcial); <code>Available:false</code> só no outage total. Fakes
+escritos à mão (o <code>insight.Fake</code> determinístico + fake readers). Inclui o teste-chave: <strong>o motor emite texto
+de IA SÓ via o <code>Insighter</code></strong>.</p>
+
+<h3>Fase 4 — API (transporte)</h3>
+<p>O <code>transport/http/insights.go</code>: <code>GET /insights</code> → DTO (insights taguados por categoria + disclaimer +
+<code>available</code>), identidade via <code>auth.UserID(ctx)</code> (<code>callerID</code>), vazio/degradado → <code>200</code> (D5), erro de
+serviço → 500. <code>Deps.Insights</code>, registro da rota auto-protegida na <code>routeTable</code>, o path + schema em
+<code>api/openapi.yaml</code> (drift verde) e a fiação no <code>cmd/api</code> (Insighter via factory + Fact Builder + engine).</p>
+
+<h3>Fase 5 — Observabilidade</h3>
+<p>O endpoint herda o span de rota do <code>otelhttp</code> (<code>GET /insights</code>); um span <code>insight.facts</code> para o
+fact-building <strong>sem PII</strong> (nenhum dinheiro/figura/perfil/texto gerado vai para telemetria); o <code>Insighter</code>
+grava seus spans <code>insight.generate</code> por categoria (provider/model/outcome/cache-hit, sem conteúdo —
+SPEC-005 BR-505). Um teste garante <strong>nenhum fato/PII no span</strong>.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: o Fact Builder table-driven (determinismo/vazio/sem-perfil/macro-faltante); o
+engine com fakes (agregação, vazio, degradação → indisponível, parcial, só-via-Insighter); handler
+(identidade-do-contexto, vazio → 200, degradado <code>available:false</code>, 401). Integração <strong>gated</strong>: Postgres
+real (<code>TEST_DATABASE_URL</code>, <code>-p 1</code>) + o <code>fake</code> Insighter — semeia holdings + cotações + perfil + macro,
+chama <code>GET /insights</code> e asserta que <strong>todo insight carrega uma explicação</strong> e o <strong>disclaimer está presente</strong>
+(os gates valem end-to-end), com isolamento por usuário.</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (endpoint <code>/insights</code>), <code>CHANGELOG.md</code>, <code>api/openapi.yaml</code> (path + schema), SPEC-104 +
+PLAN-104 marcados <strong>Done</strong>, índices e status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">10. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o service
+importando o repositório <em>concreto</em>. O SPEC-104 é um caso rico para a <strong>tradução</strong> porque o "repositório" do
+motor não é um banco — são os <strong>seams de leitura de outras features</strong> e o <strong>port do LLM</strong>. (Para a teoria
+completa, veja a <a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>;
+aqui aplicamos ela ao SPEC-104.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-104</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>insightsHandler</code> (<strong>driving adapter</strong> — traduz HTTP ↔ caso de uso)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO de response</td><td><code>insightsResponse</code> / <code>insightItemResponse</code> — continuam DTOs, na borda, com <code>category</code>/<code>explanation</code>/<code>disclaimer</code>/<code>available</code></td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>engine.Service</code> — o caso de uso "gerar insights", que <strong>vive na aplicação</strong> e depende de <strong>ports</strong> (o Fact Builder + o <code>Insighter</code>); orquestra, não computa</td><td>Aplicação (<code>insight/engine</code>)</td></tr>
+  <tr><td>Repository concreto</td><td><strong>Não há um banco!</strong> Viram três <strong>ports consumidores</strong> (<code>DashboardReader</code>, <code>ProfileReader</code>, <code>MacroReader</code>) satisfeitos por adapters de <em>outras</em> features (<code>dashboard.Service</code>, <code>profile.Service</code>, repo macro)</td><td>Interfaces no <code>engine</code>; implementações nas outras features</td></tr>
+  <tr><td>(novo) provider de IA</td><td><code>insight.Insighter</code> — <strong>driven port</strong> do LLM, com os gates de FR-013/FR-014 embutidos (SPEC-005); a única via do texto de IA</td><td>Port no core <code>insight</code>; adapters (ollama/groq/fake) na borda</td></tr>
+  <tr><td>(novo) seam de grounding</td><td><code>FactBuilder.BuildFacts</code> — a função determinística que monta os fatos; <strong>exportada</strong> como seam reusável (D6)</td><td>Aplicação (pura quanto à composição, sem SQL/HTTP)</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> o repositório concreto e o cliente de LLM concreto — a seta aponta
+<strong>para fora</strong>, rumo à infra. No SPEC-104 a virada é dupla: o motor <strong>define as interfaces que precisa</strong> (os
+três readers) e features vizinhas as satisfazem; e o texto de IA passa pelo port <code>Insighter</code> que o core
+<em>insight</em> definiu — a seta aponta <strong>para dentro</strong>:</p>
+
+<pre><code>// O engine DEFINE os ports de que precisa (internal/insight/engine/ports.go):
+type DashboardReader interface { GetDashboard(ctx, userID) (dashboard.Dashboard, error) }
+type ProfileReader   interface { GetProfile(ctx, userID)   (profile.Profile, error) }
+type MacroReader     interface { GetLatestMacroIndicator(ctx, ind) (marketdata.MacroIndicator, error) }
+
+// As OUTRAS features os satisfazem — sem saber que o engine existe:
+//   dashboard.Service  já tem GetDashboard            → satisfaz DashboardReader
+//   profile.Service    já tem GetProfile              → satisfaz ProfileReader
+//   o repo macro (006) já tem GetLatestMacroIndicator → satisfaz MacroReader
+//   o Insighter (005)  é o driven port do LLM, com gates → a única via do texto de IA
+// A fiação acontece só no cmd/api. Todas as setas de dependência apontam PARA DENTRO.</code></pre>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem <em>aciona</em> a aplicação): o <code>insightsHandler</code> chama o serviço pela interface
+  <code>InsightsEngine</code> definida no próprio transporte (consumer-defined). Fica à <strong>esquerda</strong> do hexágono.</li>
+  <li><strong>Driven ports</strong> (o que a aplicação <em>aciona</em>): <code>DashboardReader</code>, <code>ProfileReader</code>, <code>MacroReader</code>
+  (leitura de fatos) e o <code>insight.Insighter</code> (o LLM com gates). Ficam à <strong>direita</strong>.</li>
+  <li><strong>Domínio / core puro</strong>: os tipos <code>insight.Facts</code>/<code>Insight</code>/<code>Task</code> e o port <code>Insighter</code> + gates (no
+  pacote <code>insight</code>). <strong>Aplicação</strong>: o <code>engine.Service</code> e o <code>FactBuilder</code> (orquestram, compõem seams).
+  <strong>Borda</strong>: o handler e os DTOs (HTTP); os adapters de LLM e de banco das features vizinhas.</li>
+  <li><strong>A seam publicada</strong>: ao contrário do dashboard (puro consumidor), o <code>engine</code> <strong>publica</strong> uma seam — o
+  <code>FactBuilder</code> exportado (D6) — que SPEC-108 (via <code>FactSource</code>), SPEC-105 e SPEC-106 vão consumir sem
+  re-implementar o grounding.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA trilhos
+que <strong>baixam a taxa de erro</strong>. Veja, no SPEC-104, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>A IA não atacou "faça o motor de insights" de uma vez. O PLAN-104 fatiou em 7 fases bottom-up (domínio →
+Fact Builder → engine → transporte → observabilidade → testes → docs), e cada uma fechava com
+<code>go build</code> + testes verdes antes da próxima. Construir o <strong>Fact Builder (Fase 2) antes do engine</strong>
+significou que o coração da spec — a composição determinística dos fatos — foi escrito e <strong>provado por
+testes table-driven</strong> (determinismo, vazio, sem-perfil, macro-faltante, zero-<code>float</code>) <em>sem nenhum LLM por
+perto</em>. Quando o engine entrou (Fase 3), ele só <em>orquestrava</em> fatos já comprovados e um port já gated.</p>
+
+<h3>O hook determinístico <code>block-layering</code></h3>
+<p>Este foi o hook decisivo para a pergunta de arquitetura da <a href="#arq">D1</a>: o subpacote <code>engine</code>
+importa <code>dashboard</code>, <code>profile</code>, <code>marketdata</code> e <code>insight</code> — isso é permitido? O hook <code>block-layering</code>
+(PostToolUse, <code>exit 2</code>) barra <strong>mecanicamente</strong> qualquer import de SQL/HTTP/SDK de vendor dentro de um
+core/aplicação de feature. Importar os <strong>tipos de domínio puros</strong> de outra feature (<code>dashboard.Dashboard</code>,
+<code>profile.Profile</code>, <code>marketdata.MacroIndicator</code>, <code>insight.Facts</code>) <strong>passa</strong>; se a IA tivesse tentado meter
+um <code>database/sql</code> ou um <code>net/http</code> dentro de <code>internal/insight/engine</code>, o hook teria <strong>bloqueado</strong> — sem
+revisão humana. É o que garante, na prática, que o motor ficou "acima" e o core <code>insight</code> ficou puro.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong> (o grafo
+acíclico <code>engine → {dashboard, profile, marketdata, insight}</code>, sem ciclo de volta) e — o ponto mais
+crítico desta spec — a <strong>trava por construção</strong>: que o motor emite texto de usuário <strong>só</strong> via
+<code>insighter.Generate</code>, nunca construindo strings de IA por outro caminho (BR-1042). Foi a lente que firmou a
+separação <strong>core puro (port + gates) vs. aplicação (engine que orquestra)</strong> e a identidade vinda só de
+<code>auth.UserID(ctx)</code>.</p>
+
+<h3>O <code>go-correctness-reviewer</code> e a disciplina de fatos / determinismo</h3>
+<p>Sendo a feature que <strong>monta o grounding da IA</strong>, a lente de correção vigiou o risco nº 1 do plano
+(PLAN-104 §8): <strong>um caminho que burlasse os gates</strong> e o <strong>vazamento de <code>float</code> / não-determinismo nos
+fatos</strong>. Ela garantiu que <strong>nenhum</strong> valor de fato usasse <code>float64</code> (money <code>int64</code> centavos / rates int
+bps); que o Fact Builder fosse uma <strong>função pura dos seams</strong> (mesmos inputs → mesmos fatos, condição do
+cache do SPEC-005); que <code>ErrProfileNotFound</code>/<code>ErrMacroNotFound</code> fossem omissão graciosa via
+<code>errors.Is</code>; e — crítico — que o <code>ctx.Err()</code> abortasse em vez de degradar silenciosamente. Também cobrou
+o <code>%w</code> + prefixo minúsculo nos erros e o <code>ctx</code> como primeiro parâmetro.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que as travas valem — e por que isso é a melhor garantia possível</span>
+  É a <strong>estrutura</strong> que prova: o <code>engine.Service</code> tem <strong>um único colaborador capaz de produzir texto de
+  usuário</strong> — o <code>insight.Insighter</code> — e a única operação que ele invoca nele é <code>Generate(...)</code>, que <em>já</em>
+  passa pelos gates de FR-013/FR-014. O motor não recebe um cliente de LLM cru, não monta prompt, não
+  escreve título/explicação. O compilador <em>impede</em> um atalho que a estrutura não oferece. Some a isso o
+  teste dedicado ("nenhum texto de IA nasce fora do <code>Insighter</code>") e o hook <code>block-layering</code> (sem provider
+  cru no pacote) e você tem as guardas binding <strong>garantidas por construção</strong>, não por boa-fé — exatamente o
+  que o PRD exige para "nunca uma saída black-box, nunca uma ordem de compra/venda".
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>block-layering</strong>: o bloqueio duro que provou que o core <code>insight</code> ficou livre de SQL/HTTP, ao mesmo
+  tempo que <em>permitiu</em> o consumo dos tipos de domínio puros das features vizinhas pelo subpacote <code>engine</code>.</li>
+  <li><strong>O teste de drift do OpenAPI</strong>: ao adicionar <code>GET /insights</code> na <code>routeTable</code>, o
+  <code>openapi_test.go</code> <em>exigiu</em> a entrada correspondente em <code>api/openapi.yaml</code> — senão o build falharia
+  (<a href="#endpoint">seção 7</a>).</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-104 referencia o ADR-0003/ADR-0005 mas <strong>não os edita</strong> — se a
+  IA tentasse "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos — e os
+  testes têm que passar <strong>sem rede e sem DB</strong>. O default do Insighter é o <code>fake</code> determinístico, então o CI
+  roda offline; a integração (seed de holdings + cotações + perfil + macro, gates end-to-end) fica atrás do
+  gate de <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-104</th><th>Por que baixa erro</th></tr>
+  <tr><td>Fatos são computados, não gerados</td><td>O <code>FactBuilder</code> reusa a <code>Compute</code> determinística (D3); só valores, sem texto livre</td><td>O LLM raciocina sobre números reais; nunca inventa um saldo.</td></tr>
+  <tr><td>Guardas por construção (FR-013/FR-014)</td><td>Texto de IA sai SÓ via <code>insighter.Generate</code>; o motor nunca constrói strings</td><td>Explicabilidade e não-conselho são inescapáveis — não há caminho para burlar.</td></tr>
+  <tr><td>Dinheiro nunca é <code>float64</code> (incl. a wire)</td><td>Fatos em <code>int64</code> centavos / int bps; <code>*_centavos</code>/<code>*_bps</code> no JSON e no OpenAPI</td><td>Fatos exatos e reproduzíveis; o cache por <code>(user, task, facts)</code> só funciona porque os fatos não mudam.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>DashboardReader</code>/<code>ProfileReader</code>/<code>MacroReader</code> no <code>engine</code>; <code>InsightsEngine</code> no transporte</td><td>Fakes triviais nos testes; o motor depende de contratos que ele desenha, não dos internos alheios.</td></tr>
+  <tr><td>Identidade do contexto, nunca do payload</td><td><code>callerID</code> lê <code>auth.UserID(ctx)</code>; <code>BuildFacts(ctx, userID)</code> escopa por usuário</td><td>Cada um só vê insights da própria carteira — sem vazamento cross-user.</td></tr>
+  <tr><td>Erros são sentinelas, checados com <code>errors.Is</code></td><td><code>errors.Is(err, profile.ErrProfileNotFound)</code> / <code>ErrMacroNotFound</code> distinguem ausência de erro real</td><td>Perfil/macro ausente é estado (omite o fato), não falha — sem confundir os dois.</td></tr>
+  <tr><td>Enums fechados, parse-don't-validate</td><td><code>Category</code> tipado com <code>const</code> e <code>AllCategories</code> de ordem fixa; mapeia 1:1 para <code>insight.Task</code></td><td>Categoria inválida é irrepresentável; a ordem de saída é estável.</td></tr>
+  <tr><td>OpenAPI em lockstep</td><td><code>GET /insights</code> na <code>routeTable</code> + em <code>api/openapi.yaml</code>, guardado pelo teste de drift</td><td>O contrato nunca apodrece; doc e código não divergem.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só o stack existente</td><td>Zero download novo; superfície de ataque e manutenção mínimas (ADR-0003).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering</h2>
+
+<p>O SPEC-104 <strong>É</strong> uma feature de IA — a primeira que chega ao usuário. Por isso ele exercita, de forma
+concreta, vários conceitos centrais de engenharia de IA confiável. Vamos a eles, todos ancorados no código
+desta spec.</p>
+
+<h3>12.1 — Grounding / Fact Builder: o modelo raciocina sobre fatos, não os inventa</h3>
+<p>O conceito mais importante de IA confiável aplicada a finanças é <strong>grounding</strong>: o LLM nunca deve produzir
+um número; ele recebe fatos <strong>computados</strong> e raciocina sobre eles. O <code>BuildFacts</code> é exatamente esse
+mecanismo — ele monta um <code>insight.Facts</code> com valor atual, alocação, exposição setorial, perfil e macro,
+tudo em centavos/bps determinísticos, e o passa ao <code>Insighter</code>. O modelo <strong>explica</strong> a concentração; ele
+não <em>calcula</em> a concentração. Essa separação é o que torna a saída auditável: a explicação descreve fatos
+que o sistema computou e pode mostrar.</p>
+
+<h3>12.2 — As guardas como middleware de verificação (FR-013 + FR-014)</h3>
+<p>O padrão arquitetural aqui é o de <strong>verification middleware</strong>: entre o modelo e o usuário há uma cadeia que
+<strong>verifica</strong> cada saída. O gate de explicabilidade (FR-013) rejeita qualquer insight sem explicação; o gate de
+não-aconselhamento (FR-014) rejeita ordens de compra/venda, quantidades, preços-alvo. No SPEC-104 esses
+gates não são re-codados — o motor os herda <strong>por passar só pela porta <code>Insighter</code></strong>. É a aplicação
+disciplinada de "o LLM é falível, então toda saída passa por um verificador determinístico antes do
+usuário".</p>
+
+<h3>12.3 — Outputs estruturados &amp; categorização</h3>
+<p>Em vez de uma resposta de texto livre, o motor pede <strong>saídas estruturadas</strong> por categoria: cada insight tem
+<code>title</code>, <code>detail</code> e <code>explanation</code>, e o motor o tagueia com <code>category</code> (portfolio/allocation/market_context).
+Estruturar a saída — N tasks distintas, campos nomeados — é o que permite a UI renderizar, o cache chavear
+e os gates verificar de forma confiável.</p>
+
+<h3>12.4 — Caching, custo &amp; degradação como cidadania de primeira classe</h3>
+<p>A postura "zero custo" (binding nº 4) é uma <strong>decisão de engenharia de IA</strong>. O cache por
+<code>(user, task, facts)</code> só funciona porque os fatos são determinísticos; a degradação graciosa (parcial, ou
+<code>available:false</code>) mantém o produto usável quando o free-tier do LLM cai. Em IA de produção, <strong>o que fazer
+quando o modelo falha</strong> é tão importante quanto o que fazer quando ele acerta — e aqui isso é um estado
+representado, não um 500.</p>
+
+<h3>12.5 — Observabilidade sem PII &amp; defesa contra prompt-injection</h3>
+<p>Os spans (<code>insight.facts</code>, <code>insight.generate</code>) registram latência e outcome <strong>sem nenhum fato, figura ou
+texto gerado</strong> — observabilidade de IA que respeita privacidade (BR-505). E há a superfície de
+<strong>prompt-injection</strong>: valores de holdings/perfil fluem para os fatos. A mitigação é dupla — o Fact Builder
+passa <strong>valores estruturados</strong> (não narrativa livre) onde possível, e o gate de não-aconselhamento é o
+<strong>backstop fail-closed</strong>: mesmo que um valor malicioso induza o modelo a "recomendar comprar X", o gate
+rejeita a saída antes do usuário.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA confiável em finanças é <strong>fatos determinísticos + saída verificada</strong>. O SPEC-104 entrega os dois: o
+  Fact Builder produz o <em>grounding</em> (computado, em centavos/bps, reproduzível) e o <code>Insighter</code> é o
+  <em>verificador</em> (explicabilidade + não-conselho, por construção). O motor, no meio, faz o mínimo: monta
+  fatos e passa pela única porta gated. É essa modéstia arquitetural — fazer pouco, pela via certa — que
+  torna a primeira feature de IA do produto <strong>segura por design</strong>, e que prepara o terreno para o chat
+  (SPEC-108) e o multi-agente CIO reusarem a mesma costura.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir</h2>
+
+<p>Com o motor de insights no ar e o <strong>Fact Builder publicado</strong>, as próximas features de IA não precisam
+re-implementar o grounding — elas reusam <code>BuildFacts</code>. Repare como cada uma se apoia nessa seam.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como usa o SPEC-104</th></tr>
+  <tr><td>SPEC-105</td><td>Assistente de Rebalanceamento</td><td><strong>Reusa/estende <code>BuildFacts</code></strong>: usa a alocação atual contra o perfil para sugerir <em>áreas</em> de ajuste — nunca ordens (FR-014), via o mesmo <code>Insighter</code>.</td></tr>
+  <tr><td>SPEC-106</td><td>Health Score</td><td>Pontua a carteira (concentração, diversificação) a partir dos <strong>mesmos fatos</strong> — "saudável <em>para esse investidor</em>", com explicação.</td></tr>
+  <tr><td>SPEC-108</td><td>Copiloto Conversacional (Chat)</td><td><strong>Aterra cada turno do chat</strong> através de <code>BuildFacts</code> (satisfaz o <code>FactSource</code>); adiciona a task <code>chat</code> e emite cada resposta pelo <code>Insighter</code> — gates turno a turno.</td></tr>
+  <tr><td>(futuro)</td><td>Multi-agente CIO + MCP</td><td>O <code>BuildFacts</code> é a costura onde, no MCP, um loop de tool-call substitui o snapshot pré-montado <em>atrás da mesma porta</em> (ADR-0005). Mantê-la exportada e estável é o que permite essa evolução sem redesenho.</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…004</td><td>Esqueleto, persistência, auth, observabilidade</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptadores de LLM (gates)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101</td><td>Perfil do investidor (escopado por <code>user_id</code>)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-102</td><td>Carteira (FIIs + renda fixa, por usuário)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-103</td><td>Dashboard (computa patrimônio, alocação, setores)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-104</td><td>AI Insight Engine (Fact Builder + insights)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-105 / 106 / 108</td><td>Rebalanceamento / Health Score / Chat (reusam <code>BuildFacts</code>)</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">O Fact Builder como semente do multi-agente CIO + MCP</span>
+  Olhando longe: o futuro sistema multi-agente (o "CIO") precisa de uma <strong>fonte única e confiável de fatos
+  sobre o investidor</strong> para raciocinar. O <code>BuildFacts</code> é exatamente isso — uma função determinística que,
+  dado quem o usuário é, o que ele tem e o que o mercado diz, devolve o snapshot completo e auditável. Cada
+  agente que precisar "do estado da carteira deste usuário" passa pela mesma costura — isolada por usuário,
+  sem acoplamento a HTTP/SQL. Quando o MCP chegar, o <code>BuildFacts</code> (ou um loop de tool-call atrás da mesma
+  assinatura) vira a "ferramenta" plugável que produz fatos reprodutíveis para qualquer agente — e os gates
+  do <code>Insighter</code> seguem sendo o verificador inescapável. Por isso a D6 exige: <strong>exportado e estável</strong>.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-104 o YieldForge ganhou sua <strong>primeira feature de IA que chega ao usuário</strong>: o motor compõe um
+  <strong>Fact Builder determinístico</strong> (<code>BuildFacts(ctx, userID)</code>, uma seam publicada que reune dashboard +
+  perfil + macro em <code>int64</code> centavos / int bps, sem <code>float</code>) e emite texto <strong>só</strong> pelo <code>Insighter</code> gated —
+  então explicabilidade (FR-013) e não-aconselhamento (FR-014) valem <strong>por construção</strong> — gerando insights
+  de carteira/alocação/contexto de mercado via <code>GET /insights</code>, com short-circuit de carteira vazia,
+  resultado parcial e <code>200 available:false</code> no outage total, sem nenhuma tabela nova.
+</div>
+
+<footer>
+  YieldForge · Aula 104 (SPEC-104) · gerada como material de estudo. Veja também a
+  <a href="SPEC-103-aula.html">Aula 103</a> (o dashboard — a <code>Compute</code> que o Fact Builder reusa), a
+  <a href="SPEC-005-aula.html">Aula 05</a> (o port <code>Insighter</code> + os gates que tornam as travas inescapáveis), a
+  <a href="SPEC-101-aula.html">Aula 101</a> (perfil — parte do grounding), a
+  <a href="SPEC-006-aula.html">Aula 06</a> (macro &amp; cotações), a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-104-ai-insight-engine.md">SPEC-104</a>
+  e o <a href="../03-plans/PLAN-104-ai-insight-engine.md">PLAN-104</a>.
+</footer>
+
+</div>
+</body>
+</html>

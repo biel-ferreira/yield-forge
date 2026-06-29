@@ -189,6 +189,7 @@ counts, freshness) — no payloads.
 | PUT    | `/holdings/fixed-income/{id}` | session | Update an owned fixed-income holding |
 | DELETE | `/holdings/fixed-income/{id}` | session | Delete an owned fixed-income holding |
 | GET    | `/dashboard`     | session | Computed summary + allocation + FII sector exposure (full patrimony; money as `*_centavos`, shares as `*_bps`); SPEC-103 |
+| GET    | `/insights`      | session | Explainable AI insights (portfolio / allocation / market_context) grounded in computed facts; every item carries an `explanation` (FR-013) and the response a non-advice `disclaimer` (FR-014); `available:false` on a full LLM outage; SPEC-104 |
 
 > Money crosses the wire as **integer centavos** (`*_centavos`) and rates as integer basis
 > points (`*_bps`) — never a float. `maturity_date` is a `YYYY-MM-DD` string (null for
