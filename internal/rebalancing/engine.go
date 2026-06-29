@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/biel-ferreira/yield-forge/internal/insight"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
+	"github.com/biel-ferreira/yield-forge/internal/platform/observability"
 )
 
 // Options carries per-request rebalancing flags (SPEC-105 FR-1056).
@@ -24,12 +27,13 @@ type Service struct {
 	facts     FactSource
 	universe  UniverseReader
 	insighter insight.Insighter
+	tracer    trace.Tracer
 }
 
 // NewService builds the engine over the Fact Builder seam, the FII universe reader, and the
 // (gated) Insighter.
 func NewService(facts FactSource, universe UniverseReader, insighter insight.Insighter) *Service {
-	return &Service{facts: facts, universe: universe, insighter: insighter}
+	return &Service{facts: facts, universe: universe, insighter: insighter, tracer: observability.Tracer("rebalancing")}
 }
 
 // Rebalance produces the contribution guidance for userID. It builds the facts (reusing
@@ -38,17 +42,25 @@ func NewService(facts FactSource, universe UniverseReader, insighter insight.Ins
 // candidate whose ticker is not in the universe is dropped. Available is false only when every
 // area failed (full outage); an empty portfolio still produces guidance (FR-1053).
 func (s *Service) Rebalance(ctx context.Context, userID string, contribution Contribution, opts Options) (Rebalancing, error) {
-	base, err := s.facts.BuildFacts(ctx, userID)
-	if err != nil {
-		return Rebalancing{}, fmt.Errorf("rebalance: %w", err)
+	// Span over fact-building (reuse seam + universe + computed split) for latency visibility. It
+	// carries NO content — no contribution amount, figures, or generated text (BR-505/FR-1058).
+	factCtx, span := s.tracer.Start(ctx, "rebalancing.facts")
+	base, err := s.facts.BuildFacts(factCtx, userID)
+	if err == nil {
+		var universe []marketdata.FIIQuote
+		universe, err = s.universe.ListFIIUniverse(factCtx)
+		if err == nil {
+			facts, split := assembleFacts(base, contribution, universe)
+			span.End()
+			return s.generate(ctx, userID, facts, split, universe, opts)
+		}
 	}
-	universe, err := s.universe.ListFIIUniverse(ctx)
-	if err != nil {
-		return Rebalancing{}, fmt.Errorf("rebalance: %w", err)
-	}
+	span.End()
+	return Rebalancing{}, fmt.Errorf("rebalance: %w", err)
+}
 
-	facts, split := assembleFacts(base, contribution, universe)
-
+// generate runs the gated Insighter over the assembled facts (areas then candidates).
+func (s *Service) generate(ctx context.Context, userID string, facts insight.Facts, split []AreaShare, universe []marketdata.FIIQuote, opts Options) (Rebalancing, error) {
 	areas, succeeded, err := s.buildAreas(ctx, userID, facts, split)
 	if err != nil {
 		return Rebalancing{}, err
