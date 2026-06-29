@@ -12,7 +12,9 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/auth"
 	authbcrypt "github.com/biel-ferreira/yield-forge/internal/auth/bcrypt"
 	authpostgres "github.com/biel-ferreira/yield-forge/internal/auth/postgres"
+	"github.com/biel-ferreira/yield-forge/internal/dashboard"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata/ingest"
+	marketdatapostgres "github.com/biel-ferreira/yield-forge/internal/marketdata/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 	"github.com/biel-ferreira/yield-forge/internal/platform/clock"
 	"github.com/biel-ferreira/yield-forge/internal/platform/config"
@@ -116,6 +118,14 @@ func run() error {
 	// Portfolio (SPEC-102): holdings CRUD over its Postgres repository.
 	portfolioService := portfolio.NewService(portfoliopostgres.New(db), clock.System{})
 
+	// Dashboard (SPEC-103): a read-only compute service over the portfolio holdings reader and
+	// the market-data FII quote repository.
+	dashboardService := dashboard.NewService(
+		portfolioService,
+		marketdatapostgres.NewFIIQuoteRepository(db),
+		clock.System{},
+	)
+
 	router := transporthttp.NewRouter(transporthttp.Deps{
 		Logger:       logger,
 		Build:        buildinfo.Get(),
@@ -123,6 +133,7 @@ func run() error {
 		Auth:         authService,
 		Profile:      profileService,
 		Portfolio:    portfolioService,
+		Dashboard:    dashboardService,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,

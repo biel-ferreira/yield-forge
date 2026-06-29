@@ -287,6 +287,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   maturity parsing, 401), and a **real-Postgres integration** proving CRUD, per-user isolation,
   **ownership scoping** (B cannot touch A's row), and FK cascade.
 
+#### SPEC-103 implementation (dashboard)
+
+- `internal/dashboard` — a new read-only **compute** feature package (no tables, no writes): it
+  reads holdings (SPEC-102) and FII quotes (SPEC-006) through consumer-defined ports
+  (`HoldingsReader`, `QuoteSource`) and derives the figures with a **pure, deterministic
+  `Compute` function** — the binding "facts are computed, not generated" constraint applied to
+  the read model (BR-1031). The first feature to read *across* features.
+- **Portfolio summary** (FR-004): total invested (cost basis), **current value = the full
+  patrimony / net worth**, monthly passive income (Σ FII `last_dividend × qty`), and growth
+  (centavos + bps). **Allocation** (FR-005) by asset class (`fii`/`fixed_income`/`stocks`/`etfs`,
+  the last two 0 in MVP) and **FII sector exposure**, each as a share in basis points.
+- **Money is `int64` centavos / integer bps end to end** — domain, computation, DTOs, and the
+  OpenAPI schema — with every division **half-up** (new `money.ShareBps`) and the FI accrual
+  computed via `big.Int` to avoid overflow (new `money.AccrueSimpleInterest`, simple interest
+  to today per PRD A4, D2). No `float64` anywhere. Figures **reconcile** (Σ slices = totals).
+- **Graceful degradation:** a held FII with no stored quote is valued at **cost basis** and
+  listed in `stale_tickers` (FR-1036), so the total still reconciles.
+- HTTP `GET /dashboard` (auth-protected, identity from context); registered in the `routeTable`
+  and documented in `api/openapi.yaml` (the drift test stays green). No AI output (FR-013/014
+  N/A) — these deterministic facts are the substrate the Fact Builder (SPEC-104) will reuse.
+- Tests: the pure computation (table-driven — **reconciliation, determinism, stale fallback,
+  loss/negative-growth, empty, divide-by-zero guards**), the money helpers (incl. an overflow
+  case), the service (stale-not-error, hard-error-propagates), the handler (money round-trip,
+  span carries no figures), and a **real-Postgres end-to-end integration** seeding holdings +
+  quotes and asserting the computed figures reconcile across SPEC-102 + SPEC-006.
+
 ### Changed
 
 - Adopted package-oriented (by-feature) organisation over package-by-layer while
