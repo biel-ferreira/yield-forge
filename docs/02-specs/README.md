@@ -44,12 +44,13 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-101 | [Investor Profile](SPEC-101-investor-profile.md) | FR-003                | ✅ Done |
 | SPEC-102 | [Portfolio Management (FII + FI)](SPEC-102-portfolio-management.md) | FR-001, FR-002 | ✅ Done |
 | SPEC-103 | [Dashboard](SPEC-103-dashboard.md) | FR-004, FR-005        | ✅ Done |
-| SPEC-104 | AI Insight Engine                | FR-008–FR-010 (+ FR-013/014 via SPEC-005) | Not started |
+| SPEC-104 | [AI Insight Engine](SPEC-104-ai-insight-engine.md) | FR-008–FR-010 (+ FR-013/014 via SPEC-005) | 📋 Approved |
 | SPEC-105 | AI Rebalancing Assistant         | FR-011, FR-014        | Not started |
 | SPEC-106 | Portfolio Health Score           | FR-012                | Not started |
 | SPEC-107 | Projections (Income & Net Worth) | FR-016, FR-017        | Not started |
+| SPEC-108 | [Conversational Copilot (Chat)](SPEC-108-conversational-copilot.md) | FR-023–FR-025 (+ FR-013/014 via SPEC-005) | 📝 Draft |
 
-Every PRD functional requirement (FR-001…FR-018) maps to exactly one owning spec
+Every PRD functional requirement (FR-001…FR-025) maps to exactly one owning spec
 above.
 
 ---
@@ -70,7 +71,20 @@ SPEC-103 Dashboard                (needs 102 + 006)
 SPEC-104 Insights → 105 Rebalancing → 106 Health Score   (need 005 + 101/102/006)
         ↓
 SPEC-107 Projections              (needs 102 + 006; deterministic, no LLM)
+        ↓
+SPEC-108 Conversational Copilot   (build LAST — hard-needs 104 + 005 (Fact Builder + gates);
+                                   reuses 105 + 107, so building it after them wires the rich
+                                   path directly and avoids rework; bridge into Phase 2
+                                   multi-agent + Phase 3 MCP)
 ```
+
+> **Why SPEC-108 is last (no-rework ordering).** Its only *hard* new dependency is the
+> SPEC-104 Fact Builder (over the SPEC-005 gates). It *reuses* the Rebalancing Assistant
+> (SPEC-105, for "tenho R$X pra aportar" turns) and the Projections (SPEC-107). Since the
+> whole product ships at once (not incrementally), building the chat **after** 105/107
+> means its rich grounding path is the only one implemented — the graceful-degradation
+> fallbacks in SPEC-108 (FR-1083/FR-1087) stay as runtime resilience, not as an interim
+> build step that would later be reworked.
 
 > A feature is not built until it has a SPEC, and a SPEC is not built until it has a
 > matching PLAN (same number) in [`../03-plans/`](../03-plans/).

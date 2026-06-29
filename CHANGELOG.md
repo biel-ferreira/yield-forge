@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-108 — Conversational Copilot (Chat)** (Draft): a multi-turn, fact-grounded chat where the
+  investor asks free-form questions about their portfolio, allocation, market context, and the
+  current month's contribution strategy ("tenho R$X pra aportar"). It introduces no new reasoning
+  engine — it **orchestrates** the SPEC-104 Fact Builder and emits every reply through the SPEC-005
+  `Insighter` (so the explainability + non-advice gates hold turn by turn), adds a `chat`
+  `insight.Task`, persists **bounded, clearable** per-user threads/messages (FR-025), and is the
+  deliberate bridge into the Phase 2 multi-agent CIO + Phase 3 MCP. Registered in the specs index and
+  the plans index (PLAN-108 pending approval).
+- **ADR-0005 — Conversational Copilot Orchestration** (Proposed): ground each chat turn with a
+  pre-built deterministic fact snapshot and emit only through the `Insighter` port; keep live agentic
+  MCP tool-calling out of the MVP, behind the same seam, so the multi-agent CIO lands later as an
+  adapter without major redesign.
+- **PRD — Conversational Copilot**: new **Epic 10**, functional requirements **FR-023** (multi-turn
+  chat), **FR-024** (grounded conversation / orchestration seam), and **FR-025** (bounded, clearable
+  conversation memory); added to §5 In Scope, §15 as the Phase 1 capstone + Phase 2 bridge, the
+  success metrics, and §16 product-level acceptance. Updated the architecture overview (chat
+  orchestration seam, §5b) and the specs/plans indexes.
 - **OpenAPI 3.1 API documentation** — a hand-maintained spec at [`api/openapi.yaml`](api/openapi.yaml),
   embedded into the binary and served as interactive **Swagger UI at `GET /docs`** plus the
   raw contract at `GET /openapi.yaml` (both public). The spec is served locally; the Swagger UI

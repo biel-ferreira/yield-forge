@@ -1,6 +1,6 @@
 # YieldForge — Architecture Overview
 
-> Status: Draft (v0.1.0) · Last Updated: 2026-06-16
+> Status: Draft (v0.1.0) · Last Updated: 2026-06-29
 > This document describes the **target architecture** the PRD's success criteria
 > require: clean layering, MCP-readiness, and multi-agent-readiness *without major
 > redesign*. SPECs and PLANs must conform to it. Decisions are recorded as
@@ -52,8 +52,8 @@ Driven directly by the [PRD](../01-product/PRD.md):
 
 | Container             | Tech            | Responsibility                                                        |
 | --------------------- | --------------- | -------------------------------------------------------------------- |
-| **Web App**           | Next.js         | UI: portfolio, profile, dashboard, insights, rebalancing, score, projections. |
-| **API / Backend**     | Go (HTTP/REST)  | Domain logic, use cases, auth, AI orchestration, serving the web app. |
+| **Web App**           | Next.js         | UI: portfolio, profile, dashboard, insights, rebalancing, score, projections, **conversational copilot (chat)**. |
+| **API / Backend**     | Go (HTTP/REST)  | Domain logic, use cases, auth, AI orchestration (incl. the **chat copilot**), serving the web app. |
 | **Ingestion Worker**  | Go (scheduler)  | Periodic FII + macro data ingestion; decoupled from request path.    |
 | **Database**          | PostgreSQL      | Holdings, profile, market data snapshots, generated insights/scores. |
 | **LLM Provider**      | Free-tier / local (Gemini · Groq · Ollama) | Reasoning over computed facts (behind the `Insighter` port). Claude/OpenAI are paid drop-in upgrades. |
@@ -146,10 +146,35 @@ numbers come from code. Each result carries its scenario assumptions and an
 
 ---
 
+### 5b. Conversational Copilot (chat orchestration seam)
+
+The **conversational copilot** (SPEC-108) adds a chat surface *without* a new reasoning
+engine. Each user turn is grounded with a **pre-built fact snapshot** (the same Fact
+Builder) plus a bounded window of prior turns, then emitted **only** through the
+`Insighter` — so the explainability and non-advice gates hold turn by turn, exactly as
+for `/insights`.
+
+```
+ user turn (free text) ─┐
+                        ▼
+  intent routing ─▶ Fact Builder ─▶ insight.InsightRequest{ Facts, Task: chat } ─▶ Insighter (gated) ─▶ reply
+ (general | "tenho R$X")                                                                                  │
+                                                                              persist thread/message (bounded, clearable)
+```
+
+This is deliberately the **bridge into Phase 2**: the chat calls the *same* `Insighter`
+port, so swapping the single-LLM turn for a CIO-orchestrated agent fleet (below) is an
+adapter change, not a redesign — the conversational surface stays put. Grounding stays a
+pre-built fact set in the MVP (deterministic, zero-cost); agentic live MCP tool-calling is
+the future evolution. See [ADR-0005](adr/ADR-0005-conversational-copilot-orchestration.md).
+
+---
+
 ## 6. Multi-Agent & MCP Readiness (Future Phases)
 
-The same `Insighter` port is later implemented by a **CIO orchestrator** that fans
-out to specialized agents and aggregates an explainable report:
+The same `Insighter` port — already exercised by `/insights` **and the conversational
+copilot** — is later implemented by a **CIO orchestrator** that fans out to specialized
+agents and aggregates an explainable report, surfaced through the same chat surface:
 
 ```
  Insighter (port)

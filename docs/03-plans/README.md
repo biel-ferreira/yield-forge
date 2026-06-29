@@ -31,8 +31,19 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-101 | SPEC-101 | [Investor Profile](PLAN-101-investor-profile.md) | ✅ Done |
 | PLAN-102 | SPEC-102 | [Portfolio Management (FII + FI)](PLAN-102-portfolio-management.md) | ✅ Done |
 | PLAN-103 | SPEC-103 | [Dashboard](PLAN-103-dashboard.md) | ✅ Done |
+| PLAN-104 | SPEC-104 | [AI Insight Engine](PLAN-104-ai-insight-engine.md) | 📋 Approved |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
+
+### Pending (spec approved/drafted, plan not yet authored)
+
+| Plan ID  | Spec     | Title                            | Status      |
+| -------- | -------- | -------------------------------- | ----------- |
+| PLAN-104 | SPEC-104 | AI Insight Engine                | Not started |
+| PLAN-105 | SPEC-105 | AI Rebalancing Assistant         | Not started |
+| PLAN-106 | SPEC-106 | Portfolio Health Score           | Not started |
+| PLAN-107 | SPEC-107 | Projections (Income & Net Worth) | Not started |
+| PLAN-108 | SPEC-108 | Conversational Copilot (Chat)    | Not started — authored after SPEC-108 is approved |
 
 ## Standard Phase Order (per the template)
 
