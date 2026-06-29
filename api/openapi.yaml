@@ -385,6 +385,24 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/HoldingNotFound"
+  /dashboard:
+    get:
+      tags: [dashboard]
+      summary: Compute the caller's portfolio dashboard (summary, allocation, sector exposure)
+      operationId: getDashboard
+      description: |-
+        Read-only computed view over the caller's holdings and the latest market data.
+        Money is integer centavos and shares integer basis points (never a float); a held
+        FII with no current quote is valued at cost basis and listed in `stale_tickers`.
+      responses:
+        "200":
+          description: The computed dashboard.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     cookieAuth:
@@ -560,6 +578,64 @@ components:
           type: string
           format: date-time
       required: [id, ticker, quantity, average_price_centavos, created_at, updated_at]
+    DashboardResponse:
+      type: object
+      description: Computed portfolio dashboard. All money is integer centavos; all shares are basis points.
+      properties:
+        summary:
+          type: object
+          properties:
+            total_invested_centavos:
+              type: integer
+              format: int64
+            current_value_centavos:
+              type: integer
+              format: int64
+              description: The full patrimony / net worth — the sum of every holding's current value.
+            monthly_income_centavos:
+              type: integer
+              format: int64
+            growth_centavos:
+              type: integer
+              format: int64
+            growth_bps:
+              type: integer
+          required: [total_invested_centavos, current_value_centavos, monthly_income_centavos, growth_centavos, growth_bps]
+        allocation:
+          type: array
+          description: Current-value share per asset class (fii, fixed_income, stocks, etfs).
+          items:
+            type: object
+            properties:
+              asset_class:
+                type: string
+                enum: [fii, fixed_income, stocks, etfs]
+              value_centavos:
+                type: integer
+                format: int64
+              share_bps:
+                type: integer
+            required: [asset_class, value_centavos, share_bps]
+        fii_sectors:
+          type: array
+          description: Current-value share per FII sector, as a fraction of the FII total.
+          items:
+            type: object
+            properties:
+              sector:
+                type: string
+              value_centavos:
+                type: integer
+                format: int64
+              share_bps:
+                type: integer
+            required: [sector, value_centavos, share_bps]
+        stale_tickers:
+          type: array
+          description: Held FIIs with no current quote, valued at cost basis.
+          items:
+            type: string
+      required: [summary, allocation, fii_sectors, stale_tickers]
     FixedIncomeRequest:
       type: object
       properties:

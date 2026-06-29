@@ -20,6 +20,7 @@ type Deps struct {
 	Auth         AuthService      // authentication use cases
 	Profile      ProfileService   // investor profile use cases (SPEC-101)
 	Portfolio    PortfolioService // portfolio holdings use cases (SPEC-102)
+	Dashboard    DashboardService // computed dashboard (SPEC-103)
 	CookieName   string           // session cookie name
 	CookieSecure bool             // set the cookie's Secure flag (off in dev)
 	SessionTTL   time.Duration
@@ -46,12 +47,13 @@ func NewRouter(d Deps) http.Handler {
 	}
 	profileH := profileHandler{service: d.Profile, logger: d.Logger}
 	holdingsH := holdingsHandler{service: d.Portfolio, logger: d.Logger}
+	dashboardH := dashboardHandler{service: d.Dashboard, logger: d.Logger}
 
 	mux := http.NewServeMux()
 	// The application API surface comes from one declared table (routes.go) so the
 	// OpenAPI spec can be drift-tested against it (openapi_test.go). Public vs protected
 	// is decided by isPublicRoute, not by registration order.
-	for _, rt := range routeTable(api, authH, profileH, holdingsH) {
+	for _, rt := range routeTable(api, authH, profileH, holdingsH, dashboardH) {
 		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler)
 	}
 	// API documentation meta-routes (public): the embedded OpenAPI spec + Swagger UI.
