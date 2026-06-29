@@ -125,9 +125,10 @@ func TestRebalance_GatesHoldEndToEnd_Integration(t *testing.T) {
 	}
 	require.Equal(t, 10000, sumShares, "the computed shares reconcile to 100%")
 
-	// Any surfaced candidate must be grounded in the seeded universe (the fake names none → empty).
+	// Any surfaced candidate must be grounded in the seeded universe AND explained (FR-013).
 	for _, c := range got.Candidates {
 		require.Equal(t, "HGLG11", c.Ticker, "candidates are grounded in the universe")
+		require.NotEmpty(t, c.Explanation, "every candidate carries an explanation")
 	}
 
 	// u2: empty portfolio → still guides (first-investment), scoped to u2 (no leak of u1's holdings).

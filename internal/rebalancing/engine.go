@@ -44,19 +44,29 @@ func NewService(facts FactSource, universe UniverseReader, insighter insight.Ins
 func (s *Service) Rebalance(ctx context.Context, userID string, contribution Contribution, opts Options) (Rebalancing, error) {
 	// Span over fact-building (reuse seam + universe + computed split) for latency visibility. It
 	// carries NO content — no contribution amount, figures, or generated text (BR-505/FR-1058).
-	factCtx, span := s.tracer.Start(ctx, "rebalancing.facts")
-	base, err := s.facts.BuildFacts(factCtx, userID)
-	if err == nil {
-		var universe []marketdata.FIIQuote
-		universe, err = s.universe.ListFIIUniverse(factCtx)
-		if err == nil {
-			facts, split := assembleFacts(base, contribution, universe)
-			span.End()
-			return s.generate(ctx, userID, facts, split, universe, opts)
-		}
+	facts, split, universe, err := s.buildFacts(ctx, userID, contribution)
+	if err != nil {
+		return Rebalancing{}, err
 	}
-	span.End()
-	return Rebalancing{}, fmt.Errorf("rebalance: %w", err)
+	return s.generate(ctx, userID, facts, split, universe, opts)
+}
+
+// buildFacts reuses the published seam + the FII universe and computes the split, all inside the
+// rebalancing.facts span (FR-1058).
+func (s *Service) buildFacts(ctx context.Context, userID string, contribution Contribution) (insight.Facts, []AreaShare, []marketdata.FIIQuote, error) {
+	factCtx, span := s.tracer.Start(ctx, "rebalancing.facts")
+	defer span.End()
+
+	base, err := s.facts.BuildFacts(factCtx, userID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("rebalance: %w", err)
+	}
+	universe, err := s.universe.ListFIIUniverse(factCtx)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("rebalance: %w", err)
+	}
+	facts, split := assembleFacts(base, contribution, universe)
+	return facts, split, universe, nil
 }
 
 // generate runs the gated Insighter over the assembled facts (areas then candidates).
@@ -97,17 +107,21 @@ func (s *Service) buildAreas(ctx context.Context, userID string, facts insight.F
 			}
 			continue // this area degraded or was gate-rejected — skip it (FR-1057)
 		}
+		// The gate only guarantees an explanation for insights PRESENT — a successful-but-empty
+		// result (or a blank explanation) would leak an unexplained area, so guard here (FR-013).
+		if !explained(res.Insights) {
+			continue
+		}
 		succeeded++
-		area := Area{
+		in := res.Insights[0]
+		areas = append(areas, Area{
 			Class:                   string(sh.Class),
 			SuggestedShareBps:       sh.SuggestedShareBps,
 			SuggestedAmountCentavos: sh.SuggestedAmountCentavos,
-		}
-		if len(res.Insights) > 0 {
-			in := res.Insights[0]
-			area.Title, area.Detail, area.Explanation = in.Title, in.Detail, in.Explanation
-		}
-		areas = append(areas, area)
+			Title:                   in.Title,
+			Detail:                  in.Detail,
+			Explanation:             in.Explanation,
+		})
 	}
 	return areas, succeeded, nil
 }
@@ -134,6 +148,9 @@ func (s *Service) buildCandidates(ctx context.Context, userID string, facts insi
 		q, ok := known[normalizeTicker(in.Title)]
 		if !ok {
 			continue // grounding guard: the assistant never names a ticker the system doesn't know
+		}
+		if strings.TrimSpace(in.Explanation) == "" {
+			continue // no unexplained candidate reaches the user (FR-013)
 		}
 		candidates = append(candidates, Candidate{
 			Ticker:      q.Ticker.String(),
@@ -173,6 +190,13 @@ func tickerIndex(universe []marketdata.FIIQuote) map[string]marketdata.FIIQuote 
 }
 
 func normalizeTicker(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
+
+// explained reports whether the gated result carries a usable explanation. The gate guarantees an
+// explanation only for insights PRESENT, so a successful-but-empty result must be treated as
+// having no explanation — never leak an unexplained suggestion to the user (FR-013).
+func explained(insights []insight.Insight) bool {
+	return len(insights) > 0 && strings.TrimSpace(insights[0].Explanation) != ""
+}
 
 // areaShareBps returns the suggested share (bps) of the named area class, or 0 if absent.
 func areaShareBps(split []AreaShare, class string) int {

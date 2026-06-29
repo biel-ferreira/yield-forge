@@ -6,12 +6,6 @@ import "github.com/biel-ferreira/yield-forge/internal/insight"
 // is task-agnostic; SPEC-104 owns insight/market tasks, this owns rebalancing).
 const TaskRebalancing insight.Task = "rebalancing"
 
-// Categories the engine tags gated items with before splitting them in the response (SPEC-105 D3).
-const (
-	categoryArea      = "area"
-	categoryCandidate = "candidate"
-)
-
 // Area is one suggested allocation area: the computed split (FR-1053a) joined to the gated
 // explanation from the Insighter (FR-013). Class is the asset class ("fii" / "fixed_income").
 type Area struct {

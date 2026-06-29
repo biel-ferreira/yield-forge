@@ -140,6 +140,39 @@ func TestRebalance_IncludeAssetSharesSplitsFIIArea(t *testing.T) {
 	require.Equal(t, 3500, got.Candidates[1].IllustrativeShareBps)
 }
 
+func TestRebalance_DropsAreaWithoutExplanation(t *testing.T) {
+	// A successful-but-EMPTY InsightResult (a live adapter could return one) must not leak an
+	// unexplained area — the gate passes it vacuously, so the engine guards (FR-013).
+	ins := &scriptedInsighter{results: []insight.InsightResult{
+		{Disclaimer: insight.Disclaimer}, // area call: no insights
+		{},                               // candidates call
+	}}
+	svc := NewService(fakeFactSource{facts: engineFacts()}, fakeUniverse{quotes: universeHGLG()}, ins)
+
+	got, err := svc.Rebalance(context.Background(), "u1", mustContribution(t, 100_000), Options{})
+	require.NoError(t, err)
+	require.Empty(t, got.Areas, "an area with no explanation is dropped, not leaked")
+	require.False(t, got.Available, "no explained area → unavailable")
+	for _, a := range got.Areas {
+		require.NotEmpty(t, a.Explanation)
+	}
+}
+
+func TestRebalance_DropsUnexplainedCandidate(t *testing.T) {
+	// A grounded ticker with a blank explanation is dropped (FR-013), even though it is real.
+	ins := &scriptedInsighter{results: []insight.InsightResult{
+		areaExplanation("Renda Fixa"), // area call
+		{Insights: []insight.Insight{ // candidates call
+			{Title: "HGLG11", Explanation: "  "}, // grounded but unexplained → dropped
+		}},
+	}}
+	svc := NewService(fakeFactSource{facts: engineFacts()}, fakeUniverse{quotes: universeHGLG()}, ins)
+
+	got, err := svc.Rebalance(context.Background(), "u1", mustContribution(t, 100_000), Options{})
+	require.NoError(t, err)
+	require.Empty(t, got.Candidates, "a grounded but unexplained candidate is dropped")
+}
+
 func TestRebalance_FullyUnavailable(t *testing.T) {
 	ins := &scriptedInsighter{failWith: insight.ErrInsightsUnavailable}
 	svc := NewService(fakeFactSource{facts: engineFacts()}, fakeUniverse{quotes: universeHGLG()}, ins)
