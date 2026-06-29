@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/biel-ferreira/yield-forge/internal/insight"
+	"github.com/biel-ferreira/yield-forge/internal/platform/observability"
 )
 
 // Service is the insight engine (SPEC-104 FR-1042..1047). It builds one deterministic fact set
@@ -14,11 +17,12 @@ import (
 type Service struct {
 	facts     *FactBuilder
 	insighter insight.Insighter
+	tracer    trace.Tracer
 }
 
 // NewService builds the engine over the Fact Builder and the (gated) Insighter.
 func NewService(facts *FactBuilder, insighter insight.Insighter) *Service {
-	return &Service{facts: facts, insighter: insighter}
+	return &Service{facts: facts, insighter: insighter, tracer: observability.Tracer("insight")}
 }
 
 // Insights builds the caller's facts and generates insights across all categories. An empty
@@ -26,7 +30,11 @@ func NewService(facts *FactBuilder, insighter insight.Insighter) *Service {
 // the Insighter cannot serve (degraded or gate-rejected) is skipped, so a partial result is
 // returned when only some succeed; Available is false only when every category failed.
 func (s *Service) Insights(ctx context.Context, userID string) (Insights, error) {
-	facts, err := s.facts.BuildFacts(ctx, userID)
+	// Span over fact-building for latency visibility. It carries NO fact content — no money,
+	// figures, profile, or generated text reach telemetry (BR-505/BR-1046).
+	factCtx, span := s.tracer.Start(ctx, "insight.facts")
+	facts, err := s.facts.BuildFacts(factCtx, userID)
+	span.End()
 	if err != nil {
 		return Insights{}, fmt.Errorf("insights: %w", err)
 	}

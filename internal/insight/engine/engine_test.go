@@ -5,12 +5,28 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	noopTrace "go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
 	"github.com/biel-ferreira/yield-forge/internal/insight"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 	"github.com/biel-ferreira/yield-forge/internal/profile"
 )
+
+func spanRecorder(t *testing.T) *tracetest.InMemoryExporter {
+	t.Helper()
+	exp := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+		otel.SetTracerProvider(noopTrace.NewTracerProvider())
+	})
+	return exp
+}
 
 // stubInsighter returns a marked insight per call (so we can prove the engine's output comes
 // only from the Insighter), and can fail specific calls to exercise degradation.
@@ -80,6 +96,29 @@ func TestEngine_Insights_FullyUnavailable(t *testing.T) {
 	require.NoError(t, err, "an LLM outage is degradation, not a hard error")
 	require.False(t, got.Available)
 	require.Empty(t, got.Items)
+}
+
+// TestEngine_Insights_FactsSpanCarriesNoPII is the BR-1046 guarantee: the fact-building span
+// exists for latency, but carries no fact content — no money, profile, or sector values leak.
+func TestEngine_Insights_FactsSpanCarriesNoPII(t *testing.T) {
+	exp := spanRecorder(t)
+	fb := NewFactBuilder(
+		fakeDashboard{d: populatedDashboard()},
+		fakeProfile{p: moderateProfile(t)},
+		fakeMacro{vals: map[marketdata.Indicator]int64{marketdata.IndicatorSELIC: 10_500}},
+	)
+	_, err := NewService(fb, &stubInsighter{}).Insights(context.Background(), "u1")
+	require.NoError(t, err)
+
+	var found bool
+	for _, span := range exp.GetSpans() {
+		if span.Name != "insight.facts" {
+			continue
+		}
+		found = true
+		require.Empty(t, span.Attributes, "the facts span carries no content — no figures, profile, or sectors")
+	}
+	require.True(t, found, "insight.facts span recorded")
 }
 
 func TestEngine_Insights_PartialSuccess(t *testing.T) {
