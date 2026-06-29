@@ -9,7 +9,7 @@
 | Version      | 0.1.0                                                        |
 | Status       | Draft                                                        |
 | Author       | Gabigol (programacao.blume@gmail.com)                        |
-| Last Updated | 2026-06-16                                                   |
+| Last Updated | 2026-06-29                                                   |
 | Stakeholders | Product Owner / Engineer (solo), end-investor (primary user) |
 
 ---
@@ -30,6 +30,13 @@ insights, highlight risks, and surface considerations — sectors, asset categor
 themes, and named candidate assets worth the user's own analysis** — always with a
 clear, human-readable explanation, its risks and assumptions, and the final
 decision left to the user.
+
+The copilot is reachable both as **structured outputs** (dashboard, insights, score,
+projections) and as a **conversational chat** where the investor asks free-form
+questions about their portfolio, allocation, market context, and the current month's
+contribution strategy. Every answer — structured or conversational — is grounded in
+**computed facts** and passes the same explainability and non-advice gates, so the
+chat is safe by construction and never crosses into financial advice.
 
 It serves a dual purpose:
 
@@ -144,6 +151,7 @@ and extend it.
 | Rebalancing guidance compliance          | 0 outputs containing a transaction order (quantity, price/entry-exit target, or imperative buy/sell) |
 | Income projection scenarios              | 3 scenarios (pessimistic/base/optimistic) per run   |
 | Net-worth projection                     | Recomputes on contribution change; assumptions shown |
+| Conversational answer safety             | 100% of chat replies carry an explanation + disclaimer; 0 replies contain a transaction order |
 | Backend API p95 latency (non-AI reads)   | < 300 ms                                             |
 | Test coverage (domain + application)     | ≥ 80%                                               |
 | Infrastructure cost                      | R$0 / month (free tiers, free-forever, or local)    |
@@ -167,6 +175,12 @@ and extend it.
   fixed-income rates.
 - **Net-Worth Projection** — wealth growth over time from current value +
   reinvested income + a configurable monthly contribution.
+- **Conversational Copilot** — a multi-turn chat where the investor asks free-form
+  questions about their portfolio, allocation, market context, and the current
+  month's contribution strategy; answers are grounded in computed facts and pass the
+  explainability + non-advice gates. It orchestrates the insight/rebalancing/projection
+  engines behind a chat surface and is the deliberate bridge into the Phase 2
+  multi-agent system (see §15).
 - Single-user-account experience with authentication.
 
 ### Out of Scope (MVP)
@@ -447,6 +461,33 @@ that **I can see the long-term trajectory toward my goals**.
 
 ---
 
+### Epic 10 — Conversational Copilot (Chat)
+
+#### User Story
+
+As an investor, I want to **chat with the copilot in my own words** — asking about my
+portfolio, my allocation, the market, and **where to focus this month's contribution** —
+so that **I get explainable answers to the questions I actually have, without learning a
+fixed set of screens**.
+
+#### Acceptance Criteria
+
+- [ ] User can hold a **multi-turn conversation**; messages are persisted as a per-user
+      **thread** the user can revisit, and a turn may reference earlier turns.
+- [ ] Every assistant reply is **grounded in computed facts** (the Fact Builder) — the
+      copilot never invents numbers — and references the user's real portfolio/market figures.
+- [ ] A *"I have R$X to invest this month"* question is answered with suggested **areas** and
+      **named candidate assets** as considerations (reusing the Rebalancing Assistant), never
+      a transaction order.
+- [ ] **Every** reply carries a clear explanation and the **non-advice disclaimer**; no reply
+      issues a transaction order, quantity, price/entry-exit target, imperative buy/sell, or
+      guaranteed return — even when the user explicitly asks "should I buy X?".
+- [ ] Conversation history is **per-user isolated, bounded, and clearable** by the user.
+- [ ] If the LLM is unavailable, the chat degrades gracefully ("temporarily unavailable");
+      the dashboard/portfolio remain usable.
+
+---
+
 ## 9. Functional Requirements
 
 > IDs are referenced by SPECs. NF requirements are in §10.
@@ -525,6 +566,24 @@ that **I can see the long-term trajectory toward my goals**.
   (FR-015), distinct from the internal result cache (a performance optimization), and is
   never treated as financial advice (FR-014). *(Owned by the AI feature phase, SPEC-104,
   not the `Insighter` port spec.)*
+- **FR-023 — Conversational Copilot (Multi-Turn Chat):** Provide a multi-turn chat where the
+  user asks free-form natural-language questions about their portfolio, allocation, market
+  context, and the current month's contribution strategy, and receives explainable answers.
+  Turns form a persisted, per-user **thread** the user can revisit; a turn may reference
+  earlier turns in the same thread. *(Owned by SPEC-108.)*
+- **FR-024 — Grounded Conversation (Facts & Orchestration):** Every chat reply is grounded in
+  **computed facts** (the Fact Builder) and the existing reasoning engines (insights FR-008–010,
+  rebalancing FR-011, projections FR-016/017) — the copilot never invents figures, and prior
+  generated text is never treated as a source of numbers. A *"I have R$X to invest this month"*
+  turn is routed to the rebalancing facts. This orchestration is the seam that grows into the
+  Phase 2 multi-agent CIO and Phase 3 MCP tool-calling **without major redesign**. *(Owned by
+  SPEC-108.)*
+- **FR-025 — Conversation Memory (Bounded, Clearable):** Persist per-user, time-ordered chat
+  threads and messages so the user can review and continue past conversations. Storage is
+  **bounded by a configurable per-user cap** (zero-cost posture) with rolling eviction of the
+  oldest entries, and the user can **clear** their history on demand. Per-user isolated (FR-015),
+  distinct from FR-022's insight history and from the internal result cache, and never treated as
+  financial advice (FR-014). *(Owned by SPEC-108.)*
 
 ---
 
@@ -698,11 +757,21 @@ A usable, single-user copilot:
 - Observability baseline (OpenTelemetry).
 - Runs at **zero cost** end-to-end (G12).
 
+#### Phase 1 capstone — Conversational Copilot (Chat)
+
+Built last in Phase 1, on top of the insight/rebalancing/projection engines: a multi-turn,
+fact-grounded chat (FR-023–FR-025) that lets the user ask their own questions and gets gated,
+explainable answers. It introduces no new reasoning engine — it **orchestrates** the existing
+ones behind the `Insighter` port — which makes it the deliberate **bridge into Phase 2**: the
+same chat surface is later backed by the multi-agent CIO with no major redesign.
+
 ### Future Phases
 
 #### Phase 2 — Multi-Agent System
 
-Decompose the Insight Engine into specialized agents orchestrated by a CIO agent:
+Decompose the Insight Engine into specialized agents orchestrated by a CIO agent — surfaced
+through the **same conversational copilot surface** delivered in the Phase 1 capstone (the chat
+orchestration seam, FR-024):
 
 - **Macro Agent** — SELIC, inflation, economic environment.
 - **Fixed Income Agent** — fixed-income products, liquidity, rates.
@@ -744,6 +813,8 @@ The product is considered successful when:
 - [ ] Portfolio Health Score (0–100) is produced with a detailed explanation.
 - [ ] Passive income is projected across pessimistic/base/optimistic scenarios.
 - [ ] Net worth is projected over time from a configurable monthly contribution.
+- [ ] User can hold a multi-turn, fact-grounded conversation with the copilot; every reply
+      is explainable, carries the non-advice disclaimer, and contains **no** transaction order.
 - [ ] The whole system runs at **zero cost** (free tiers / free-forever / local).
 - [ ] The LLM provider is swappable without domain/application changes.
 - [ ] Architecture supports future multi-agent expansion (no major redesign).

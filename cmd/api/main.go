@@ -13,6 +13,8 @@ import (
 	authbcrypt "github.com/biel-ferreira/yield-forge/internal/auth/bcrypt"
 	authpostgres "github.com/biel-ferreira/yield-forge/internal/auth/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
+	insightengine "github.com/biel-ferreira/yield-forge/internal/insight/engine"
+	insightfactory "github.com/biel-ferreira/yield-forge/internal/insight/factory"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata/ingest"
 	marketdatapostgres "github.com/biel-ferreira/yield-forge/internal/marketdata/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
@@ -126,6 +128,13 @@ func run() error {
 		clock.System{},
 	)
 
+	// AI Insight Engine (SPEC-104): the Fact Builder (dashboard + profile + macro seams) feeding
+	// the gated Insighter (SPEC-005). The Insighter provider is config-selected; default `fake`.
+	insightEngine := insightengine.NewService(
+		insightengine.NewFactBuilder(dashboardService, profileService, marketdatapostgres.NewMacroRepository(db)),
+		insightfactory.New(cfg, logger, clock.System{}),
+	)
+
 	router := transporthttp.NewRouter(transporthttp.Deps{
 		Logger:       logger,
 		Build:        buildinfo.Get(),
@@ -134,6 +143,7 @@ func run() error {
 		Profile:      profileService,
 		Portfolio:    portfolioService,
 		Dashboard:    dashboardService,
+		Insights:     insightEngine,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,

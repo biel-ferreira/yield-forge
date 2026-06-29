@@ -403,6 +403,26 @@ paths:
                 $ref: "#/components/schemas/DashboardResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /insights:
+    get:
+      tags: [insights]
+      summary: Generate the caller's explainable portfolio insights
+      operationId: getInsights
+      description: |-
+        AI insights across categories (portfolio, allocation, market_context), grounded in
+        computed facts and emitted only through the gated Insighter — every insight carries an
+        explanation (FR-013) and never a transaction order (FR-014); the response carries the
+        non-advice disclaimer. `available` is false when the LLM was fully unavailable; an empty
+        portfolio returns `available:true` with no insights.
+      responses:
+        "200":
+          description: The generated insights (possibly empty / degraded — see `available`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     cookieAuth:
@@ -578,6 +598,33 @@ components:
           type: string
           format: date-time
       required: [id, ticker, quantity, average_price_centavos, created_at, updated_at]
+    InsightsResponse:
+      type: object
+      description: AI insights aggregated across categories, with the non-advice disclaimer.
+      properties:
+        insights:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                enum: [portfolio, allocation, market_context]
+              title:
+                type: string
+              detail:
+                type: string
+              explanation:
+                type: string
+                description: Always present — the explainability gate (FR-013) guarantees it.
+            required: [category, title, detail, explanation]
+        disclaimer:
+          type: string
+          description: The non-advice disclaimer (FR-014).
+        available:
+          type: boolean
+          description: False when the LLM was fully unavailable (insights empty).
+      required: [insights, disclaimer, available]
     DashboardResponse:
       type: object
       description: Computed portfolio dashboard. All money is integer centavos; all shares are basis points.

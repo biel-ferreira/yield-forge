@@ -153,5 +153,6 @@ Task runner is [`Task`](https://taskfile.dev) (`Taskfile.yml`); raw `go` fallbac
 Done: SPEC-001 (skeleton), SPEC-002 (persistence), SPEC-003 (auth), SPEC-004
 (observability), SPEC-005 (Insighter port + LLM adapters), SPEC-006 (MarketDataProvider
 port + ingestion worker), SPEC-101 (investor profile), SPEC-102 (portfolio management),
-SPEC-103 (dashboard). Next: SPEC-104 (AI insight engine) / SPEC-107 (projections). See
+SPEC-103 (dashboard), SPEC-104 (AI insight engine). Next: SPEC-105 (rebalancing) / SPEC-107
+(projections) / SPEC-108 (conversational copilot). See
 [docs/02-specs/README.md](docs/02-specs/README.md) for the live index.
