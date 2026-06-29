@@ -13,8 +13,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/biel-ferreira/yield-forge/internal/auth"
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
+	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 	"github.com/biel-ferreira/yield-forge/internal/portfolio"
 )
 
@@ -88,4 +90,30 @@ func TestGetDashboard_Unauthenticated(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.getDashboard(rec, httptest.NewRequest(http.MethodGet, "/dashboard", nil))
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestHTTP_DashboardSpanRouteNamed runs auth → dashboard end to end and verifies the server
+// span is route-named and carries no money/figure values (SPEC-103 FR-1038).
+func TestHTTP_DashboardSpanRouteNamed(t *testing.T) {
+	exp := spanRecorder(t)
+	user := auth.User{ID: "u1", Email: "me@example.com"}
+	router := NewRouter(Deps{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Build:      buildinfo.Info{},
+		Ready:      fakePinger{},
+		Auth:       fakeAuth{authUser: user},
+		Dashboard:  &fakeDashboardService{result: sampleDashboard()},
+		CookieName: "yf_session",
+		SessionTTL: time.Hour,
+	})
+
+	rr := doReq(router, http.MethodGet, "/dashboard", "", &http.Cookie{Name: "yf_session", Value: "tok"})
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	spans := exp.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "GET /dashboard", spans[0].Name)
+	for _, kv := range spans[0].Attributes {
+		require.NotContains(t, kv.Value.Emit(), "1100000", "no money/figure values on the span")
+	}
 }
