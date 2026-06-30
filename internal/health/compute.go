@@ -93,7 +93,7 @@ func concentration(in Inputs) FactorScore {
 	return FactorScore{
 		Factor:      FactorConcentration,
 		Score:       clamp(100-worst/100, 0, 100),
-		Explanation: fmt.Sprintf("maior concentração isolada: %d%% — quanto menor, mais saudável.", worst/100),
+		Explanation: fmt.Sprintf("maior concentração isolada: %d%% — quanto menor, mais saudável.", clamp(worst, 0, 10000)/100),
 	}
 }
 
@@ -146,7 +146,8 @@ func targetFIIShareBps(risk profile.RiskProfile, selicBps int, hasMacro bool) in
 	return maxInt(0, base-tilt)
 }
 
-// baseFIIShareBps is the profile-implied target FII share before any market tilt (SPEC-105 rule).
+// baseFIIShareBps is the profile-implied target FII share before any market tilt (SPEC-106
+// FR-1064; the same conservative→FI / aggressive→FII direction the Rebalancing Assistant uses).
 func baseFIIShareBps(risk profile.RiskProfile) int {
 	switch risk {
 	case profile.RiskConservative:

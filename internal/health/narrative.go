@@ -35,7 +35,8 @@ func (s *Service) addNarrative(ctx context.Context, userID string, in Inputs, hs
 }
 
 // narrativeText extracts the gated prose from the result (the gate guarantees it is explained and
-// order-free); empty when the result carries no usable text.
+// order-free); empty when the result carries no usable text. Detail carries the user-facing prose,
+// so it is preferred; Explanation is the fallback (the gate guarantees one is present).
 func narrativeText(res insight.InsightResult) string {
 	if len(res.Insights) == 0 {
 		return ""
