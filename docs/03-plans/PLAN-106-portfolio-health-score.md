@@ -8,7 +8,7 @@
 | Related Feature | SPEC-106 — a deterministic, market-aware score with a gated narrative |
 | Related Spec    | [SPEC-106](../02-specs/SPEC-106-portfolio-health-score.md)   |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                       |
+| Status          | Done                                                        |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-29                                                   |
 

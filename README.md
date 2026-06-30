@@ -191,6 +191,7 @@ counts, freshness) — no payloads.
 | GET    | `/dashboard`     | session | Computed summary + allocation + FII sector exposure (full patrimony; money as `*_centavos`, shares as `*_bps`); SPEC-103 |
 | GET    | `/insights`      | session | Explainable AI insights (portfolio / allocation / market_context) grounded in computed facts; every item carries an `explanation` (FR-013) and the response a non-advice `disclaimer` (FR-014); `available:false` on a full LLM outage; SPEC-104 |
 | POST   | `/rebalancing`   | session | Contribution guidance — `{contribution_centavos, include_asset_shares?}` → suggested areas with a **computed** `suggested_share_bps` (Σ 10000) + grounded named FII candidates nested in the FII area; every item explained (FR-013), non-advice `disclaimer` (FR-014); SPEC-105 |
+| GET    | `/health-score`  | session | Reproducible 0–100 **computed** Portfolio Health Score + per-factor breakdown (diversification / concentration / liquidity / goal_alignment / risk_exposure, weights as `*_bps`); market-aware (macro is an input); an optional gated AI `narrative` explains it (`narrative_available:false` on outage) but never changes the number; SPEC-106 |
 
 > Money crosses the wire as **integer centavos** (`*_centavos`) and rates as integer basis
 > points (`*_bps`) — never a float. `maturity_date` is a `YYYY-MM-DD` string (null for

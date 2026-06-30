@@ -7,7 +7,7 @@
 | Feature Name | Portfolio Health Score                                 |
 | Feature ID   | SPEC-106                                                |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
+| Status       | Done                                                   |
 | Author       | Gabigol                                                |
 | Last Updated | 2026-06-29                                             |
 | Related PRD  | [PRD](../01-product/PRD.md) §Epic 7, FR-012, FR-013, FR-014 |

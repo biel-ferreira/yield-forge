@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-106 — Portfolio Health Score**: a reproducible **0–100 score** with a per-factor breakdown
+  (diversification, concentration, liquidity, goal alignment, risk exposure). Unlike the Insight
+  Engine and Rebalancing Assistant, the **score and breakdown are computed, not LLM-generated** — the
+  PRD reproducibility metric ("same inputs → same score + identical explanation") and the binding
+  "LLM never invents numbers" rule both demand it. The score is **market-aware** because macro
+  (SELIC) is an *input* to the goal-alignment/risk factors via a modest, documented, bounded tilt —
+  so it adjusts with conditions yet stays reproducible given `(portfolio, profile, macro)`. An
+  **optional gated "professor" narrative** (the SPEC-005 Insighter, `health_score` task) explains the
+  computed result using the live market — grounded, gated (FR-013/014), degradable, and it **never
+  changes the number** (test-enforced). New `GET /health-score` (auth-scoped); empty portfolio →
+  `score 0`; LLM outage → `narrative_available:false` with the score + breakdown intact. Adds
+  `money.WeightedMeanBps`; no new tables; documented in `api/openapi.yaml`; PT-BR lesson
+  `docs/lessons/SPEC-106-aula.html`.
 - **SPEC-105 — AI Rebalancing Assistant**: given a contribution amount, explainable guidance on
   where to focus the new money — suggested areas, each with a **deterministically computed share**
   of the contribution (`suggested_share_bps`, half-up, Σ = 10 000 via the new `money.AllocateBps`),

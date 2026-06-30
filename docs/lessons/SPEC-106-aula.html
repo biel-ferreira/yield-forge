@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 106 — SPEC-106: Portfolio Health Score (Nota Computada + Narrativa do Professor) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 106 · O Health Score · uma nota 0–100 que você pode confiar</span>
+    <h1>SPEC-106 — Portfolio Health Score (Nota Computada + Narrativa do Professor)</h1>
+    <p>Esta é a spec que dá ao investidor <strong>um número único e rastreável</strong>: uma <strong>nota de saúde de 0 a 100</strong> para a carteira, com um <strong>detalhamento por fator</strong> (diversificação, concentração, liquidez, alinhamento de metas, exposição a risco). A lição central — e o que a diferencia do SPEC-104 e do SPEC-105 — é que aqui a <strong>NOTA é COMPUTADA, não gerada</strong>: o LLM <em>nunca</em> produz nem altera o número. A métrica de sucesso do PRD exige <em>"mesmos inputs → mesma nota + mesma explicação"</em>, então o cálculo é <strong>determinístico e reproduzível</strong>. E há uma sutileza linda: a nota é <strong>ciente do mercado</strong> (o macro é um <em>input</em>) <strong>e ainda assim reprodutível</strong> — porque "mesmos inputs" inclui o snapshot de mercado. Em cima da nota computada, uma <strong>narrativa do "professor"</strong> (o Insighter gated) explica o resultado usando o mercado ao vivo — aterrada, gated, degradável, e que <strong>nunca toca no número</strong>.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: uma nota 0–100 + um detalhamento por fator (FR-012)</a></li>
+    <li><a href="#computed">LIÇÃO PRINCIPAL — a NOTA é COMPUTADA, não gerada: <code>Compute</code> + <code>WeightedMeanBps</code></a></li>
+    <li><a href="#market">Ciente do mercado, ainda assim reprodutível: o macro como INPUT</a></li>
+    <li><a href="#narrative">A narrativa do "professor": a camada gated que NUNCA muda o número</a></li>
+    <li><a href="#factors">Os cinco fatores, um a um (regras determinísticas)</a></li>
+    <li><a href="#service">O service: compõe os reads na borda, o core fica puro</a></li>
+    <li><a href="#endpoint">O endpoint <code>GET /health-score</code> e o contrato</a></li>
+    <li><a href="#decisoes">As 6 decisões (D1–D6) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: uma nota 0–100 + um detalhamento por fator (FR-012)</h2>
+
+<p>Os SPECs anteriores deram ao investidor <strong>observações</strong> (insights, SPEC-104) e <strong>orientação acionável</strong>
+(rebalanceamento, SPEC-105). O SPEC-106 entrega uma terceira coisa, complementar: um <strong>termômetro</strong>. Uma
+<strong>nota 0–100</strong> que resume "quão saudável está a minha carteira <em>para o meu perfil, neste mercado</em>" — um
+sinal único, que o investidor pode acompanhar no tempo, sempre acompanhado de um <strong>detalhamento de por quê</strong>
+(FR-012). Sem auditoria manual, sem caixa-preta.</p>
+
+<p>O que ele entrega é um novo pacote-feature <code>internal/health</code> e um endpoint:</p>
+<ul>
+  <li>O <strong><code>HealthScore</code></strong> — a nota (<code>int</code> 0–100) + a fatia <code>Factors []FactorScore</code> (o detalhamento) + os campos
+  opcionais da narrativa (<code>Narrative</code>, <code>NarrativeAvailable</code>, <code>Disclaimer</code>).</li>
+  <li>A <strong><code>Compute(Inputs) HealthScore</code></strong> — o <strong>coração</strong>: uma <strong>função pura</strong> que calcula os cinco sub-scores e
+  os combina pela <strong>média ponderada</strong> (<code>money.WeightedMeanBps</code>, Σ pesos = 10 000, meio-para-cima). <strong>Nenhum LLM
+  aqui.</strong></li>
+  <li>O <strong><code>Service.Score</code></strong> — compõe quatro reads (dashboard, perfil, holdings, macro) na <strong>borda</strong>, roda a
+  <code>Compute</code>, e <strong>depois</strong> pede a <strong>narrativa do professor</strong> ao <code>Insighter</code> gated (que só explica o número já
+  decidido).</li>
+  <li><strong>Um único endpoint</strong> <code>GET /health-score</code>. <strong>Nenhuma tabela, nenhuma migration</strong> — a nota é computada
+  sob demanda (histórico fica fora de escopo).</li>
+</ul>
+
+<div class="diagram">ANTES (SPEC-103 / 101 / 102 / 006 / 005)        DEPOIS (SPEC-106)
+  dashboard: alocação/setores/concentração     health.Compute: NOTA 0–100 COMPUTADA (Σ pesos=10000)
+  profile:   risco/objetivos/horizonte         5 fatores: cada um com sub-score + explicação
+  holdings:  posições + tipos de liquidez      macro é INPUT → nota ciente do mercado, mas reprodutível
+  macro:     SELIC/CDI/IPCA (006)              narrativa do "professor" (Insighter gated, opcional)
+  Insighter: porta gated do LLM (pronta)       GET /health-score → nota + detalhamento + narrativa
+  NOTA gerada? NUNCA — é computada            "mesmos inputs → mesma nota + mesma explicação"</div>
+
+<p>O endpoint novo (atrás da auth deny-by-default, fora da allowlist pública):</p>
+<pre><code>GET /health-score
+   → 200 { score, factors[]{name,score,weight_bps,explanation}, narrative, narrative_available, disclaimer }
+   | 401 (sem sessão)</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que esta spec é a "prova de fogo" da reprodutibilidade — e por que ela é computada</span>
+  As três specs de IA do produto têm posturas diferentes diante do número. No SPEC-104 o LLM <strong>explica</strong> fatos
+  computados. No SPEC-105 o LLM <strong>explica</strong> uma % computada e <strong>nomeia</strong> candidatos aterrados. No SPEC-106 a
+  ambição é maior ainda: <strong>a nota e o detalhamento inteiro são computados</strong> — o LLM não chega nem perto do
+  número. Por quê? Porque a métrica de sucesso do PRD é literal: <em>"mesmos inputs → mesma nota + a mesma
+  explicação"</em>. Um LLM, por natureza, <strong>não é determinístico</strong> — a mesma pergunta dá respostas levemente
+  diferentes. Se a nota viesse do modelo, ela <strong>flutuaria entre chamadas</strong> e a métrica de reprodutibilidade
+  quebraria. A regra binding nº 3 do PRD ("o LLM nunca inventa números") fecha o argumento: a nota é matemática,
+  auditável e estável. O LLM entra <strong>depois</strong>, só para narrar.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="computed">2. LIÇÃO PRINCIPAL — a NOTA é COMPUTADA, não gerada: <code>Compute</code> + <code>WeightedMeanBps</code></h2>
+
+<p>Esta é a ideia mais importante da aula. A <code>Compute</code> (em <code>internal/health/compute.go</code>) é uma <strong>função
+pura</strong>: ela recebe um snapshot estruturado e plano (<code>Inputs</code>) e devolve a nota + o detalhamento, sem tocar em
+SQL, HTTP, LLM ou relógio. Cada um dos cinco fatores é uma <strong>regra determinística</strong> que produz um sub-score
+0–100 + uma explicação; a nota final é a <strong>média ponderada</strong> desses sub-scores.</p>
+
+<h3>2.1 — A primitiva de combinação: <code>money.WeightedMeanBps</code> (meio-para-cima)</h3>
+
+<p>No coração da nota está uma primitiva nova em <code>internal/platform/money</code>: <code>WeightedMeanBps</code> calcula a média
+ponderada de inteiros, onde os pesos são <strong>basis points que somam 10 000</strong> — exatamente a mesma disciplina de
+inteiros + <strong>arredondamento meio-para-cima</strong> que rege todo o dinheiro do projeto (nada de <code>float</code>):</p>
+
+<pre><code>// internal/platform/money/ratio.go
+// WeightedMeanBps retorna a média ponderada de values, onde weightsBps são pesos inteiros em
+// basis points que somam 10000 — Σ(valueᵢ × weightᵢ) / 10000, arredondado meio-para-cima
+// (SPEC-106 BR-1061 — a nota de saúde é a média ponderada reprodutível dos seus sub-scores).
+func WeightedMeanBps(values, weightsBps []int) int {
+    // ... pareia values[i] × weightsBps[i] ...
+    var num int64
+    for i := 0; i < n; i++ {
+        num += int64(values[i]) * int64(weightsBps[i])
+    }
+    if num <= 0 { return 0 }
+    // meio-para-cima: (2*num + 10000) / (2*10000)
+    return int((2*num + 10000) / 20000)
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que inteiros + meio-para-cima = reprodutibilidade "ao ponto"</span>
+  A reprodutibilidade do PRD não é "mais ou menos a mesma nota"; é <strong>a mesma nota, ao ponto</strong>, e <strong>a mesma
+  explicação, byte a byte</strong>. <code>float64</code> sabota isso de duas formas: a aritmética binária acumula erros (0,1 +
+  0,2 ≠ 0,3) e a ordem das operações importa. A solução do projeto, aplicada aqui, é <strong>nunca usar <code>float</code></strong>: os
+  sub-scores são <code>int</code> 0–100, os pesos são <code>int</code> bps (Σ = 10 000), e a média tem <strong>uma regra de arredondamento
+  documentada</strong> (meio-para-cima). O resultado é uma função de inteiros — totalmente determinística — então a mesma
+  entrada sempre dá a mesma saída, sem deriva. É a mesma filosofia da <code>ShareBps</code>/<code>ApplyBps</code> do dashboard.
+</div>
+
+<h3>2.2 — A <code>Compute</code>: o detalhamento e a renormalização dos pesos</h3>
+
+<p>A <code>Compute</code> monta a lista de fatores, deixa cada regra calcular seu sub-score, e combina. Há dois detalhes
+espertos embutidos: a <strong>carteira vazia</strong> faz short-circuit para nota 0 (D6), e quando o <strong>perfil não está
+setado</strong> os dois fatores que dependem dele são <strong>omitidos</strong> e os pesos restantes são <strong>renormalizados</strong> para
+voltar a somar 10 000 (D4) — reusando o mesmo <code>AllocateBps</code> do SPEC-105:</p>
+
+<pre><code>// internal/health/compute.go — a nota é a média ponderada dos sub-scores (SEM LLM)
+func Compute(in Inputs) HealthScore {
+    if in.CurrentValueCentavos <= 0 {
+        return emptyScore()                       // carteira vazia → nota 0 + "adicione posições" (D6)
+    }
+
+    factors := []FactorScore{
+        diversification(in), concentration(in), liquidity(in),
+    }
+    if in.HasProfile {
+        factors = append(factors, goalAlignment(in), riskExposure(in))  // só com perfil
+    }
+
+    // Renormaliza os pesos dos fatores PRESENTES para somar EXATAMENTE 10000 (reusa o allocator):
+    weights := make([]int64, len(factors))
+    for i, f := range factors { weights[i] = int64(defaultWeightBps[f.Factor]) }
+    normalised := money.AllocateBps(weights)      // ← Σ = 10 000 exato, mesmo sem 2 fatores
+
+    values := make([]int, len(factors))
+    for i := range factors {
+        factors[i].WeightBps = normalised[i]
+        values[i] = factors[i].Score
+    }
+    return HealthScore{Score: money.WeightedMeanBps(values, normalised), Factors: factors}
+}</code></pre>
+
+<p>Os pesos default (D3) são uma heurística <strong>documentada e ajustável</strong>: diversificação 25% · concentração 25% ·
+liquidez 15% · alinhamento de metas 20% · exposição a risco 15% (em bps, Σ = 10 000). Quando o perfil falta, os
+20% + 15% dos dois fatores omitidos não somem — eles são <strong>redistribuídos</strong> proporcionalmente entre os três
+fatores que sobraram, então a nota continua significativa e os pesos continuam fechando em 10 000.</p>
+
+<div class="box why">
+  <span class="lbl">Por que reusar <code>AllocateBps</code> para renormalizar (e não dividir por 0,65)</span>
+  Dividir os pesos por "0,65" para reescalar reintroduziria <code>float</code> e deriva de arredondamento — exatamente o que
+  estamos evitando. Reusar o <code>money.AllocateBps</code> (a mesma primitiva de maior-resto do SPEC-105) garante que os
+  pesos renormalizados <strong>somam exatamente 10 000 bps</strong> por construção, com inteiros, de forma determinística. É
+  o invariante de reconciliação aplicado aos pesos: <strong>os pesos sempre fecham em 100%</strong>, com ou sem perfil — então
+  a média ponderada nunca fica "fora de escala".
+</div>
+
+<!-- ============================================================ -->
+<h2 id="market">3. Ciente do mercado, ainda assim reprodutível: o macro como INPUT</h2>
+
+<p>Aqui está a sutileza mais elegante da spec, e ela responde a uma pergunta natural: <em>"como a nota pode mudar
+com o mercado E continuar reprodutível?"</em>. A resposta é que <strong>o macro (SELIC) é um INPUT da computação</strong>, não
+uma fonte de aleatoriedade. A nota é uma <strong>função determinística de <code>(carteira, perfil, snapshot de mercado)</code></strong>
+— e "mesmos inputs" <em>inclui</em> o snapshot de mercado. Então:</p>
+
+<ul>
+  <li>Se o mercado mudar (SELIC sobe), a nota <strong>se ajusta</strong> — porque um dos inputs mudou.</li>
+  <li>Se você rodar duas vezes com o <strong>mesmo</strong> snapshot, a nota é <strong>idêntica</strong> — porque a função é determinística.</li>
+</ul>
+
+<p>O mercado entra via um <strong>tilt modesto, documentado e limitado</strong> no alvo de alocação dos fatores de meta/risco:
+conforme a SELIC sobe acima de uma banda neutra (~10%), o mix "saudável" inclina para a renda fixa (pós-fixados
+ficam mais atraentes). O tilt é <strong>determinístico</strong> (mesma SELIC → mesmo tilt) e <strong>limitado</strong> (no máximo 10 pontos
+percentuais), então nunca vira um chamado de market-timing:</p>
+
+<pre><code>// internal/health/compute.go — o tilt de mercado: determinístico e limitado
+const (
+    selicNeutralBps = 1000 // ~10% de taxa básica (a banda neutra)
+    maxTiltBps      = 1000  // teto: desloca no máximo 10 p.p. do alvo de FII
+)
+
+// targetFIIShareBps: o alvo de FII ciente do mercado — o alvo do perfil deslocado para renda fixa
+// conforme a SELIC sobe acima da banda neutra (SPEC-106 FR-1064). Determinístico e limitado.
+func targetFIIShareBps(risk profile.RiskProfile, selicBps int, hasMacro bool) int {
+    base := baseFIIShareBps(risk)                 // a regra de direção do perfil (herdada do SPEC-105)
+    tilt := 0
+    if hasMacro && selicBps > selicNeutralBps {
+        tilt = clamp((selicBps-selicNeutralBps)/2, 0, maxTiltBps)  // modesto, limitado
+    }
+    return maxInt(0, base-tilt)                    // SELIC alta → menos FII no alvo "saudável"
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">A distinção que resolve o paradoxo "muda com o mercado E é reprodutível"</span>
+  Não-determinismo e <em>dependência-de-input</em> são coisas diferentes. Uma função <code>f(x)</code> que dá saídas diferentes
+  para o <strong>mesmo</strong> <code>x</code> é não-determinística (ruim para reprodutibilidade — é o LLM cru). Uma função que dá saídas
+  diferentes para <code>x</code> <strong>diferentes</strong> é apenas <em>sensível ao input</em> (perfeitamente reprodutível). O macro é um
+  <strong>argumento</strong> da nota, então: trocar o macro muda a nota (sensibilidade desejada), mas fixar o macro fixa a nota
+  (reprodutibilidade preservada). É por isso que o teste de reprodutibilidade compara duas chamadas com o
+  <strong>mesmo <code>(carteira, perfil, macro)</code></strong> e exige um detalhamento byte-idêntico — e ainda assim a nota responde
+  às condições. Se o macro estiver ausente, o tilt é <strong>neutro</strong> (cai no alvo só-do-perfil), explicado, e a nota
+  continua sendo computada.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="narrative">4. A narrativa do "professor": a camada gated que NUNCA muda o número</h2>
+
+<p>Em cima da nota computada vem a <strong>experiência do professor</strong>: uma <strong>narrativa em prosa</strong>, rica e contextual,
+que explica o porquê da nota usando o mercado ao vivo. Ela é produzida pelo <code>Insighter</code> gated (SPEC-005, com
+uma nova task <code>health_score</code>) e tem quatro propriedades que vale fixar — porque elas são o que torna a camada
+<em>segura</em>:</p>
+
+<ol>
+  <li><strong>Aterrada nos fatos computados.</strong> A narrativa recebe <strong>a própria nota</strong> e os sub-scores como FATOS — ela
+  explica o número que foi dado, nunca inventa um.</li>
+  <li><strong>Gated.</strong> Passa pelos mesmos gates do SPEC-005 — explicabilidade (FR-013) e não-conselho (FR-014) — sem
+  re-implementá-los.</li>
+  <li><strong>Degradável.</strong> Se o LLM estiver fora, a narrativa some (<code>narrative_available:false</code>) e a nota +
+  detalhamento <strong>continuam de pé</strong>.</li>
+  <li><strong>Nunca muda o número.</strong> Esta é a garantia binding (D1), e ela é <strong>provada por teste</strong>.</li>
+</ol>
+
+<pre><code>// internal/health/narrative.go — a narrativa é ADITIVA: só explica, nunca toca a nota
+func (s *Service) addNarrative(ctx context.Context, userID string, in Inputs, hs HealthScore) HealthScore {
+    res, err := s.insighter.Generate(ctx, insight.InsightRequest{   // ← a ÚNICA via do texto de IA
+        Facts:  narrativeFacts(in, hs),   // a nota COMPUTADA + sub-scores + mercado vão como FATOS
+        Task:   TaskHealthScore,
+        UserID: userID,
+    })
+    if err != nil {
+        return hs   // degrada: a nota + o detalhamento computados ficam de pé (FR-1063)
+    }
+    text := narrativeText(res)
+    if text == "" { return hs }
+    hs.Narrative = text                  // ← só ANEXA prosa; Score e Factors permanecem intocados
+    hs.NarrativeAvailable = true
+    hs.Disclaimer = res.Disclaimer
+    return hs
+}</code></pre>
+
+<p>Repare em <code>narrativeFacts</code>: a nota e cada sub-score viram <strong>fatos inteiros</strong> que alimentam o prompt. O LLM
+recebe "a nota é 72; diversificação 60, concentração 80..." e <strong>explica isso</strong> com o contexto de SELIC/CDI ao
+vivo — ele nunca calcula a nota, só a justifica:</p>
+
+<pre><code>// internal/health/narrative.go — aterra a narrativa na nota COMPUTADA (inteiros, sem float)
+func narrativeFacts(in Inputs, hs HealthScore) insight.Facts {
+    factorScores := make(map[string]int, len(hs.Factors))
+    for _, f := range hs.Factors { factorScores[string(f.Factor)] = f.Score }
+    facts := insight.Facts{
+        "health_score":  hs.Score,        // ← a nota JÁ decidida, passada como fato
+        "factor_scores": factorScores,    // ← os sub-scores JÁ decididos
+        "fii_value_centavos": in.FIIValueCentavos, /* ... */
+    }
+    if in.HasProfile { facts["risk_profile"] = string(in.Risk) }
+    if in.HasMacro   { facts["selic_bps"]   = in.SelicBps }     // o mercado tempera a EXPLICAÇÃO
+    return facts
+}</code></pre>
+
+<div class="box bug">
+  <span class="lbl">A prova de que a narrativa nunca muda o número: <code>TestService_Score_NumberUnchangedByNarrative</code></span>
+  É a <strong>estrutura</strong> que prova, mas há também um teste que crava a garantia binding. Ele roda a <code>Score</code> <strong>duas
+  vezes</strong> com os mesmos inputs: uma com a narrativa <strong>OK</strong> e outra com o Insighter <strong>totalmente fora</strong>
+  (<code>ErrInsightsUnavailable</code>). Depois assevera <code>require.Equal(off.Score, on.Score, "a narrativa nunca muda o
+  número")</code> <strong>e</strong> <code>require.Equal(off.Factors, on.Factors, "nem o detalhamento")</code>. O outage <strong>não é um erro
+  duro</strong> — a nota fica de pé com <code>NarrativeAvailable:false</code>. Some a isso o teste de que uma carteira vazia <strong>não
+  chama o LLM</strong> (<code>stub.calls == 0</code>) e você tem a separação número/narrativa <strong>garantida por construção e por
+  teste</strong>, não por boa-fé.
+</div>
+
+<div class="diagram">    O caminho da nota → da narrativa (e por que o número está blindado):
+
+    Inputs (carteira + perfil + macro)  ─▶  Compute(Inputs)   [PURO, sem LLM]
+                                                  │  produz Score + Factors (determinístico)
+                                                  ▼
+                                          HealthScore{Score, Factors}   ◀── ESTE número é final
+                                                  │
+                          (carteira vazia? → para aqui, sem chamar o LLM)
+                                                  ▼
+                    insighter.Generate(facts = nota + sub-scores + mercado, "health_score")
+                                                  │   cadeia de decorators do SPEC-005
+                          ┌───────────────────────────────────────────────┐
+                          │ cache → gate(FR-013 explica + FR-014 não       │
+                          │ aconselha) → telemetria → provider (LLM)       │
+                          └───────────────────────────────────────────────┘
+                                                  │
+                              só ANEXA: hs.Narrative = text  (Score/Factors intocados)
+                                                  ▼
+                       GET /health-score → nota + detalhamento + narrativa (+ disclaimer)
+
+    O LLM recebe a nota como FATO e a explica. Ele nunca a produz nem a altera.</div>
+
+<!-- ============================================================ -->
+<h2 id="factors">5. Os cinco fatores, um a um (regras determinísticas)</h2>
+
+<p>Cada fator é uma <strong>função pura documentada</strong> dos fatos: recebe os <code>Inputs</code>, devolve um sub-score 0–100 + uma
+explicação que <strong>cita os fatos que a moveram</strong> (FR-1062). Todas usam <code>clamp</code> para ficar no intervalo, e nenhuma
+toca <code>float</code>.</p>
+
+<table>
+  <tr><th>Fator</th><th>Peso (D3)</th><th>Regra (determinística)</th><th>O sinal que ele dá</th></tr>
+  <tr>
+    <td><strong>Diversificação</strong></td><td>25%</td>
+    <td>Recompensa mais posições espalhadas por mais setores de FII (~5 posições + ~3 setores saturam)</td>
+    <td>Carteira fina ou de setor único pontua baixo</td>
+  </tr>
+  <tr>
+    <td><strong>Concentração</strong></td><td>25%</td>
+    <td><code>100 − maiorFatiaIsolada/100</code> — o inverso da maior fatia de classe/setor</td>
+    <td>Muita concentração isolada → nota baixa</td>
+  </tr>
+  <tr>
+    <td><strong>Liquidez</strong></td><td>15%</td>
+    <td>Fatia do patrimônio prontamente líquida (FIIs + renda fixa de liquidez diária) / patrimônio total</td>
+    <td>Tudo travado no vencimento → nota baixa</td>
+  </tr>
+  <tr>
+    <td><strong>Alinhamento de metas</strong> <span class="tag">ciente do mercado</span></td><td>20%</td>
+    <td>Quão perto o mix FII/RF atual está do alvo <strong>implícito no perfil + tilt de mercado</strong></td>
+    <td>Longe do alvo "saudável" para o perfil → nota baixa</td>
+  </tr>
+  <tr>
+    <td><strong>Exposição a risco</strong> <span class="tag">ciente do mercado</span></td><td>15%</td>
+    <td>Penaliza risco (fatia de FII + concentração) acima da tolerância do perfil</td>
+    <td>Mais risco do que o perfil suporta → nota baixa</td>
+  </tr>
+</table>
+
+<p>Veja a <strong>diversificação</strong> e a <strong>concentração</strong> — as duas mais simples, mas que mostram o padrão "explicação
+cita os fatos":</p>
+
+<pre><code>// internal/health/compute.go
+func diversification(in Inputs) FactorScore {
+    holdingsPart := clamp(in.HoldingsCount*12, 0, 60)  // ~5 posições saturam a parte de posições
+    sectorPart   := clamp(in.FIISectorCount*13, 0, 40) // ~3 setores saturam a parte de setores
+    return FactorScore{Factor: FactorDiversification, Score: clamp(holdingsPart+sectorPart, 0, 100),
+        Explanation: fmt.Sprintf("%d posição(ões) em %d setor(es) de FII — mais posições e setores elevam este fator.",
+            in.HoldingsCount, in.FIISectorCount)}
+}
+
+func concentration(in Inputs) FactorScore {
+    worst := maxInt(in.LargestClassBps, in.LargestSectorBps)
+    return FactorScore{Factor: FactorConcentration, Score: clamp(100-worst/100, 0, 100),
+        Explanation: fmt.Sprintf("maior concentração isolada: %d%% — quanto menor, mais saudável.", worst/100)}
+}</code></pre>
+
+<h3>5.1 — A derivação de liquidez (FII + renda fixa de liquidez diária)</h3>
+
+<p>O fator de liquidez tem uma derivação digna de nota. "Líquido" = <strong>todos os FIIs</strong> (negociados em bolsa) <strong>+ a
+parcela de liquidez diária da renda fixa</strong> (um CDB de liquidez diária é líquido; um CDB no vencimento, não). O
+service calcula a <strong>parcela diária</strong> da RF pela proporção do <em>valor investido</em> e a aplica ao valor atual de RF:</p>
+
+<pre><code>// internal/health/service.go — a parcela líquida da renda fixa (split por valor investido)
+func liquidValue(fiiValue, fiValue int64, fi []portfolio.FixedIncomeHolding) int64 {
+    var totalInvested, dailyInvested int64
+    for _, h := range fi {
+        totalInvested += h.InvestedAmountCentavos
+        if h.LiquidityType == portfolio.LiquidityDaily {   // só os de liquidez DIÁRIA contam
+            dailyInvested += h.InvestedAmountCentavos
+        }
+    }
+    liquidFI := int64(0)
+    if totalInvested > 0 {
+        liquidFI = money.ApplyBps(fiValue, money.ShareBps(dailyInvested, totalInvested))
+    }
+    return fiiValue + liquidFI   // FIIs (sempre líquidos) + a parcela diária da RF
+}</code></pre>
+
+<h3>5.2 — Os casos de borda, todos como estados (não erros)</h3>
+<table>
+  <tr><th>Cenário</th><th><code>score</code></th><th>Comportamento</th></tr>
+  <tr><td>Carteira vazia</td><td><code>0</code></td><td>5 fatores com nota 0 + "adicione posições" (D6); <strong>sem chamada ao LLM</strong></td></tr>
+  <tr><td>Perfil não setado</td><td>computada</td><td>meta + risco omitidos; pesos renormalizados; explicado (D4)</td></tr>
+  <tr><td>Posição/setor único</td><td>baixa em div/conc</td><td>o sinal intencional</td></tr>
+  <tr><td>RF toda no vencimento</td><td>baixa em liquidez</td><td>explicado</td></tr>
+  <tr><td>Macro ausente</td><td>computada</td><td>tilt neutro (alvo só-do-perfil), explicado</td></tr>
+  <tr><td>LLM fora</td><td>computada</td><td><code>narrative_available:false</code>; nota + detalhamento intactos</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="service">6. O service: compõe os reads na borda, o core fica puro</h2>
+
+<p>A regra de pureza (BR-1063) diz: <strong>o core de scoring é puro</strong> (sem SQL/HTTP/LLM/time); os reads e a chamada ao
+Insighter acontecem na <strong>borda</strong> (o service). O <code>Service.Score</code> faz exatamente essa divisão de trabalho: monta
+os <code>Inputs</code> a partir de <strong>quatro reads</strong>, roda a <code>Compute</code> pura, e depois anexa a narrativa:</p>
+
+<pre><code>// internal/health/service.go — a borda compõe; o core computa
+func (s *Service) Score(ctx context.Context, userID string) (HealthScore, error) {
+    computeCtx, span := s.tracer.Start(ctx, "health.compute")   // span SEM conteúdo (BR-505)
+    in, err := s.buildInputs(computeCtx, userID)                // 4 reads: dashboard/holdings/profile/macro
+    if err != nil { span.End(); return HealthScore{}, err }
+    hs := Compute(in)                                           // ← o core PURO decide a nota
+    span.End()
+    if in.CurrentValueCentavos <= 0 {
+        return hs, nil                                          // carteira vazia: nada a narrar
+    }
+    return s.addNarrative(ctx, userID, in, hs), nil            // ← a narrativa gated, na borda
+}</code></pre>
+
+<p>E o <code>buildInputs</code> mostra a <strong>degradação graciosa</strong> dos reads opcionais: um <strong>perfil não setado</strong>
+(<code>ErrProfileNotFound</code>) e uma <strong>macro ausente</strong> (<code>ErrMacroNotFound</code>) <strong>não são erros</strong> — eles deixam os fatores
+afetados se virarem (renormalização / tilt neutro). Só um erro de dashboard/holdings sobe:</p>
+
+<pre><code>// internal/health/service.go — perfil/macro ausentes degradam, não falham
+func (s *Service) addProfile(ctx, userID, in *Inputs) error {
+    p, err := s.profiles.GetProfile(ctx, userID)
+    if errors.Is(err, profile.ErrProfileNotFound) {
+        return nil   // meta + risco são omitidos (renormalizados) — NÃO é erro
+    }
+    if err != nil { return fmt.Errorf("health inputs: profile: %w", err) }
+    in.Risk = p.Risk; in.HasProfile = true; return nil
+}</code></pre>
+
+<p>Os <code>Inputs</code> são <strong>flat e primitivos</strong> de propósito — só inteiros (centavos, bps, contagens) e enums. É isso que
+torna a <code>Compute</code> uma função pura e fácil de testar table-driven: ela não conhece <code>dashboard.Dashboard</code> nem
+<code>portfolio.Holdings</code>; ela conhece apenas o snapshot numérico que o service extraiu.</p>
+
+<!-- ============================================================ -->
+<h2 id="endpoint">7. O endpoint <code>GET /health-score</code> e o contrato</h2>
+
+<p>O handler é deliberadamente magro: lê a identidade do contexto (nunca do payload, BR-1064), chama o serviço,
+mapeia para o DTO. Não há body de request — é um <code>GET</code>:</p>
+
+<pre><code>// internal/transport/http/health.go
+func (h healthHandler) getHealthScore(w http.ResponseWriter, r *http.Request) {
+    userID, ok := callerID(w, r)   // identidade do contexto, nunca do payload (BR-1064)
+    if !ok { return }
+    hs, err := h.service.Score(r.Context(), userID)
+    if err != nil { /* erro REAL de serviço → 500 */ }
+    writeJSON(w, http.StatusOK, toHealthResponse(hs))   // degradado (narrativa fora) ainda é 200
+}</code></pre>
+
+<p>O DTO de resposta carrega a nota, o detalhamento (cada fator com <code>name</code>/<code>score</code>/<code>weight_bps</code>/<code>explanation</code>) e
+os campos da narrativa. A nota e os pesos são <strong>inteiros</strong> — o ban do <code>float</code> se estende ao contrato:</p>
+
+<pre><code>// internal/transport/http/health.go — DTO de resposta (inteiros, nunca float)
+type healthResponse struct {
+    Score              int                    `json:"score"`               // 0–100, computado (nunca LLM)
+    Factors            []healthFactorResponse `json:"factors"`
+    Narrative          string                 `json:"narrative"`           // prosa opcional; "" se indisponível
+    NarrativeAvailable bool                   `json:"narrative_available"` // false no outage total do LLM
+    Disclaimer         string                 `json:"disclaimer"`          // presente com a narrativa (FR-014)
+}
+type healthFactorResponse struct {
+    Name string `json:"name"`; Score int `json:"score"`              // 0–100
+    WeightBps int `json:"weight_bps"`; Explanation string `json:"explanation"`  // pesos somam 10000
+}</code></pre>
+
+<p>Como toda spec que toca um endpoint, o contrato vive em <strong>lockstep</strong> em dois lugares guardados pelo teste de
+drift: a <code>routeTable</code> (<code>internal/transport/http/routes.go</code>) e <code>api/openapi.yaml</code>. A nota/sub-scores aparecem
+como inteiros e os pesos como <code>*_bps</code>:</p>
+
+<pre><code># api/openapi.yaml
+  /health-score:
+    get:
+      operationId: getHealthScore
+      summary: Reproducible 0–100 Portfolio Health Score with a per-factor breakdown + gated narrative
+      description: |-
+        A deterministic, reproducible 0–100 score (same inputs → same score + identical breakdown),
+        with five factors each carrying a sub-score, a weight (bps, summing to 10000) and a computed
+        explanation. The score is computed, not generated; market data is an input (market-aware,
+        still reproducible). An optional gated Insighter narrative explains it (FR-013/014) and never
+        changes the number; on an LLM outage narrative_available is false and the score stands.
+      responses:
+        "200": { ... $ref HealthScoreResponse ... }
+        "401": { $ref: Unauthorized }</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">8. As 6 decisões (D1–D6) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>LLM ou determinístico?</td>
+    <td><strong>Em camadas</strong>: nota + detalhamento <strong>computados</strong>; narrativa gated <strong>opcional</strong> por cima</td>
+    <td>Reprodutibilidade do PRD + "o LLM nunca inventa números" exigem nota computada; o macro é input (ciente do mercado, ainda reprodutível); a narrativa é uma camada aditiva rotulada que nunca toca o número.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Onde mora o motor?</td>
+    <td><strong>Novo pacote-feature <code>internal/health</code></strong> — <code>Compute</code> pura + um service magro</td>
+    <td>Espelha a forma do dashboard (SPEC-103); o core fica puro, os reads na borda.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Pesos dos fatores?</td>
+    <td>div 25% · conc 25% · liq 15% · meta 20% · risco 15% (bps, Σ = 10 000)</td>
+    <td>Heurística documentada e ajustável; a personalização por perfil fica como follow-up (§15).</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Perfil não setado?</td>
+    <td><strong>Renormalizar</strong> — omite meta + risco e reescala os pesos restantes a 10 000, cada omitido anotado</td>
+    <td>A nota continua significativa sem perfil; reusa <code>AllocateBps</code> (sem float, fecha em 10 000).</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Reusar fontes estruturadas ou <code>BuildFacts</code>?</td>
+    <td><strong>Ler o dashboard/perfil/holdings/macro estruturados direto</strong></td>
+    <td>Mais limpo para uma computação numérica que parsear o mapa opaco de fatos; a seam <code>BuildFacts</code> é para grounding de LLM, não necessária aqui.</td>
+  </tr>
+  <tr>
+    <td><strong>D6</strong></td><td>Carteira vazia?</td>
+    <td><strong><code>200</code> com <code>score: 0</code></strong> + explicação "adicione posições"</td>
+    <td>Consistente com o padrão de estado amigável; não é um 404; e short-circuita sem chamar o LLM.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">9. As 7 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core/domínio primeiro, borda depois, cada fase compilando e revisável
+sozinha. Com <strong>três fios condutores</strong>: "a nota é computada, não gerada" (a <code>Compute</code> pura antes de qualquer
+LLM), "só inteiros" (sub-scores/nota em [0,100], pesos em bps, half-up, Σ = 10 000) e "guardas por construção"
+(a narrativa só pelo <code>Insighter</code>, e nunca tocando o número).</p>
+
+<h3>Fase 1 — Domínio &amp; as cinco regras de fator + a nota ponderada (o coração)</h3>
+<p>O enum fechado <code>Factor</code> (+ <code>ParseFactor</code>), os tipos <code>FactorScore</code>/<code>HealthScore</code>, os pesos default (D3); a
+primitiva <code>money.WeightedMeanBps</code> (média ponderada inteira, half-up, Σ = 10 000); as cinco regras puras sobre os
+<code>Inputs</code> (meta + risco <strong>cientes do mercado</strong>); e a <code>Compute</code> (combina, renormaliza se sem perfil — D4, carteira
+vazia → 0 — D6, macro ausente → tilt neutro). <strong>A nota foi provada antes de qualquer LLM</strong> — testes table-driven
+de fronteiras, do tilt de mercado, da reprodutibilidade byte-idêntica e do zero-<code>float</code>.</p>
+
+<h3>Fase 2 — Inputs &amp; o service (compõe os reads)</h3>
+<p>Os ports consumer-defined <code>DashboardReader</code>/<code>ProfileReader</code>/<code>HoldingsReader</code>/<code>MacroReader</code>; o <code>health.Service</code>
+compondo os quatro reads nos <code>Inputs</code> e chamando a <code>Compute</code> (perfil/macro degradam graciosamente). <strong>Ainda sem
+LLM.</strong> Testes da composição + dos caminhos de degradação.</p>
+
+<h3>Fase 3 — A narrativa de IA gated (guardas por construção)</h3>
+<p>Depois de computar a nota, pede a narrativa via <code>Insighter.Generate</code> (task <code>health_score</code>) com os fatos = nota
+computada + sub-scores + macro + fatos-chave; anexa o texto gated + o disclaimer. Degrada gracioso
+(<code>NarrativeAvailable:false</code>), aborta em <code>ctx.Err()</code>, e é emitida <strong>só</strong> via o Insighter (teste-marcador). Inclui o
+teste-chave: <strong>a nota é idêntica com a narrativa ligada ou desligada</strong>.</p>
+
+<h3>Fase 4 — API (transporte)</h3>
+<p><code>transport/http/health.go</code>: <code>GET /health-score</code> → DTO (nota + fatores + narrativa + <code>available</code> +
+disclaimer), identidade via <code>auth.UserID(ctx)</code>; erro de serviço → 500. <code>Deps.HealthScore</code>, registro na
+<code>routeTable</code>, path + schema em <code>api/openapi.yaml</code> (drift verde) e a fiação no <code>cmd/api</code> (reusa o Insighter
+compartilhado).</p>
+
+<h3>Fase 5 — Observabilidade</h3>
+<p>A rota herda o span do <code>otelhttp</code>; um span <code>health.compute</code> <strong>sem conteúdo</strong> (nenhuma nota/holdings/perfil vai
+para telemetria); o <code>Insighter</code> grava seu span <code>insight.generate</code> (sem conteúdo — BR-505). Um teste garante
+<strong>nenhum valor de fato / nota / holdings no span</strong>.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: cada regra de fator (fronteiras: vazio, setor-único, tudo-ilíquido, perfil-fora);
+a média ponderada + half-up; o tilt de mercado (mesmo macro → mesmo tilt, ausente → neutro);
+<strong>reprodutibilidade</strong> (mesmos inputs → mesma nota + detalhamento byte-idêntico); a narrativa
+(só-via-Insighter, degrada, número-inalterado); vazio + perfil-fora; handler (identidade-do-contexto,
+forma <code>200</code>, <code>401</code>). Integração <strong>gated</strong>: Postgres real (<code>TEST_DATABASE_URL</code>, <code>-p 1</code>) + o <code>fake</code> Insighter —
+semeia holdings + perfil + cotações + macro, chama <code>GET /health-score</code>, asserta que a nota ∈ [0,100], todo
+fator é explicado, o resultado reconcilia, <strong>duas chamadas devolvem nota + explicação idênticas</strong>
+(reprodutibilidade ponta a ponta) e o isolamento por usuário vale.</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (endpoint <code>/health-score</code>), <code>CHANGELOG.md</code>, <code>api/openapi.yaml</code> (path + schema), SPEC-106 +
+PLAN-106 marcados <strong>Done</strong>, índices e status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">10. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o service
+importando o repositório <em>concreto</em>. O SPEC-106 é um caso particularmente limpo para a <strong>tradução</strong>, porque o
+"repositório" do motor é, na verdade, <strong>quatro fontes de leitura de outras features</strong> (dashboard, perfil,
+holdings, macro) <strong>+ o port do LLM</strong> — e o "núcleo de negócio" é uma função pura. (Para a teoria completa, veja
+a <a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>; aqui aplicamos ela ao
+SPEC-106.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-106</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>healthHandler</code> (<strong>driving adapter</strong> — traduz HTTP ↔ caso de uso, lê a identidade do contexto)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO de response</td><td><code>healthResponse</code> / <code>healthFactorResponse</code> — continuam DTOs, na borda, com <code>score</code>/<code>weight_bps</code>/<code>explanation</code>/<code>narrative</code>/<code>disclaimer</code> (inteiros, nunca float)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Enum/value object de domínio</td><td><code>health.Factor</code> (enum fechado + <code>ParseFactor</code>) e <code>FactorScore</code>/<code>HealthScore</code></td><td>Domínio (<code>health</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>health.Service</code> — o caso de uso "computar a nota", que <strong>vive no core da feature</strong> e depende de <strong>ports</strong> (os quatro readers + o <code>Insighter</code>); compõe os reads + anexa a narrativa, não conversa com SQL/HTTP</td><td>Core da feature (<code>health</code>)</td></tr>
+  <tr><td>Lógica de negócio pura</td><td><code>Compute</code> + as cinco regras de fator + <code>money.WeightedMeanBps</code>/<code>AllocateBps</code> — funções puras (sem SQL/HTTP/LLM/time), totalmente testáveis</td><td>Domínio (<code>health</code> / <code>platform/money</code>)</td></tr>
+  <tr><td>Repository concreto</td><td>Vira <strong>cinco ports</strong>: <code>DashboardReader</code>, <code>ProfileReader</code>, <code>HoldingsReader</code>, <code>MacroReader</code> e o <code>insight.Insighter</code> (LLM gated) — satisfeitos por services de <em>outras</em> features na fiação</td><td>Interfaces no <code>health</code>; implementações na borda/features vizinhas</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> os repositórios concretos e o cliente de LLM concreto — a seta aponta <strong>para
+fora</strong>, rumo à infra. No SPEC-106 o motor <strong>define as interfaces que precisa</strong> e features vizinhas as satisfazem;
+e o texto de IA passa pelo port <code>Insighter</code> que o core <em>insight</em> definiu — a seta aponta <strong>para dentro</strong>:</p>
+
+<pre><code>// internal/health/ports.go — o service DEFINE os ports de que precisa (consumer-defined):
+type DashboardReader interface { GetDashboard(ctx, userID) (dashboard.Dashboard, error) }
+type ProfileReader   interface { GetProfile(ctx, userID) (profile.Profile, error) }
+type HoldingsReader  interface { ListHoldings(ctx, userID) (portfolio.Holdings, error) }
+type MacroReader     interface { GetLatestMacroIndicator(ctx, ind) (marketdata.MacroIndicator, error) }
+
+// As OUTRAS peças os satisfazem — sem saber que o health existe:
+//   dashboard.Service (103)   já tem GetDashboard            → satisfaz DashboardReader
+//   profile.Reader (101)      já tem GetProfile              → satisfaz ProfileReader
+//   portfolio.Service (102)   já tem ListHoldings            → satisfaz HoldingsReader
+//   o repo de macro (006)     já tem GetLatestMacroIndicator → satisfaz MacroReader
+//   o Insighter (005)         é o driven port do LLM, gated  → a única via do texto de IA
+// A fiação acontece só no cmd/api. Todas as setas de dependência apontam PARA DENTRO.</code></pre>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem <em>aciona</em> a aplicação): o <code>healthHandler</code> chama o serviço pela interface
+  <code>HealthScorer</code> definida no próprio transporte (consumer-defined). Fica à <strong>esquerda</strong> do hexágono.</li>
+  <li><strong>Driven ports</strong> (o que a aplicação <em>aciona</em>): os quatro readers (<code>DashboardReader</code>, <code>ProfileReader</code>,
+  <code>HoldingsReader</code>, <code>MacroReader</code>) e o <code>insight.Insighter</code> (o LLM com gates). Ficam à <strong>direita</strong>.</li>
+  <li><strong>Domínio / core puro</strong>: o enum <code>Factor</code>, os tipos <code>FactorScore</code>/<code>HealthScore</code>, a <code>Compute</code>, as cinco regras e
+  as primitivas <code>money.*</code> — tudo sem SQL/HTTP/LLM/time. <strong>Aplicação</strong>: o <code>Service</code> (compõe os reads, computa,
+  anexa a narrativa gated). <strong>Borda</strong>: o handler e os DTOs (HTTP); os adapters de LLM e de banco das features
+  vizinhas.</li>
+</ul>
+
+<div class="diagram">           ┌──────── internal/health (core da feature) ──────────────────┐
+ HTTP ─▶ getHealthScore ─▶│  Service.Score  (compõe reads + COMPUTA + narra)        │
+ (driving)                │      │                                                  │
+                          │      ├─▶ DashboardReader.GetDashboard ◀── dashboard (103)│
+                          │      ├─▶ HoldingsReader.ListHoldings   ◀── portfolio (102)│
+                          │      ├─▶ ProfileReader.GetProfile      ◀── profile (101)  │
+                          │      ├─▶ MacroReader.GetLatest...       ◀── marketdata (006)│
+                          │      ├─▶ Compute(Inputs)   [PURO, Σ pesos=10000, sem LLM] │
+                          │      └─▶ insighter.Generate(facts, "health_score")        │
+                          │             ▲ a ÚNICA via do texto de IA (gates SPEC-005) │
+                          └─────────────────────────────────────────────────────────┘
+   Acíclico: health → {dashboard, profile, portfolio, marketdata, insight, money}. Compute PURO.</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA trilhos que
+<strong>baixam a taxa de erro</strong>. Veja, no SPEC-106, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase — a nota antes do LLM</h3>
+<p>A IA não atacou "faça o health score" de uma vez. O PLAN-106 fatiou em 7 fases bottom-up, e a ordenação foi
+<strong>deliberada</strong>: a <strong>Fase 1 lança a <code>Compute</code> + as cinco regras + <code>WeightedMeanBps</code> antes de tudo</strong>, com testes
+table-driven provando fronteiras, o tilt de mercado, a <strong>reprodutibilidade byte-idêntica</strong> e zero-<code>float</code> —
+<em>sem nenhum LLM por perto</em>. Isso significa que a nota já estava <strong>provada e mecânica</strong> quando o service (Fase 2)
+e a narrativa (Fase 3) entraram. É o oposto de pedir a nota ao modelo: o harness força a matemática a ser
+escrita e testada primeiro, então não há como o LLM "vazar" para dentro do cálculo.</p>
+
+<h3>O hook determinístico <code>block-layering</code></h3>
+<p>O hook <code>block-layering</code> (PostToolUse, <code>exit 2</code>) barra <strong>mecanicamente</strong> qualquer import de SQL/HTTP/SDK de
+vendor dentro de um core de feature. Importar os <strong>tipos de domínio puros</strong> de outras features
+(<code>dashboard.Dashboard</code>, <code>profile.RiskProfile</code>, <code>portfolio.Holdings</code>, <code>marketdata.MacroIndicator</code>,
+<code>insight.Facts</code>) <strong>passa</strong>; se a IA tivesse tentado meter um <code>database/sql</code> ou um <code>net/http</code> dentro de
+<code>internal/health</code>, o hook teria <strong>bloqueado</strong> — sem revisão humana. É o que garante, na prática, que a
+<code>Compute</code> ficou pura e que os reads ficaram na borda (atrás dos readers), não embutidos no domínio.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong> (o grafo acíclico
+<code>health → {dashboard, profile, portfolio, marketdata, insight, money}</code>, sem ciclo de volta), a leitura
+<strong>direta das fontes estruturadas</strong> em vez do mapa opaco de fatos (D5) e — o ponto mais crítico — a <strong>pureza da
+<code>Compute</code></strong>: que o core de scoring não chama SQL/HTTP/LLM/time, e que a narrativa de usuário sai <strong>só</strong> via
+<code>insighter.Generate</code>, nunca construindo strings de IA por outro caminho.</p>
+
+<h3>O <code>go-correctness-reviewer</code> e a disciplina de "computado, não gerado"</h3>
+<p>Sendo a feature onde a <strong>nota</strong> é produzida, a lente de correção vigiou os riscos nº 1 do plano (PLAN-106 §8):
+que <strong>o LLM influenciasse a nota</strong> (quebra de reprodutibilidade), que o <strong>detalhamento fosse não-reprodutível</strong>
+(float / ordem-de-mapa / time) e que a <strong>narrativa burlasse os gates</strong>. Ela garantiu que a nota vem da
+<code>Compute</code> <strong>antes</strong> de qualquer chamada ao LLM (a narrativa recebe a nota como fato); que tudo é <strong>inteiro</strong>
+(sem float); que o detalhamento é em <strong>ordem fixa de fatores</strong> (reprodutível); que <code>ctx.Err()</code> aborta; e o
+<code>%w</code> + prefixo minúsculo nos erros (<code>"health inputs: dashboard: %w"</code>) e o <code>ctx</code> como primeiro parâmetro.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que a separação vale — a nota não se move</span>
+  É a <strong>estrutura</strong> que prova. A <code>Compute</code> roda <strong>antes</strong> de a narrativa ser pedida, e <code>addNarrative</code> só faz
+  <code>hs.Narrative = text</code> — ela nem recebe acesso de escrita ao <code>Score</code>/<code>Factors</code> de forma a alterá-los. Some a isso
+  o teste <code>TestService_Score_NumberUnchangedByNarrative</code> (nota idêntica com o LLM ligado vs. totalmente fora), o
+  teste de que a carteira vazia <strong>não chama o LLM</strong>, o teste de reprodutibilidade byte-idêntica e o hook
+  <code>block-layering</code> (sem provider cru no pacote) e você tem a regra binding <strong>garantida por construção</strong>, não por
+  boa-fé — exatamente o que o PRD exige.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>block-layering</strong>: o bloqueio duro que provou que o <code>health</code> ficou livre de SQL/HTTP, ao mesmo tempo que
+  <em>permitiu</em> o consumo dos tipos de domínio puros das features vizinhas.</li>
+  <li><strong>O teste de drift do OpenAPI</strong>: ao adicionar <code>GET /health-score</code> na <code>routeTable</code>, o <code>openapi_test.go</code>
+  <em>exigiu</em> a entrada correspondente em <code>api/openapi.yaml</code> — senão o build falharia (<a href="#endpoint">seção
+  7</a>).</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-106 referencia ADR-0002 e herda os gates do SPEC-005, mas <strong>não os
+  edita</strong> — se a IA tentasse "atualizar" um gate aceito ou um ADR, o hook barraria. ADR é imutável; supersede,
+  nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos — e os testes têm
+  que passar <strong>sem rede e sem DB</strong>. O default do Insighter é o <code>fake</code> determinístico, então o CI roda offline; a
+  integração (seed de holdings + perfil + cotações + macro, reprodutibilidade ponta a ponta) fica atrás do gate
+  de <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-106</th><th>Por que baixa erro</th></tr>
+  <tr><td>Fatos são computados, não gerados</td><td>A <code>Compute</code> decide a nota antes do LLM; a narrativa recebe a nota como fato e só a explica</td><td>A nota é auditável e reproduzível; o LLM nunca a inventa.</td></tr>
+  <tr><td>Reprodutibilidade ("mesmos inputs → mesma nota")</td><td>Só inteiros + <code>WeightedMeanBps</code> half-up + ordem fixa de fatores; o macro é input</td><td>A métrica do PRD vale ao ponto; teste de detalhamento byte-idêntico.</td></tr>
+  <tr><td>Guardas por construção (FR-013/FR-014)</td><td>Texto de IA (a narrativa) sai SÓ via <code>insighter.Generate</code> gated</td><td>Explicabilidade e não-conselho são inescapáveis — não há caminho para burlar.</td></tr>
+  <tr><td>Dinheiro/taxas nunca são <code>float64</code> (incl. a wire)</td><td>Centavos <code>int64</code>, scores/pesos <code>int</code> bps; <code>weight_bps</code> no JSON e no OpenAPI</td><td>A nota é exata; os pesos reconciliam a 10 000 sem deriva.</td></tr>
+  <tr><td>Enums fechados parse-don't-validate</td><td><code>Factor</code> é <code>type X string</code> + <code>ParseFactor</code> (trim+lower, sentinela <code>%w</code>)</td><td>Um fator inválido é irrepresentável; normalização consistente.</td></tr>
+  <tr><td>Domínio é puro</td><td>A <code>Compute</code> + as regras não tocam SQL/HTTP/LLM/time; os reads ficam no service (borda)</td><td>Testável sem infra; o hook <code>block-layering</code> garante mecanicamente.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td>Os 4 readers + <code>HealthScorer</code> no transporte; <code>accept interfaces, return structs</code></td><td>Fakes triviais nos testes; o motor depende de contratos que ele desenha.</td></tr>
+  <tr><td>Identidade do contexto, nunca do payload</td><td><code>callerID</code> lê <code>auth.UserID(ctx)</code>; não há input do cliente (é um <code>GET</code>)</td><td>Cada um só vê a própria nota — sem vazamento cross-user.</td></tr>
+  <tr><td>OpenAPI em lockstep</td><td><code>GET /health-score</code> na <code>routeTable</code> + em <code>api/openapi.yaml</code>, guardado pelo teste de drift</td><td>O contrato nunca apodrece; doc e código não divergem.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só o stack existente + <code>money.WeightedMeanBps</code></td><td>Zero download novo; superfície de ataque e manutenção mínimas (ADR-0003).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering</h2>
+
+<p>O SPEC-106 é uma feature de IA com uma postura <strong>distinta</strong> das anteriores: aqui o LLM tem o papel <strong>mais
+restrito</strong> de todos — ele não produz nenhum número, só narra. Justamente por isso, ele ensina alguns dos
+conceitos mais importantes de engenharia de IA confiável: <strong>onde NÃO usar o LLM</strong>, e como verificar o que ele
+produz. Vamos a eles, todos ancorados no código desta spec.</p>
+
+<h3>12.1 — Determinismo onde importa: a nota como cálculo, não como geração</h3>
+<p>A lição central de engenharia de IA aqui é negativa e poderosa: <strong>nem tudo deve passar pelo LLM</strong>. Uma nota
+que precisa ser <strong>reprodutível ao ponto</strong> (a métrica do PRD) é exatamente o tipo de saída que <strong>não</strong> deve sair
+de um modelo probabilístico — porque um LLM, por construção, não dá a mesma resposta duas vezes. A <code>Compute</code>
+resolve isso com código determinístico; o LLM entra <strong>depois</strong>, para a parte em que ele é insubstituível (a
+linguagem). Saber <strong>desenhar essa fronteira</strong> — cálculo determinístico vs. geração — é metade da engenharia de
+IA de produto.</p>
+
+<h3>12.2 — Grounding levado ao extremo: o modelo recebe a resposta pronta</h3>
+<p>No SPEC-104 o grounding era "o LLM raciocina sobre fatos computados". Aqui ele é ainda mais forte: o LLM
+recebe <strong>a própria conclusão</strong> (a nota e os sub-scores) como fato e só a <strong>explica</strong>. O <code>narrativeFacts</code> passa
+<code>health_score: hs.Score</code> e <code>factor_scores</code> — o modelo não tem nem a oportunidade de derivar um número, porque
+ele já vem decidido. É a forma mais segura de grounding: <strong>o sistema computa, o modelo verbaliza</strong>. Isso torna
+a narrativa inteiramente justificável — toda frase explica um número que tem origem mecânica.</p>
+
+<h3>12.3 — A narrativa como camada gated e degradável (FR-013 + FR-014)</h3>
+<p>A narrativa passa pelos <strong>mesmos gates</strong> herdados do SPEC-005 (explicabilidade rejeita texto sem explicação;
+não-conselho rejeita ordens/quantidades/preços-alvo), sem re-implementá-los — a propriedade arquitetural é que
+<strong>o motor só emite texto de usuário pela porta que tem os gates</strong>. E ela é <strong>degradável</strong>: um outage do LLM não
+derruba a feature, só remove a prosa (<code>narrative_available:false</code>). Esse é o padrão de <strong>graceful degradation</strong>
+que mantém a IA como um <em>enhancement</em>, nunca um ponto único de falha do produto.</p>
+
+<h3>12.4 — Defesa contra prompt-injection: a nota é blindada por design</h3>
+<p>A narrativa passa holdings e a nota pelo LLM, então há uma superfície de <strong>prompt-injection</strong>. Mas a mitigação
+mais forte é estrutural: <strong>a nota é computada</strong>, então uma injeção <strong>não pode mover o número</strong> — no pior caso a
+narrativa degrada. O gate de não-conselho é o <strong>backstop fail-closed</strong> sobre o texto. É a aplicação da regra "o
+LLM é falível, então o que importa (o número) não depende dele, e o que ele produz (o texto) passa por um
+verificador". A injeção esbarra num número que ela não controla.</p>
+
+<h3>12.5 — Mercado como input determinístico vs. market-timing (uma lição de calibração)</h3>
+<p>O tilt de mercado é uma <strong>lição de engenharia de IA aplicada a finanças</strong>: como deixar uma métrica responder ao
+ambiente <strong>sem</strong> virar um chamado de market-timing? A resposta é mantê-lo <strong>modesto, documentado e limitado</strong>
+(<code>maxTiltBps = 1000</code>), e <strong>determinístico</strong> (mesma SELIC → mesmo tilt). A narrativa então explica "a nota mudou
+por causa do mercado, não da sua carteira" — separando deriva de mercado de deriva de carteira. É calibração
+deliberada: input suficiente para ser útil, limitado o bastante para ser seguro e reproduzível.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA confiável em finanças é <strong>saber o que NÃO entregar ao modelo</strong>. O SPEC-106 entrega a lição mais limpa: a
+  <strong>nota é computada</strong> (determinística, reproduzível, ciente do mercado via input), e o LLM faz <strong>só</strong> o que ele
+  faz melhor — explicar em linguagem natural, com o mercado ao vivo, atrás dos gates. O service, no meio, faz o
+  mínimo: compõe os reads, computa a nota e anexa a narrativa pela única porta gated. É essa <strong>modéstia
+  arquitetural</strong> — <strong>deixar a matemática à matemática e o LLM à linguagem</strong> — que torna a "nota de saúde" um sinal
+  em que o investidor pode <strong>confiar e acompanhar no tempo</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir</h2>
+
+<p>Com o Health Score no ar, o YieldForge tem um <strong>termômetro</strong> que fecha o ciclo das três features de IA:
+insights observam, rebalanceamento orienta, o health score <strong>resume</strong> — todos sobre os mesmos fatos
+computados.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como se conecta ao SPEC-106</th></tr>
+  <tr><td>SPEC-105</td><td>Rebalanceamento</td><td>O rebalanceamento sugere <em>como aproximar</em> a carteira de uma nota melhor; juntos, "qual é a minha nota" + "como melhorá-la" formam um ciclo acionável.</td></tr>
+  <tr><td>SPEC-107</td><td>Projeções</td><td>Um <strong>aporte mensal</strong> projetado, combinado com o health score, mostra como a carteira <em>evolui em saúde</em> ao longo do tempo — e a nota ciente do mercado revela tanto deriva de carteira quanto de mercado.</td></tr>
+  <tr><td>SPEC-108</td><td>Copiloto Conversacional (Chat)</td><td>É o roteador natural: ao detectar "como está minha carteira?", o chat chama <code>GET /health-score</code> e usa a <strong>narrativa do professor</strong> como resposta conversacional.</td></tr>
+  <tr><td>(futuro)</td><td>Histórico do score</td><td>Persistir nota + snapshot de fatores ao longo do tempo (PRD out-of-scope) mostra <strong>tanto a deriva de carteira quanto a de mercado</strong> — limpo de implementar porque o core é determinístico.</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…004</td><td>Esqueleto, persistência, auth, observabilidade</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptadores de LLM (gates)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101 / 102 / 103</td><td>Perfil / Carteira / Dashboard</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-104</td><td>AI Insight Engine (Fact Builder publicado)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-105</td><td>AI Rebalancing Assistant (% computada + candidatos aterrados)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-106</td><td>Portfolio Health Score (nota computada + narrativa do professor)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-107 / 108</td><td>Projeções / Chat</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que a separação nota/narrativa prepara o futuro multi-agente</span>
+  Olhando longe: quando o sistema multi-agente (o "CIO") chegar, cada agente precisará produzir <strong>conclusões
+  defensáveis</strong>. O padrão que o SPEC-106 estabelece — <strong>cálculos determinísticos como ferramentas, LLM como
+  explicador</strong> — é exatamente o que o MCP formaliza: um loop de tool-call onde o agente <em>chama</em> a <code>Compute</code> (uma
+  ferramenta) e <em>explica</em> a nota, em vez de inventar um número. A <code>Compute</code> de hoje é o protótipo das ferramentas
+  determinísticas que cada agente futuro vai chamar — atrás da mesma porta gated do <code>Insighter</code>, que segue
+  sendo o verificador inescapável. A "nota de saúde" vira uma das primeiras <em>tools</em> que o CIO consulta para
+  raciocinar sobre a carteira.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-106 o YieldForge ganhou seu <strong>termômetro</strong>: uma <strong>nota 0–100 COMPUTADA</strong> (não gerada) com um
+  detalhamento por fator, combinada por <code>money.WeightedMeanBps</code> (Σ pesos = 10 000, half-up) numa <code>Compute</code> pura
+  — <strong>reproduzível ao ponto</strong> ("mesmos inputs → mesma nota") e <strong>ciente do mercado</strong> (o macro é um input, com tilt
+  modesto e determinístico) <em>sem deixar de ser reprodutível</em>; em cima dela, uma <strong>narrativa do "professor"</strong> pela
+  porta gated do <code>Insighter</code> explica o resultado com o mercado ao vivo — aterrada, gated (FR-013/014), degradável
+  (<code>narrative_available:false</code>) e que <strong>nunca toca no número</strong> (test-enforced) — exposta em <code>GET /health-score</code>,
+  com carteira vazia → nota 0, sem nenhuma tabela nova.
+</div>
+
+<footer>
+  YieldForge · Aula 106 (SPEC-106) · gerada como material de estudo. Veja também a
+  <a href="SPEC-105-aula.html">Aula 105</a> (o rebalanceamento — a % computada e o grounding guard), a
+  <a href="SPEC-104-aula.html">Aula 104</a> (o motor de insights — a seam <code>BuildFacts</code> e o grounding), a
+  <a href="SPEC-005-aula.html">Aula 05</a> (o port <code>Insighter</code> + os gates que tornam a narrativa inescapável), a
+  <a href="SPEC-103-aula.html">Aula 103</a> (o dashboard — a <code>Compute</code> e a disciplina de <code>ShareBps</code>/<code>ApplyBps</code>), a
+  <a href="SPEC-006-aula.html">Aula 06</a> (macro &amp; cotações — o SELIC que tempera o tilt), a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-106-portfolio-health-score.md">SPEC-106</a>
+  e o <a href="../03-plans/PLAN-106-portfolio-health-score.md">PLAN-106</a>.
+</footer>
+
+</div>
+</body>
+</html>
