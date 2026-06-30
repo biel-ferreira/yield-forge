@@ -409,6 +409,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Fake market-data provider SELIC scale**: `marketdata.Fake.FetchMacroIndicator` returned the
+  policy rate as `10_500` bps (≈105%) while labelling it "10,50%"; the real BCB adapter correctly
+  stores 10.50% as `1050` bps (1% = 100 bps). Corrected the fake to `1_050` so dev/CI macro data
+  matches production — surfaced while building the SPEC-106 market-aware health-score tilt.
 - `.env` loader now strips inline `# comments` from values (respecting quotes), so
   `.env.example`'s annotated lines (`DB_MAX_OPEN_CONNS=10   # default: 10`) can be copied
   verbatim into a working `.env` instead of being parsed as invalid values.

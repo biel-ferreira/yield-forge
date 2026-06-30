@@ -49,7 +49,7 @@ func (f Fake) FetchFIIQuotes(_ context.Context, tickers []Ticker) (map[Ticker]FI
 // FetchMacroIndicator returns a fixed, valid observation for the requested indicator.
 func (f Fake) FetchMacroIndicator(_ context.Context, ind Indicator) (MacroIndicator, error) {
 	now := f.stamp()
-	value, unit := int64(10_500), UnitBps // 10,50% policy rate
+	value, unit := int64(1_050), UnitBps // 10.50% policy rate (1% = 100 bps, like the real BCB adapter)
 	if ind == IndicatorIFIX {
 		value, unit = 320_000, UnitPoints // ~3.200,00 index points
 	}
