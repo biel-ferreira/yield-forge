@@ -90,6 +90,32 @@ func TestFIIQuoteRepository_NotFound_Integration(t *testing.T) {
 	require.ErrorIs(t, err, marketdata.ErrFIIQuoteNotFound)
 }
 
+func TestFIIQuoteRepository_ListFIIUniverse_Integration(t *testing.T) {
+	fii, _ := marketDataDB(t)
+	ctx := context.Background()
+
+	// Empty universe before any ingestion → empty slice, not an error (SPEC-105 FR-1054).
+	empty, err := fii.ListFIIUniverse(ctx)
+	require.NoError(t, err)
+	require.Empty(t, empty)
+
+	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	for _, q := range []marketdata.FIIQuote{
+		{Ticker: marketdata.MustParseTicker("XPLG11"), PriceCentavos: 10_000, Sector: marketdata.SectorLogistics, Source: "test", ObservedAt: now, FetchedAt: now},
+		{Ticker: marketdata.MustParseTicker("HGLG11"), PriceCentavos: 16_000, Sector: marketdata.SectorLogistics, Source: "test", ObservedAt: now, FetchedAt: now},
+	} {
+		require.NoError(t, fii.UpsertFIIQuote(ctx, q))
+	}
+
+	universe, err := fii.ListFIIUniverse(ctx)
+	require.NoError(t, err)
+	require.Len(t, universe, 2)
+	// Ordered by ticker (deterministic).
+	require.Equal(t, "HGLG11", universe[0].Ticker.String())
+	require.Equal(t, "XPLG11", universe[1].Ticker.String())
+	require.Equal(t, marketdata.SectorLogistics, universe[0].Sector)
+}
+
 func TestMacroRepository_SeriesLatestAndIdempotency_Integration(t *testing.T) {
 	_, macro := marketDataDB(t)
 	ctx := context.Background()

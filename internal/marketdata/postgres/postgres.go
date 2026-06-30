@@ -63,38 +63,78 @@ func (r FIIQuoteRepository) UpsertFIIQuote(ctx context.Context, q marketdata.FII
 	return nil
 }
 
-// GetFIIQuoteByTicker returns the snapshot for t, or marketdata.ErrFIIQuoteNotFound.
-func (r FIIQuoteRepository) GetFIIQuoteByTicker(ctx context.Context, t marketdata.Ticker) (marketdata.FIIQuote, error) {
-	const q = `
-		SELECT ticker, price_centavos, dividend_yield_bps, p_vp_bps, sector,
-			last_dividend_centavos, last_dividend_date, source, observed_at, fetched_at
-		FROM fii_quotes WHERE ticker = $1`
+// fiiQuoteColumns is the SELECT projection both reads share (column order matches scanFIIQuote).
+const fiiQuoteColumns = `ticker, price_centavos, dividend_yield_bps, p_vp_bps, sector,
+	last_dividend_centavos, last_dividend_date, source, observed_at, fetched_at`
 
+// rowScanner is the Scan surface shared by *sql.Row and *sql.Rows.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanFIIQuote decodes one fii_quotes row (projection: fiiQuoteColumns) into a domain FIIQuote.
+func scanFIIQuote(s rowScanner) (marketdata.FIIQuote, error) {
 	var (
 		ticker  string
 		sector  string
 		lastDiv sql.NullTime
 		out     marketdata.FIIQuote
 	)
-	err := r.db.QueryRowContext(ctx, q, t.String()).Scan(
+	if err := s.Scan(
 		&ticker, &out.PriceCentavos, &out.DividendYieldBps, &out.PVPBps, &sector,
-		&out.LastDividendCentavos, &lastDiv, &out.Source, &out.ObservedAt, &out.FetchedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return marketdata.FIIQuote{}, marketdata.ErrFIIQuoteNotFound
+		&out.LastDividendCentavos, &lastDiv, &out.Source, &out.ObservedAt, &out.FetchedAt,
+	); err != nil {
+		return marketdata.FIIQuote{}, err
 	}
-	if err != nil {
-		return marketdata.FIIQuote{}, fmt.Errorf("query fii quote: %w", err)
-	}
-
 	parsed, err := marketdata.ParseTicker(ticker)
 	if err != nil {
-		return marketdata.FIIQuote{}, fmt.Errorf("query fii quote: %w", err)
+		return marketdata.FIIQuote{}, err
 	}
 	out.Ticker = parsed
 	out.Sector = marketdata.Sector(sector)
 	if lastDiv.Valid {
 		d := lastDiv.Time
 		out.LastDividendDate = &d
+	}
+	return out, nil
+}
+
+// GetFIIQuoteByTicker returns the snapshot for t, or marketdata.ErrFIIQuoteNotFound.
+func (r FIIQuoteRepository) GetFIIQuoteByTicker(ctx context.Context, t marketdata.Ticker) (marketdata.FIIQuote, error) {
+	const q = `SELECT ` + fiiQuoteColumns + ` FROM fii_quotes WHERE ticker = $1`
+
+	out, err := scanFIIQuote(r.db.QueryRowContext(ctx, q, t.String()))
+	if errors.Is(err, sql.ErrNoRows) {
+		return marketdata.FIIQuote{}, marketdata.ErrFIIQuoteNotFound
+	}
+	if err != nil {
+		return marketdata.FIIQuote{}, fmt.Errorf("query fii quote: %w", err)
+	}
+	return out, nil
+}
+
+// ListFIIUniverse returns every known FII snapshot, ordered by ticker (deterministic). It is the
+// grounded candidate universe the Rebalancing Assistant reasons over (SPEC-105 FR-1054); the
+// empty slice (not an error) means ingestion has not populated any quotes yet.
+func (r FIIQuoteRepository) ListFIIUniverse(ctx context.Context) ([]marketdata.FIIQuote, error) {
+	const q = `SELECT ` + fiiQuoteColumns + ` FROM fii_quotes ORDER BY ticker`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("list fii universe: %w", err)
+	}
+	defer rows.Close()
+
+	var out []marketdata.FIIQuote
+	for rows.Next() {
+		quote, err := scanFIIQuote(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list fii universe: %w", err)
+		}
+		out = append(out, quote)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list fii universe: %w", err)
 	}
 	return out, nil
 }

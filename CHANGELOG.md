@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-105 — AI Rebalancing Assistant**: given a contribution amount, explainable guidance on
+  where to focus the new money — suggested areas, each with a **deterministically computed share**
+  of the contribution (`suggested_share_bps`, half-up, Σ = 10 000 via the new `money.AllocateBps`),
+  plus **grounded named FII candidates** nested in the FII area. It is the second consumer of the
+  published SPEC-104 Fact Builder seam (`BuildFacts`, reused — no second dashboard read), augmenting
+  the facts with the contribution and the live FII universe (new `ListFIIUniverse` read). Two
+  "computed, not generated" guards: the % split is computed **before** the LLM (which only explains
+  it), and a **grounding guard** drops any candidate naming a ticker the system does not know (no
+  hallucinated tickers). All guidance is emitted only through the gated `Insighter`, so
+  explainability (FR-013) and non-advice (FR-014) hold by construction — a `%` split across areas is
+  a consideration, never a transaction order. New `POST /rebalancing` (auth-scoped; `> 0` integer
+  centavos, never a float; optional `include_asset_shares` opts into an illustrative per-candidate
+  share); empty portfolio still guides; full LLM outage degrades to `200 available:false`. No new
+  tables; documented in `api/openapi.yaml`; PT-BR lesson `docs/lessons/SPEC-105-aula.html`.
 - **SPEC-104 — AI Insight Engine**: the first AI feature reaching users. A deterministic
   **Fact Builder** (`engine.BuildFacts`) composes a structured snapshot from the dashboard
   (SPEC-103), profile (SPEC-101), and macro (SPEC-006) seams — money as `int64` centavos and

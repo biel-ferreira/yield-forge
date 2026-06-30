@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 105 — SPEC-105: AI Rebalancing Assistant (% Computada + Candidatos Aterrados) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 105 · O Assistente de Rebalanceamento · "Tenho R$X pra aportar"</span>
+    <h1>SPEC-105 — AI Rebalancing Assistant (% Computada + Candidatos Aterrados)</h1>
+    <p>Este é o momento mais <strong>acionável</strong> do copiloto: o investidor tem dinheiro novo e uma decisão a tomar. O assistente pega um <strong>aporte</strong> ("tenho R$X pra aportar este mês") e devolve <strong>onde focar</strong> — áreas sugeridas, cada uma com uma <strong>fatia computada do aporte</strong>, mais <strong>candidatos nomeados e aterrados</strong> — <em>nunca</em> uma ordem de transação (FR-011, FR-014). A lição central são <strong>duas travas de "computado, não gerado"</strong>: a <strong>% por área é calculada</strong> por um allocator determinístico <em>antes</em> do LLM (que só a <strong>explica</strong>), e os <strong>nomes</strong> só sobrevivem se o ticker existir de verdade no universo de FIIs (a trava de aterramento). Números computados, nomes aterrados — o modelo raciocina, mas não inventa.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: do aporte à orientação — áreas + candidatos, nunca uma ordem</a></li>
+    <li><a href="#split">LIÇÃO PRINCIPAL — a % é COMPUTADA, não gerada: o <code>ContributionSplit</code></a></li>
+    <li><a href="#grounding">A trava de aterramento: candidatos só sobrevivem se o ticker for real</a></li>
+    <li><a href="#reuso">Reúso da seam publicada: <code>BuildFacts</code> + reconstrução da alocação (BR-1052)</a></li>
+    <li><a href="#construcao">As travas por construção: texto de IA só pelo <code>Insighter</code> gated (FR-013/FR-014)</a></li>
+    <li><a href="#estados">Estados graciosos: carteira vazia AINDA orienta, outage → <code>200 available:false</code></a></li>
+    <li><a href="#endpoint">O endpoint <code>POST /rebalancing</code> e o contrato</a></li>
+    <li><a href="#decisoes">As 7 decisões (D1–D7) e por quê</a></li>
+    <li><a href="#fases">As 8 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: do aporte à orientação — áreas + candidatos, nunca uma ordem</h2>
+
+<p>O SPEC-104 entregou a <strong>primeira feature de IA</strong> (os insights de carteira) e — crucialmente — <strong>publicou
+uma seam</strong>: o <code>BuildFacts(ctx, userID)</code>, a função determinística que monta o snapshot de fatos do
+investidor. O SPEC-105 é o <strong>segundo consumidor</strong> dessa seam, e ele a usa para o caso mais útil de todos:
+o investidor diz <em>"tenho R$X pra aportar"</em>, e o assistente responde <strong>onde focar esse dinheiro novo</strong>.</p>
+
+<p>O que ele entrega é um novo pacote-feature <code>internal/rebalancing</code> e um endpoint:</p>
+<ul>
+  <li>O <strong><code>Contribution</code></strong> — um value object <code>int64</code> centavos, validado <code>&gt; 0</code> na borda (parse-don't-validate);
+  é o <strong>único</strong> valor que o cliente fornece.</li>
+  <li>O <strong><code>ContributionSplit</code></strong> (a função pura <code>Split</code>) — o <strong>coração</strong>: um allocator determinístico que
+  computa a <strong>fatia sugerida por área</strong> (<code>suggested_share_bps</code>, Σ = 10 000 exato) <em>antes</em> de qualquer LLM.</li>
+  <li>O <strong><code>Service.Rebalance</code></strong> — reusa <code>BuildFacts</code>, aumenta os fatos com o aporte + o universo de FIIs + o
+  split computado, e chama o <code>Insighter</code> gated para <strong>explicar</strong> cada área e <strong>nomear</strong> candidatos — com a
+  <strong>trava de aterramento</strong> descartando qualquer ticker que o sistema não conhece.</li>
+  <li><strong>Um único endpoint</strong> <code>POST /rebalancing</code>. <strong>Nenhuma tabela, nenhuma migration</strong> — só uma nova
+  <em>query</em> de leitura (<code>ListFIIUniverse</code>) sobre a tabela <code>fii_quotes</code> que já existe.</li>
+</ul>
+
+<div class="diagram">ANTES (SPEC-104 / 006 / 101)                   DEPOIS (SPEC-105)
+  BuildFacts: seam publicada (pronta)          rebalancing: aporte → áreas + candidatos
+  fii_quotes: cotações ingeridas (006)         ContributionSplit: % por área COMPUTADA (Σ=10000)
+  Insighter: porta gated do LLM (pronta)       grounding guard: ticker real ou descartado
+  perfil: risco do investidor (101)            POST /rebalancing → áreas (% + R$) + candidatos
+  insights "olhe sua carteira" (104)           "onde aplicar o dinheiro novo" (acionável)
+  fatos COMPUTADOS (grounding)                 fatos COMPUTADOS + nomes ATERRADOS</div>
+
+<p>O endpoint novo (atrás da auth deny-by-default, fora da allowlist pública):</p>
+<pre><code>POST /rebalancing  { contribution_centavos, include_asset_shares? }
+   → 200 { areas[]{class,suggested_share_bps,suggested_amount_centavos,explanation,candidates[]}, disclaimer, available }
+   | 400 (aporte ≤ 0 / float) | 401</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que esta spec é a "hora da verdade" do copiloto — e por que ela respeita FR-014</span>
+  Um <strong>insight</strong> ("sua carteira está concentrada em logística") é observação. Um <strong>aporte</strong> ("tenho R$1.000")
+  é uma <em>decisão prestes a acontecer</em>. É exatamente aqui que a tentação de "dar uma ordem" é máxima — e onde
+  a regra binding nº 2 (<strong>copiloto, nunca conselheiro</strong>) precisa segurar firme. O truque de design é sutil: o
+  assistente sugere uma <strong>% de divisão entre áreas</strong> ("60% renda fixa, 40% FIIs"), que é uma <strong>consideração</strong>,
+  não uma ordem — não carrega quantidade de cotas, preço-alvo, imperativo de compra/venda nem garantia, então
+  fica <strong>fora da assinatura de ordem do FR-014</strong>. E ainda assim o disclaimer de não-aconselhamento acompanha
+  toda resposta, e a decisão final continua com o usuário.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="split">2. LIÇÃO PRINCIPAL — a % é COMPUTADA, não gerada: o <code>ContributionSplit</code></h2>
+
+<p>Esta é a ideia mais importante da aula. A regra binding nº 3 do PRD diz <strong>"fatos são computados, não
+gerados"</strong> — e aqui ela ganha sua forma mais ousada: a <strong>própria porcentagem sugerida</strong> é um fato computado.
+O LLM <strong>nunca produz o número</strong>; um allocator determinístico o calcula <em>antes</em> da chamada ao modelo, e o
+<code>Insighter</code> só <strong>explica</strong> o que já foi decidido pela matemática.</p>
+
+<h3>2.1 — A primitiva reutilizável: <code>money.AllocateBps</code> (Σ = 10 000 exato)</h3>
+
+<p>No coração do split está uma primitiva nova em <code>internal/platform/money</code>: <code>AllocateBps</code> distribui
+<strong>10 000 basis points</strong> (= 100%) entre pesos, usando o <strong>método do maior resto</strong> para que o resultado some
+<strong>exatamente 10 000</strong> — sem deriva de arredondamento. É a mesma disciplina da alocação do dashboard (SPEC-103):</p>
+
+<pre><code>// internal/platform/money/ratio.go
+// AllocateBps distribui 10000 bps entre os pesos, proporcionalmente, com maior-resto
+// para que a soma seja EXATAMENTE 10000 — sem deriva (SPEC-105 BR-1056). Pesos negativos
+// viram 0; total zero → tudo zero. Empate no resto vai para o índice menor (determinístico).
+func AllocateBps(weights []int64) []int {
+    // ... floor de cada fatia (w*10000/total) ...
+    leftover := 10000 - distributed
+    // ordena por resto decrescente (estável: empate mantém ordem) e
+    // distribui o leftover de 1 em 1 aos maiores restos:
+    sort.SliceStable(rems, func(a, b int) bool { return rems[a].r > rems[b].r })
+    for k := 0; k < leftover && k < len(rems); k++ { shares[rems[k].idx]++ }
+    return shares
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que "maior-resto" e não arredondar cada fatia isolada</span>
+  Se você arredondasse cada fatia independentemente (33,33% → 33%, três vezes), a soma daria 99% — falta 1
+  ponto. O método do <strong>maior resto</strong> primeiro faz o <em>floor</em> de todas as fatias, conta quantos bps sobraram, e
+  distribui esse <strong>leftover</strong> de 1 em 1 para as fatias com o <strong>maior resto fracionário</strong>. O resultado <strong>sempre
+  fecha em 10 000</strong>, e o empate vai para o índice menor — então a mesma entrada sempre dá a mesma saída. É o
+  invariante de reconciliação: <strong>a soma das fatias é exatamente 100%</strong>, por construção, nunca "≈100%".
+</div>
+
+<h3>2.2 — O allocator de domínio: rebalanceamento-por-aporte</h3>
+
+<p>O <code>Split</code> (em <code>internal/rebalancing/split.go</code>) é uma <strong>função pura</strong>: dada a alocação atual, o perfil de
+risco e o aporte, devolve as fatias por área. A lógica é elegante — em vez de mandar vender o que está
+sobrando, ele <strong>direciona o dinheiro novo para as classes que estão ABAIXO do alvo</strong> implícito no perfil. É
+o "rebalanceamento por aporte": você corrige o desequilíbrio <em>aportando mais onde falta</em>, sem nunca emitir
+uma ordem de venda.</p>
+
+<pre><code>// internal/rebalancing/split.go — o split é uma função PURA dos fatos
+func Split(current Allocation, risk profile.RiskProfile, contribution Contribution) []AreaShare {
+    targets := targetShares(risk)                              // direção implícita no perfil
+    futureTotal := current.TotalCentavos + contribution.Centavos()
+
+    // Pesa cada classe por QUANTO ela está abaixo do alvo APÓS o aporte:
+    weights := make([]int64, len(splitClasses))
+    var anyGap bool
+    for i, c := range splitClasses {
+        targetValue := money.ApplyBps(futureTotal, targets[c])
+        if gap := targetValue - current.ByClass[c]; gap > 0 {  // só os DÉFICITS pesam
+            weights[i] = gap
+            anyGap = true
+        }
+    }
+    if !anyGap {                                               // rede de segurança
+        for i, c := range splitClasses { weights[i] = int64(targets[c]) }
+    }
+
+    shares := money.AllocateBps(weights)                       // ← Σ = 10 000 exato
+    // ... monta AreaShare{Class, SuggestedShareBps, SuggestedAmountCentavos=ApplyBps(aporte, share)}
+}</code></pre>
+
+<p>A "direção implícita no perfil" é uma regra pequena e <strong>documentada</strong> — não uma promessa de alvo numérico
+(isso é deferido em D4/D7). Conservador inclina para renda fixa; agressivo para FIIs; perfil desconhecido
+lê como moderado:</p>
+
+<pre><code>// targetShares: a direção (bps, Σ=10000) que o aporte persegue — uma regra de DIREÇÃO, não um alvo prometido
+func targetShares(risk profile.RiskProfile) map[dashboard.AssetClass]int {
+    switch risk {
+    case profile.RiskConservative:
+        return map[...]int{ClassFII: 3000, ClassFixedIncome: 7000}  // inclina p/ renda fixa
+    case profile.RiskAggressive:
+        return map[...]int{ClassFII: 7000, ClassFixedIncome: 3000}  // inclina p/ FIIs
+    default:  // moderado / não setado
+        return map[...]int{ClassFII: 5000, ClassFixedIncome: 5000}
+    }
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que o número é COMPUTADO antes do LLM — e o que isso resolve (D7)</span>
+  Há duas formas de produzir um "60% renda fixa". A frágil: pedir ao LLM. Aí o número fica <strong>não-determinístico</strong>
+  (varia entre chamadas), <strong>não-auditável</strong> (de onde veio o 60?) e <strong>perigosamente próximo de uma ordem</strong>.
+  A robusta, escolhida aqui: o <code>Split</code> <strong>computa</strong> a fatia a partir de <code>alocação + perfil</code> — uma função
+  visivelmente mecânica e reproduzível — e passa o resultado como um <em>fato</em>. O LLM recebe esse fato e só o
+  <strong>explica</strong> ("a renda fixa recebe a maior fatia porque seu perfil é conservador e o ambiente de SELIC alta
+  favorece pós-fixados"). A decisão <strong>D7</strong> traça a linha com precisão: <strong>os dados de mercado ao vivo inclinam a
+  NARRATIVA, não o número cru</strong>. O número é função de alocação + perfil; o mercado entra na explicação. Assim o
+  split é determinístico (o mesmo aporte → o mesmo split), e a explicação fica rica e contextual.
+</div>
+
+<h3>2.3 — Por que uma % entre áreas é uma consideração, não uma ordem (BR-1056)</h3>
+
+<p>Esta é a justificativa de conformidade, e vale entendê-la a fundo. O FR-014 proíbe <strong>ordens de transação</strong>:
+quantidade de cotas, preço-alvo, imperativo de compra/venda, garantia. Um <strong>split percentual entre seções</strong>
+("60% para renda fixa, 40% para FIIs") <strong>não carrega nenhuma dessas coisas</strong> — é um direcionamento qualitativo
+de <em>onde considerar</em> focar, com o disclaimer junto. Por isso ele fica <strong>fora da assinatura de ordem do
+FR-014</strong>, e o gate de não-aconselhamento (que ainda roda sobre o texto da explicação) o deixa passar. A
+fronteira é deliberada: a <strong>área</strong> é uma consideração; uma <strong>ordem por ativo nomeado com quantidade</strong> seria
+proibida — e é exatamente por isso que a fatia por candidato é <strong>opt-in</strong> e sempre enquadrada como ilustrativa
+(seção <a href="#endpoint">7</a>, D6).</p>
+
+<!-- ============================================================ -->
+<h2 id="grounding">3. A trava de aterramento: candidatos só sobrevivem se o ticker for real</h2>
+
+<p>Se a % é "computada, não gerada", os <strong>nomes</strong> são "aterrados, não inventados". Quando o assistente nomeia
+candidatos ("dê uma olhada em HGLG11, KNRI11..."), há um risco clássico de IA: a <strong>alucinação de ticker</strong> —
+o modelo cospe um código que <em>parece</em> um FII mas não existe, ou que o sistema não conhece. A <strong>trava de
+aterramento</strong> (grounding guard) é determinística e fail-closed: <strong>todo candidato é validado contra o universo
+real de FIIs (SPEC-006); se o ticker não está lá, ele é descartado antes de chegar ao usuário</strong> (BR-1053).</p>
+
+<pre><code>// internal/rebalancing/engine.go — buildCandidates: o grounding guard
+known := tickerIndex(universe)   // mapa ticker-normalizado → cotação real (o universo SPEC-006)
+res, err := s.insighter.Generate(ctx, ...)   // o LLM propõe candidatos pela porta gated
+// ...
+var candidates []Candidate
+for _, in := range res.Insights {
+    q, ok := known[normalizeTicker(in.Title)]
+    if !ok {
+        continue   // TRAVA DE ATERRAMENTO: o assistente nunca nomeia um ticker que o sistema não conhece
+    }
+    candidates = append(candidates, Candidate{
+        Ticker: q.Ticker.String(), Sector: string(q.Sector),  // dados REAIS do universo
+        Title: in.Title, Detail: in.Detail, Explanation: in.Explanation,
+    })
+}</code></pre>
+
+<div class="box bug">
+  <span class="lbl">O detalhe que torna isto à prova de alucinação: o ticker vem do universo, não do texto</span>
+  Repare em <code>q.Ticker.String()</code> e <code>q.Sector</code>: o ticker e o setor que vão para o usuário <strong>não são lidos do
+  texto do LLM</strong> — eles vêm da <strong>cotação real</strong> (<code>q</code>) que o índice <code>known</code> devolveu. O LLM só serve como um
+  "proponente" de qual ticker mencionar; a <strong>fonte da verdade é o universo</strong>. Se o modelo escrevesse "HGLG11"
+  com um erro de digitação, ou inventasse "XPTO99", o <code>normalizeTicker</code> + lookup falharia e o candidato seria
+  <strong>silenciosamente descartado</strong>. É a mesma filosofia da % computada, aplicada a nomes: <strong>o modelo aponta, o
+  sistema confirma</strong>. Um teste dedicado prova que um ticker desconhecido é descartado e um conhecido é mantido.
+</div>
+
+<p>E a renda fixa? Ela não tem um universo público de tickers (não há "ticker" de um CDB), então os candidatos
+de RF são <strong>type-level</strong> ("pós-fixado ≥100% CDI", "Tesouro IPCA+"), aterrados na <strong>macro ao vivo</strong> (SELIC/CDI/IPCA
+que já vêm no <code>BuildFacts</code>), sem um produto nomeado específico. Só os candidatos por <strong>ticker</strong> (FIIs) passam
+pela trava de aterramento — porque só FIIs têm um universo nomeável ingerido (SPEC-006).</p>
+
+<!-- ============================================================ -->
+<h2 id="reuso">4. Reúso da seam publicada: <code>BuildFacts</code> + reconstrução da alocação (BR-1052)</h2>
+
+<p>A decisão D6 do SPEC-104 — <strong>exportar</strong> o Fact Builder — paga dividendos aqui. O SPEC-105 <strong>não re-lê</strong> o
+dashboard, o perfil ou a macro: ele consome a seam publicada via uma interface consumer-defined,
+<code>FactSource</code>, satisfeita na fiação por <code>*engine.Service</code> (o motor do SPEC-104):</p>
+
+<pre><code>// internal/rebalancing/facts.go — a seam publicada que o engine REUSA (BR-1052)
+type FactSource interface {
+    BuildFacts(ctx context.Context, userID string) (insight.Facts, error)
+}</code></pre>
+
+<p>O motor então <strong>aumenta</strong> esses fatos base com três coisas: o aporte, o universo de FIIs ao vivo, e o split
+computado. E há um detalhe esperto: para alimentar o allocator, ele precisa da alocação atual por classe —
+mas ele a <strong>reconstrói a partir dos próprios fatos</strong> (<code>current_value_centavos</code> × <code>allocation_bps</code>), em vez de
+fazer uma segunda leitura do dashboard:</p>
+
+<pre><code>// internal/rebalancing/facts.go — reconstrói a alocação SEM um segundo read do dashboard (BR-1052)
+func allocationFromFacts(base insight.Facts) Allocation {
+    total, _ := base["current_value_centavos"].(int64)
+    byClass := map[dashboard.AssetClass]int64{}
+    if bps, ok := base["allocation_bps"].(map[string]int); ok {
+        for cls, share := range bps {
+            byClass[dashboard.AssetClass(cls)] = money.ApplyBps(total, share)  // bps → centavos
+        }
+    }
+    return Allocation{TotalCentavos: total, ByClass: byClass}
+}
+
+func assembleFacts(base insight.Facts, contribution Contribution, universe []marketdata.FIIQuote) (insight.Facts, []AreaShare) {
+    risk, _ := base["risk_profile"].(string)                  // "" se perfil não setado → moderado
+    split := Split(allocationFromFacts(base), profile.RiskProfile(risk), contribution)
+    base["contribution_centavos"] = contribution.Centavos()
+    base["fii_universe"]          = universeFacts(universe)   // ticker/setor/yield/preço
+    base["suggested_split"]       = splitFacts(split)         // bps + centavos, NUNCA float
+    return base, split
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que reconstruir a alocação dos fatos em vez de reler o dashboard</span>
+  O dashboard já foi computado <strong>uma vez</strong> dentro do <code>BuildFacts</code> (que reusa a <code>Compute</code> do SPEC-103). Reler
+  o dashboard aqui significaria um <strong>segundo caminho de computação</strong> — e o risco de divergência por
+  arredondamento que o SPEC-104 tanto evitou. Reconstruir a alocação a partir de <code>current_value_centavos</code> e
+  <code>allocation_bps</code> (que já estão nos fatos) mantém <strong>um único caminho</strong>: o número que a IA explica, o número
+  do split e o número que a tela mostra são <strong>o mesmo</strong>. A renda fixa entra <strong>ao vivo</strong> via a macro que já está
+  nos fatos base (SELIC/CDI/IPCA precificam todo CDB/Tesouro); só o universo de <em>produtos nomeados</em> é FII-only.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="construcao">5. As travas por construção: texto de IA só pelo <code>Insighter</code> gated</h2>
+
+<p>Como no SPEC-104, as duas guardas binding — <strong>explicabilidade (FR-013)</strong> e <strong>não-aconselhamento (FR-014)</strong>
+— <strong>não são re-implementadas aqui</strong> (BR-1054). Elas já vivem no <code>Insighter</code> (SPEC-005) como decorators de
+gate. O motor de rebalanceamento garante que elas valem por uma propriedade arquitetural: <strong>ele só emite
+texto de usuário pela porta que tem os gates</strong>. Repare que tanto as áreas quanto os candidatos passam pelo
+<em>mesmo</em> <code>insighter.Generate</code> — não há um segundo gerador de strings:</p>
+
+<pre><code>// internal/rebalancing/engine.go — áreas: o LLM EXPLICA, mas os NÚMEROS vêm do split computado
+for _, sh := range split {            // sh = AreaShare com suggested_share_bps JÁ calculado
+    res, err := s.insighter.Generate(ctx, insight.InsightRequest{   // ← a ÚNICA via do texto
+        Facts:  withFocus(facts, "area", string(sh.Class)),
+        Task:   TaskRebalancing,
+        UserID: userID,
+    })
+    if err != nil {
+        if ctx.Err() != nil { return nil, 0, fmt.Errorf("rebalance: %w", ctx.Err()) }
+        continue   // esta área degradou ou foi rejeitada pelo gate — pula (FR-1057)
+    }
+    succeeded++
+    area := Area{Class: string(sh.Class),
+        SuggestedShareBps:       sh.SuggestedShareBps,        // ← número COMPUTADO, não do texto
+        SuggestedAmountCentavos: sh.SuggestedAmountCentavos}
+    if len(res.Insights) > 0 {
+        in := res.Insights[0]
+        area.Title, area.Detail, area.Explanation = in.Title, in.Detail, in.Explanation  // ← texto gated
+    }
+    areas = append(areas, area)
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">A junção (join): número computado + texto gated, lado a lado</span>
+  O padrão-chave do motor é um <strong>join</strong>: para cada área, o <code>suggested_share_bps</code> vem do <code>AreaShare</code>
+  <strong>computado</strong> (a fonte autoritativa), e o <code>title</code>/<code>detail</code>/<code>explanation</code> vêm da <code>Insight</code> <strong>gated</strong>. O
+  número e a prosa nunca se misturam: o modelo <strong>jamais</strong> tem a chance de alterar a fatia, porque a fatia já
+  está no <code>area</code> antes de o texto chegar. Mesmo que o LLM escrevesse "62%" no meio da explicação, o campo
+  estruturado <code>SuggestedShareBps</code> continuaria sendo o valor que o allocator calculou. É assim que "o
+  Insighter explica, mas nunca produz nem altera os números" (BR-1056) vira código.
+</div>
+
+<div class="diagram">    O ÚNICO caminho do texto de IA até o usuário (áreas E candidatos):
+
+    facts (computados: aporte + universo + split) ─▶ insighter.Generate(facts, "rebalancing", userID)
+                                     │
+                                     ▼   cadeia de decorators do SPEC-005
+                          ┌──────────────────────────────────────────┐
+                          │ cache → gate(FR-013 explica + FR-014 não  │
+                          │ aconselha) → telemetria → provider (LLM)  │
+                          └──────────────────────────────────────────┘
+                                     │
+                  ┌──────────────────┴───────────────────┐
+                  ▼ áreas                                 ▼ candidatos
+        join: % COMPUTADA + explicação gated      grounding guard: ticker real ou descartado
+                  │                                       │
+                  └───────────▶ POST /rebalancing ◀───────┘ ─▶ usuário (+ disclaimer)
+
+    Não há segundo gerador de strings. O número é computado, o nome é aterrado, o texto é gated.</div>
+
+<!-- ============================================================ -->
+<h2 id="estados">6. Estados graciosos: vazio AINDA orienta, outage → <code>200 available:false</code></h2>
+
+<p>O mundo real falha de formas variadas, e o motor representa cada uma como um <strong>estado</strong>, não um erro 500.</p>
+
+<h3>6.1 — Carteira vazia AINDA orienta (a diferença-chave do SPEC-104)</h3>
+
+<p>Esta é a distinção mais importante em relação ao SPEC-104. Lá, uma carteira vazia faz <strong>short-circuit</strong> (nada
+a analisar, sem chamada ao LLM). Aqui, é o <strong>contrário</strong>: uma carteira vazia <strong>+ um aporte</strong> é justamente o
+caso do <strong>primeiro investimento</strong> — o investidor mais precisa de orientação. Então o motor <strong>não dá
+short-circuit</strong>: o <code>Split</code> simplesmente não acha nenhuma alocação atual para rebalancear, então segue a
+direção implícita no perfil (a rede de segurança <code>if !anyGap</code> da seção 2.2 entra), e o LLM explica como
+começar (FR-1053).</p>
+
+<h3>6.2 — Outage total → <code>200 available:false</code> (D5)</h3>
+
+<p>Se o LLM está totalmente fora, o motor <strong>não devolve 503</strong>. Consistente com o SPEC-104, ele devolve <strong><code>200</code>
+com <code>available:false</code></strong> e sugestões vazias — o dashboard e a carteira continuam usáveis; só a faixa de
+rebalanceamento mostra "temporariamente indisponível". O <code>Available</code> é <code>true</code> sempre que <strong>ao menos uma
+área</strong> deu certo (resultado parcial); só vira <code>false</code> quando <strong>todas</strong> falharam:</p>
+
+<pre><code>// internal/rebalancing/engine.go — Available:false SÓ no outage total
+return Rebalancing{
+    Areas:      areas,
+    Candidates: candidates,
+    Disclaimer: insight.Disclaimer,
+    Available:  succeeded > 0,   // false só quando TODA área falhou (outage total)
+}, nil</code></pre>
+
+<p>E os candidatos são <strong>opcionais</strong>: se a chamada de candidatos degrada, isso não é fatal — o motor devolve as
+áreas mesmo assim (<code>return nil, nil</code> em <code>buildCandidates</code>). Como no SPEC-104, um <strong>cancelamento</strong> de contexto
+(<code>ctx.Err() != nil</code>) <strong>aborta</strong> em vez de degradar silenciosamente — distinção que separa degradação correta
+de degradação que esconde um problema.</p>
+
+<h3>6.3 — Candidato por-ativo só com <code>include_asset_shares</code> (D6)</h3>
+
+<p>Por padrão, nenhum número por candidato é mostrado — só áreas com %, e os candidatos nomeados <strong>dentro</strong> da
+área de FII. Uma <strong>fatia ilustrativa por candidato</strong> ("~15% para HGLG11, como consideração") é <strong>opt-in</strong> via
+o flag <code>include_asset_shares</code> (default off). Quando ligado, a fatia da área de FII é distribuída uniformemente
+entre os candidatos (maior-resto ao primeiro), sempre enquadrada como ilustrativa, nunca como imperativo:</p>
+
+<pre><code>// internal/rebalancing/engine.go — fatia por candidato: opt-in, ilustrativa, distribuída uniformemente
+func assignIllustrativeShares(candidates []Candidate, fiiAreaBps int) {
+    n := len(candidates)
+    if n == 0 || fiiAreaBps <= 0 { return }
+    base := fiiAreaBps / n
+    remainder := fiiAreaBps - base*n
+    for i := range candidates {
+        candidates[i].IllustrativeShareBps = base
+        if i < remainder { candidates[i].IllustrativeShareBps++ }   // maior-resto ao primeiro
+    }
+}</code></pre>
+
+<table>
+  <tr><th>Cenário</th><th><code>available</code></th><th><code>areas</code> / <code>candidates</code></th><th>Comportamento</th></tr>
+  <tr><td>Carteira vazia + aporte</td><td><code>true</code></td><td>áreas (direção do perfil)</td><td>AINDA orienta (1º investimento)</td></tr>
+  <tr><td>Tudo OK</td><td><code>true</code></td><td>áreas + candidatos aterrados</td><td>caminho feliz</td></tr>
+  <tr><td>Algumas áreas falham</td><td><code>true</code></td><td>as áreas que deram certo</td><td>parcial</td></tr>
+  <tr><td>LLM totalmente fora</td><td><code>false</code></td><td><code>[]</code> / <code>[]</code></td><td>tentou, degradou (D5)</td></tr>
+  <tr><td>Ticker alucinado</td><td>—</td><td>candidato descartado</td><td>trava de aterramento (BR-1053)</td></tr>
+  <tr><td>Aporte ≤ 0 / float</td><td>—</td><td><code>400</code></td><td>antes de qualquer LLM (BR-1051)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="endpoint">7. O endpoint <code>POST /rebalancing</code> e o contrato</h2>
+
+<p>O handler é deliberadamente magro: lê a identidade do contexto, <strong>faz o parse do aporte</strong> (o único input do
+cliente), chama o serviço, mapeia para o DTO. O dinheiro entra como campo <strong>inteiro</strong> (<code>int64</code> centavos) — um
+corpo com float é rejeitado pelo decoder, então o ban do <code>float</code> vale na borda (BR-1051):</p>
+
+<pre><code>// internal/transport/http/rebalancing.go
+type rebalancingRequest struct {
+    ContributionCentavos int64 `json:"contribution_centavos"`  // inteiro → float é rejeitado no decode
+    IncludeAssetShares   bool  `json:"include_asset_shares"`
+}
+
+func (h rebalancingHandler) postRebalancing(w http.ResponseWriter, r *http.Request) {
+    userID, ok := callerID(w, r)   // identidade do contexto, nunca do payload (BR-1055)
+    if !ok { return }
+    var req rebalancingRequest
+    if err := decodeJSON(w, r, &req); err != nil {
+        writeError(w, http.StatusBadRequest, "invalid request body"); return
+    }
+    contribution, err := rebalancing.ParseContribution(req.ContributionCentavos)  // parse-don't-validate, > 0
+    if err != nil {
+        writeError(w, http.StatusBadRequest, "contribution_centavos must be a positive integer"); return
+    }
+    res, err := h.service.Rebalance(r.Context(), userID, contribution,
+        rebalancing.Options{IncludeAssetShares: req.IncludeAssetShares})
+    if err != nil { /* erro REAL de serviço → 500 */ }
+    writeJSON(w, http.StatusOK, toRebalancingResponse(res))   // vazio E degradado → 200
+}</code></pre>
+
+<p>O DTO de resposta <strong>aninha os candidatos dentro da área de FII</strong> (D6): como todos os candidatos com ticker
+são FIIs, eles pertencem àquela área; se FIIs não é uma área sugerida, os candidatos não aparecem. Cada item
+carrega um <code>explanation</code> <strong>sempre presente</strong> (o gate de explicabilidade garante), e a resposta carrega o
+<code>disclaimer</code>:</p>
+
+<pre><code>// internal/transport/http/rebalancing.go — candidatos aninhados na área de FII (D6)
+type areaResponse struct {
+    Class                   string              `json:"class"`
+    SuggestedShareBps       int                 `json:"suggested_share_bps"`
+    SuggestedAmountCentavos int64               `json:"suggested_amount_centavos"`
+    Explanation             string              `json:"explanation"` // sempre presente — o gate garante
+    Candidates              []candidateResponse `json:"candidates"`
+}
+type candidateResponse struct {
+    Ticker               string `json:"ticker"`
+    Explanation          string `json:"explanation"`
+    IllustrativeShareBps int    `json:"illustrative_share_bps,omitempty"` // só com include_asset_shares
+}</code></pre>
+
+<p>Como toda spec que toca um endpoint, o contrato vive em <strong>lockstep</strong> em dois lugares, guardados pelo teste de
+drift: a <code>routeTable</code> (<code>internal/transport/http/routes.go</code>) e <code>api/openapi.yaml</code>. O dinheiro aparece como
+inteiro (<code>*_centavos</code>) e a fatia como <code>*_bps</code> — o ban do <code>float</code> se estende ao contrato:</p>
+
+<pre><code># api/openapi.yaml
+  /rebalancing:
+    post:
+      operationId: postRebalancing
+      summary: Generate explainable contribution guidance (areas, computed split, candidates)
+      description: |-
+        Given a contribution amount, suggest where to focus the new money: areas (each with a
+        deterministically computed `suggested_share_bps`, summing to 10000), with grounded named
+        FII candidates nested inside the FII area. The percentages are computed, not generated; the
+        gated Insighter only explains them — every area/candidate carries an explanation (FR-013)
+        and never a transaction order (FR-014); the response carries the non-advice disclaimer.
+      responses:
+        "200": { ... $ref RebalancingResponse ... }
+        "400": { ... aporte ≤ 0 / float ... }
+        "401": { $ref: Unauthorized }</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">8. As 7 decisões (D1–D7) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Onde mora o motor?</td>
+    <td><strong>Novo pacote-feature <code>internal/rebalancing</code></strong>, consumindo a seam <code>BuildFacts</code> + o <code>Insighter</code></td>
+    <td>Mantém as features separadas (espelha o <code>internal/chat</code> do SPEC-108); o core <code>insight</code> fica puro. Acoplamento menor que meter outro serviço dentro do <code>engine</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Candidatos nomeados no MVP?</td>
+    <td><strong>Sim — FIIs nomeados</strong>, com um pequeno read <code>ListFIIUniverse</code> sobre <code>fii_quotes</code></td>
+    <td>É o que torna a orientação acionável. RF fica type-level (sem universo de produtos); ações/ETFs fora do MVP.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Forma da saída de candidato?</td>
+    <td><strong>Áreas e candidatos como <code>insight.Insight</code> gated</strong>, taguados (<code>area</code>/<code>candidate</code>), separados no DTO</td>
+    <td>Tudo flui pelo gate <strong>existente</strong> do SPEC-005, sem alteração; o DTO os separa na resposta.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Alvos de alocação?</td>
+    <td><strong>Qualitativos</strong> no MVP — raciocina sobre perfil + alocação; <strong>defere</strong> alvos numéricos por classe</td>
+    <td>Pergunta aberta compartilhada com o SPEC-104; a regra de direção é uma heurística pequena e documentada.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Forma do estado degradado?</td>
+    <td><strong><code>200</code> com <code>available:false</code></strong> + sugestões vazias</td>
+    <td>Mais amigável que um 503; parcial <code>200</code> quando só algumas áreas falham. Consistente com SPEC-104.</td>
+  </tr>
+  <tr>
+    <td><strong>D6</strong></td><td>Granularidade da %?</td>
+    <td><strong>Área por padrão; por-ativo opt-in</strong> via <code>include_asset_shares</code></td>
+    <td>A % por área é uma consideração (fora do FR-014); a fatia por candidato, ilustrativa, é o caminho que o chat (SPEC-108) liga ao perguntar "quanto em cada um?".</td>
+  </tr>
+  <tr>
+    <td><strong>D7</strong></td><td>Mercado inclina o número ou a narrativa?</td>
+    <td><strong>Narrativa apenas (A)</strong></td>
+    <td>O split é função determinística de <code>alocação + perfil</code> — visivelmente mecânico e reproduzível. SELIC/CDI/IPCA e yields de FII inclinam a <em>explicação</em>; o número inclinado fica como fast-follow documentado.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">9. As 8 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core/domínio primeiro, borda depois, cada fase compilando e
+revisável sozinha. Com <strong>três fios condutores</strong>: "fatos computados, não gerados" (aqui a % e os nomes),
+"guardas por construção" (texto só pelo <code>Insighter</code>) e "dinheiro é inteiro + reconcilia" (o split soma
+exatamente 10 000 bps, half-up).</p>
+
+<h3>Fase 1 — Domínio &amp; o allocator determinístico (o coração)</h3>
+<p>A primitiva <code>money.AllocateBps</code> (Σ = 10 000 exato, half-up, maior-resto); o value object <code>Contribution</code>
+(<code>int64</code> centavos, <code>ParseContribution</code> valida <code>&gt; 0</code>, sentinela <code>ErrInvalidContribution</code>); o <code>Split</code> puro
+(pesos a partir da alocação + a regra de direção do perfil) e os tipos de resultado (<code>Area</code>, <code>Candidate</code>,
+<code>Rebalancing</code>) + a task <code>rebalancing</code>. <strong>O número principal foi provado antes de qualquer LLM entrar</strong> —
+testes table-driven de <strong>Σ = 10 000 em pesos difíceis</strong>, determinismo, vazio-segue-a-direção, zero-<code>float</code>.</p>
+
+<h3>Fase 2 — Persistência: o read do universo de FIIs</h3>
+<p><code>marketdata.ListFIIUniverse(ctx)</code> — um <code>SELECT</code> sobre <code>fii_quotes</code> (mesmas colunas de
+<code>GetFIIQuoteByTicker</code>, sem <code>WHERE</code>), ordenado deterministicamente — e o port consumer-defined
+<code>rebalancing.UniverseReader</code>, satisfeito na borda pelo adapter Postgres. <strong>Sem mudança de schema</strong> — só uma
+query nova. Teste de integração gated (PG real: semeia cotações → list devolve).</p>
+
+<h3>Fase 3 — Fatos de rebalanceamento (aumenta o Fact Builder)</h3>
+<p><code>assembleFacts</code>: reusa <code>BuildFacts</code>, depois adiciona <code>contribution_centavos</code>, o universo de FIIs
+(<code>fii_universe</code>: ticker/setor/yield/preço) e o split computado (<code>suggested_split</code>: bps + centavos). Reconstrói
+a alocação dos fatos (<code>allocationFromFacts</code>) sem um segundo read. Testes: fatos incluem aporte + universo +
+split; reusa <code>BuildFacts</code> (fake seam); determinístico; <strong>nenhum <code>float</code></strong>; o split reconcilia a 10 000.</p>
+
+<h3>Fase 4 — O Engine (orquestração, grounding guard, gates por construção)</h3>
+<p><code>Service.Rebalance(ctx, userID, contribution, opts)</code>: monta os fatos, chama o <code>Insighter</code> por área
+(juntando o <code>suggested_share_bps</code> computado à explicação gated) e por candidatos (aplicando a <strong>trava de
+aterramento</strong>); carteira vazia → ainda orienta (sem short-circuit); degradação → <code>Available:false</code>; aborta em
+<code>ctx.Err()</code>; fatia por-ativo só com o flag (D6). Inclui o teste-chave: <strong>o motor emite texto de IA SÓ via o
+<code>Insighter</code></strong>; e o teste do grounding guard (ticker desconhecido descartado).</p>
+
+<h3>Fase 5 — API (transporte)</h3>
+<p><code>transport/http/rebalancing.go</code>: <code>POST /rebalancing</code> → parse <code>{contribution_centavos, include_asset_shares?}</code>
+(inteiro, <strong>nunca float</strong>; <code>&gt; 0</code> senão <code>400</code>), identidade via <code>auth.UserID(ctx)</code>; DTO (áreas + bps +
+candidatos aninhados + disclaimer + <code>available</code>); degradado → <code>200</code>; erro de serviço → 500. <code>Deps.Rebalancing</code>,
+registro na <code>routeTable</code>, path + schema em <code>api/openapi.yaml</code> (drift verde) e a fiação no <code>cmd/api</code>.</p>
+
+<h3>Fase 6 — Observabilidade</h3>
+<p>A rota <code>POST /rebalancing</code> herda o span do <code>otelhttp</code>; um span <code>rebalancing.facts</code> para o fact-building
+<strong>sem PII</strong> (nenhum aporte/figura/texto gerado vai para telemetria); o <code>Insighter</code> grava seus spans
+<code>insight.generate</code> (sem conteúdo — BR-505). Um teste garante <strong>nenhum valor de fato / valor do aporte / texto
+gerado no span</strong>.</p>
+
+<h3>Fase 7 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: o allocator (Σ = 10 000, determinismo, direção, no float); parse do aporte; aumento
+de fatos; grounding guard; engine com fakes (só-via-Insighter, vazio-orienta, degrada, flag); handler
+(identidade-do-contexto, <code>400</code> aporte ruim, <code>401</code>, degradado <code>200</code>). Integração <strong>gated</strong>: Postgres real
+(<code>TEST_DATABASE_URL</code>, <code>-p 1</code>) + o <code>fake</code> Insighter — semeia holdings + cotações (um universo) + perfil,
+chama <code>POST /rebalancing</code> e asserta que <strong>toda área/candidato carrega explicação</strong>, o <strong>disclaimer está
+presente</strong>, os candidatos são <strong>aterrados</strong> no universo semeado, as áreas somam 10 000 e o isolamento por
+usuário vale.</p>
+
+<h3>Fase 8 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (endpoint <code>/rebalancing</code>), <code>CHANGELOG.md</code>, <code>api/openapi.yaml</code> (path + schema), SPEC-105 +
+PLAN-105 marcados <strong>Done</strong>, índices e status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">10. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o service
+importando o repositório <em>concreto</em>. O SPEC-105 é um ótimo caso para a <strong>tradução</strong> porque o "repositório" do
+motor não é um banco só — é uma <strong>seam de outra feature</strong> (<code>BuildFacts</code>), um <strong>read de mercado</strong> (o universo)
+e o <strong>port do LLM</strong>. (Para a teoria completa, veja a <a href="arquitetura-hexagonal-aula.html">aula conceitual de
+arquitetura hexagonal</a>; aqui aplicamos ela ao SPEC-105.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-105</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>rebalancingHandler</code> (<strong>driving adapter</strong> — traduz HTTP ↔ caso de uso, faz o parse do aporte)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO de request/response</td><td><code>rebalancingRequest</code> / <code>rebalancingResponse</code> / <code>areaResponse</code> / <code>candidateResponse</code> — continuam DTOs, na borda, com <code>*_centavos</code>/<code>*_bps</code>/<code>explanation</code>/<code>disclaimer</code>/<code>available</code></td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Value object de entrada</td><td><code>rebalancing.Contribution</code> — parse-don't-validate (<code>&gt; 0</code>): um aporte inválido é irrepresentável</td><td>Domínio (<code>rebalancing</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>rebalancing.Service</code> — o caso de uso "gerar orientação de aporte", que <strong>vive no core da feature</strong> e depende de <strong>ports</strong> (a <code>FactSource</code>, o <code>UniverseReader</code>, o <code>Insighter</code>); orquestra + junta o split computado, não conversa com SQL/HTTP</td><td>Core da feature (<code>rebalancing</code>)</td></tr>
+  <tr><td>Lógica de negócio pura</td><td><code>Split</code> + <code>money.AllocateBps</code>/<code>ApplyBps</code> — o allocator determinístico, função pura (sem SQL/HTTP/LLM), totalmente testável</td><td>Domínio (<code>rebalancing</code> / <code>platform/money</code>)</td></tr>
+  <tr><td>Repository concreto</td><td>Vira <strong>três ports</strong>: a <code>FactSource</code> (seam do SPEC-104), o <code>UniverseReader</code> (read de mercado) e o <code>insight.Insighter</code> (LLM gated) — satisfeitos por adapters de <em>outras</em> features na fiação</td><td>Interfaces no <code>rebalancing</code>; implementações na borda/features vizinhas</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> o repositório concreto e o cliente de LLM concreto — a seta aponta
+<strong>para fora</strong>, rumo à infra. No SPEC-105 a virada é tripla: o motor <strong>define as interfaces que precisa</strong> (a
+fonte de fatos, o universo) e features vizinhas as satisfazem; e o texto de IA passa pelo port <code>Insighter</code>
+que o core <em>insight</em> definiu — a seta aponta <strong>para dentro</strong>:</p>
+
+<pre><code>// O engine DEFINE os ports de que precisa (consumer-defined):
+type FactSource    interface { BuildFacts(ctx, userID) (insight.Facts, error) }      // facts.go
+type UniverseReader interface { ListFIIUniverse(ctx) ([]marketdata.FIIQuote, error) } // ports.go
+
+// As OUTRAS peças os satisfazem — sem saber que o rebalancing existe:
+//   *engine.Service (SPEC-104)        já tem BuildFacts        → satisfaz FactSource
+//   o adapter Postgres de marketdata  ganha ListFIIUniverse    → satisfaz UniverseReader
+//   o Insighter (SPEC-005)            é o driven port do LLM, gated → a única via do texto de IA
+// A fiação acontece só no cmd/api. Todas as setas de dependência apontam PARA DENTRO.</code></pre>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem <em>aciona</em> a aplicação): o <code>rebalancingHandler</code> chama o serviço pela interface
+  <code>RebalancingEngine</code> definida no próprio transporte (consumer-defined). Fica à <strong>esquerda</strong> do hexágono.</li>
+  <li><strong>Driven ports</strong> (o que a aplicação <em>aciona</em>): <code>FactSource</code> (a seam de grounding), <code>UniverseReader</code>
+  (o universo de FIIs) e o <code>insight.Insighter</code> (o LLM com gates). Ficam à <strong>direita</strong>.</li>
+  <li><strong>Domínio / core puro</strong>: o value object <code>Contribution</code>, o allocator <code>Split</code>, as primitivas <code>money.*</code> e
+  os tipos <code>Area</code>/<code>Candidate</code>/<code>Rebalancing</code> — tudo sem SQL/HTTP/LLM. <strong>Aplicação</strong>: o <code>Service</code> (orquestra,
+  junta o número computado ao texto gated). <strong>Borda</strong>: o handler e os DTOs (HTTP); os adapters de LLM e de
+  banco das features vizinhas.</li>
+</ul>
+
+<div class="diagram">           ┌──────── internal/rebalancing (core da feature) ─────────────┐
+ HTTP ─▶ postRebalancing ─▶│  Service.Rebalance  (orquestra + JUNTA o split)         │
+ (driving)                 │      │                                                  │
+                           │      ├─▶ FactSource.BuildFacts ◀── *engine.Service (104) │
+                           │      ├─▶ UniverseReader.ListFIIUniverse ◀── postgres (006)│
+                           │      ├─▶ Split(alocação, perfil, aporte)  [PURO, Σ=10000] │
+                           │      └─▶ insighter.Generate(facts, "rebalancing") (×áreas+candidatos)│
+                           │             ▲ a ÚNICA via do texto de IA (gates SPEC-005) │
+                           └─────────────────────────────────────────────────────────┘
+   Acíclico: rebalancing → {insight, marketdata, dashboard, profile, money}. Split PURO.</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA trilhos
+que <strong>baixam a taxa de erro</strong>. Veja, no SPEC-105, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase — o número antes do LLM</h3>
+<p>A IA não atacou "faça o assistente de rebalanceamento" de uma vez. O PLAN-105 fatiou em 8 fases bottom-up, e
+a ordenação foi <strong>deliberada</strong>: a <strong>Fase 1 lança o allocator (<code>AllocateBps</code> + <code>Split</code>) antes de tudo</strong>, com
+testes table-driven provando <strong>Σ = 10 000 em pesos difíceis</strong>, determinismo e zero-<code>float</code> — <em>sem nenhum LLM
+por perto</em>. Isso significa que o "número principal" (a fatia) já estava <strong>provado e mecânico</strong> quando o engine
+(Fase 4) entrou para só <em>orquestrar</em>. É o oposto de pedir o número ao modelo: o harness força a matemática a
+ser escrita e testada primeiro, então não há como o LLM "vazar" para dentro do cálculo.</p>
+
+<h3>O hook determinístico <code>block-layering</code></h3>
+<p>O hook <code>block-layering</code> (PostToolUse, <code>exit 2</code>) barra <strong>mecanicamente</strong> qualquer import de SQL/HTTP/SDK
+de vendor dentro de um core de feature. Importar os <strong>tipos de domínio puros</strong> de outras features
+(<code>dashboard.AssetClass</code>, <code>marketdata.FIIQuote</code>, <code>profile.RiskProfile</code>, <code>insight.Facts</code>) <strong>passa</strong>; se a IA
+tivesse tentado meter um <code>database/sql</code> ou um <code>net/http</code> dentro de <code>internal/rebalancing</code>, o hook teria
+<strong>bloqueado</strong> — sem revisão humana. É o que garante, na prática, que o <code>Split</code> ficou puro e o read do
+universo ficou na borda (atrás do <code>UniverseReader</code>), não embutido no domínio.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong> (o grafo acíclico
+<code>rebalancing → {insight, marketdata, dashboard, profile, money}</code>, sem ciclo de volta), o <strong>reúso da seam
+publicada</strong> (a <code>FactSource</code> em vez de um segundo read do dashboard, BR-1052) e — o ponto mais crítico — a
+<strong>trava por construção</strong>: que o motor emite texto de usuário <strong>só</strong> via <code>insighter.Generate</code>, tanto para áreas
+quanto para candidatos, nunca construindo strings de IA por outro caminho (BR-1054).</p>
+
+<h3>O <code>go-correctness-reviewer</code> e a disciplina de "computado, não gerado"</h3>
+<p>Sendo a feature onde a <strong>% e os nomes</strong> são produzidos, a lente de correção vigiou os riscos nº 1 do plano
+(PLAN-105 §8): que <strong>a % lesse como ordem</strong>, que <strong>o LLM inventasse um ticker</strong>, que <strong>o texto burlasse os
+gates</strong> e que <strong>o split não reconciliasse</strong>. Ela garantiu que o <code>suggested_share_bps</code> dos campos estruturados
+vem do <strong>allocator</strong> (não parseado do texto do LLM); que a trava de aterramento usa <code>q.Ticker</code> do <strong>universo</strong>
+(não o título do LLM); que <code>AllocateBps</code> soma <strong>exatamente 10 000</strong>; que <code>ctx.Err()</code> aborta em vez de degradar;
+e o <code>%w</code> + prefixo minúsculo nos erros e o <code>ctx</code> como primeiro parâmetro.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que as travas valem — duas, desta vez</span>
+  É a <strong>estrutura</strong> que prova. <strong>(1) A %:</strong> o campo <code>SuggestedShareBps</code> da <code>Area</code> é preenchido do
+  <code>AreaShare</code> computado <em>antes</em> de o texto do LLM chegar — o modelo nem recebe a chance de alterá-lo. <strong>(2) Os
+  nomes:</strong> o <code>Ticker</code> do <code>Candidate</code> vem de <code>q.Ticker</code> (a cotação real do universo), não do título do LLM; um
+  ticker desconhecido cai no <code>continue</code>. Some a isso o teste "nenhum texto de IA nasce fora do <code>Insighter</code>", o
+  teste do grounding guard e o hook <code>block-layering</code> (sem provider cru no pacote) e você tem as guardas binding
+  <strong>garantidas por construção</strong>, não por boa-fé — exatamente o que o PRD exige.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>block-layering</strong>: o bloqueio duro que provou que o <code>rebalancing</code> ficou livre de SQL/HTTP, ao mesmo
+  tempo que <em>permitiu</em> o consumo dos tipos de domínio puros das features vizinhas.</li>
+  <li><strong>O teste de drift do OpenAPI</strong>: ao adicionar <code>POST /rebalancing</code> na <code>routeTable</code>, o
+  <code>openapi_test.go</code> <em>exigiu</em> a entrada correspondente em <code>api/openapi.yaml</code> — senão o build falharia
+  (<a href="#endpoint">seção 7</a>).</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-105 referencia ADR-0002/ADR-0003 e herda os gates do SPEC-005, mas
+  <strong>não os edita</strong> — se a IA tentasse "atualizar" um gate aceito ou um ADR, o hook barraria. ADR é imutável;
+  supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos — e os
+  testes têm que passar <strong>sem rede e sem DB</strong>. O default do Insighter é o <code>fake</code> determinístico, então o CI
+  roda offline; a integração (seed de holdings + cotações + perfil, gates end-to-end, candidatos aterrados)
+  fica atrás do gate de <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-105</th><th>Por que baixa erro</th></tr>
+  <tr><td>Fatos são computados, não gerados</td><td>O <code>Split</code> computa a % antes do LLM; o grounding guard valida nomes contra o universo real</td><td>O número é auditável e reproduzível; nenhum ticker é inventado.</td></tr>
+  <tr><td>Guardas por construção (FR-013/FR-014)</td><td>Texto de IA (áreas E candidatos) sai SÓ via <code>insighter.Generate</code></td><td>Explicabilidade e não-conselho são inescapáveis — não há caminho para burlar.</td></tr>
+  <tr><td>Dinheiro nunca é <code>float64</code> (incl. a wire)</td><td><code>Contribution</code> e o split em <code>int64</code> centavos / int bps; <code>*_centavos</code>/<code>*_bps</code> no JSON e no OpenAPI</td><td>O aporte e as fatias são exatos; o split reconcilia a 10 000 sem deriva.</td></tr>
+  <tr><td>Parse-don't-validate (value objects)</td><td><code>ParseContribution</code> rejeita <code>≤ 0</code> com a sentinela <code>ErrInvalidContribution</code></td><td>Um aporte inválido é irrepresentável; o <code>400</code> acontece antes de qualquer LLM.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>FactSource</code>/<code>UniverseReader</code> no pacote; <code>RebalancingEngine</code> no transporte</td><td>Fakes triviais nos testes; o motor depende de contratos que ele desenha.</td></tr>
+  <tr><td>Reúso da seam, sem duplicar reads</td><td><code>FactSource.BuildFacts</code> + <code>allocationFromFacts</code> em vez de um 2º read do dashboard (BR-1052)</td><td>Um único caminho de computação; a tela, o split e a IA usam o mesmo número.</td></tr>
+  <tr><td>Identidade do contexto, nunca do payload</td><td><code>callerID</code> lê <code>auth.UserID(ctx)</code>; o aporte é o único input do cliente</td><td>Cada um só vê orientação da própria carteira — sem vazamento cross-user.</td></tr>
+  <tr><td>OpenAPI em lockstep</td><td><code>POST /rebalancing</code> na <code>routeTable</code> + em <code>api/openapi.yaml</code>, guardado pelo teste de drift</td><td>O contrato nunca apodrece; doc e código não divergem.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só o stack existente</td><td>Zero download novo; superfície de ataque e manutenção mínimas (ADR-0003).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering</h2>
+
+<p>O SPEC-105 <strong>É</strong> uma feature de IA — e uma das mais delicadas, porque é onde a saída do modelo está mais
+perto de "parecer um conselho". Por isso ele exercita, de forma concreta, vários conceitos centrais de
+engenharia de IA confiável. Vamos a eles, todos ancorados no código desta spec.</p>
+
+<h3>12.1 — Grounding levado ao limite: o modelo nem produz o número, nem o nome</h3>
+<p>O grounding do SPEC-104 dizia "o LLM raciocina sobre fatos computados". O SPEC-105 vai além: a <strong>própria
+recomendação numérica</strong> (a % por área) é computada por código, e os <strong>nomes</strong> são validados contra um universo
+real. O modelo recebe o split como fato e o <strong>explica</strong>; recebe a lista de candidatos e só sobrevivem os que
+existem. É a forma mais forte de grounding: <strong>o modelo aponta e raciocina, mas o sistema decide os números e
+confirma os nomes</strong>. Isso torna a saída inteiramente auditável — toda fatia tem uma origem mecânica, todo
+ticker tem uma cotação real.</p>
+
+<h3>12.2 — As guardas como middleware de verificação (FR-013 + FR-014)</h3>
+<p>O padrão arquitetural aqui é o de <strong>verification middleware</strong>: entre o modelo e o usuário há uma cadeia que
+<strong>verifica</strong> cada saída. No SPEC-105 há <strong>dois verificadores</strong> em série: (1) os gates herdados do SPEC-005
+(explicabilidade rejeita texto sem explicação; não-conselho rejeita ordens/quantidades/preços-alvo), por onde
+todo texto passa; e (2) a <strong>trava de aterramento</strong>, um verificador determinístico específico desta feature que
+descarta candidatos sem ticker real. Verificadores empilhados, cada um fail-closed.</p>
+
+<h3>12.3 — Defesa contra alucinação como código de primeira classe</h3>
+<p>A <strong>alucinação de ticker</strong> é um dos modos de falha mais perigosos de IA em finanças — nomear um ativo que
+não existe (ou existe mas o sistema não conhece) destruiria a confiança. A mitigação aqui não é um prompt
+"por favor não invente tickers" (frágil); é uma <strong>checagem determinística</strong> que usa o universo como fonte da
+verdade e <strong>descarta</strong> o que não bate. É a aplicação da regra "o LLM é falível, então toda saída passa por um
+verificador determinístico" — desta vez ao <em>conteúdo factual</em> (o nome), não só à forma (a explicação).</p>
+
+<h3>12.4 — Separação número/narrativa (D7): determinismo onde importa, riqueza onde ajuda</h3>
+<p>A decisão D7 é uma <strong>lição de engenharia de IA</strong>: onde a saída precisa ser determinística e auditável (o
+número), use código; onde a saída se beneficia de contexto e fluidez (a explicação), use o LLM. O split é
+função de <code>alocação + perfil</code> (reproduzível); o mercado ao vivo (SELIC/CDI/IPCA, yields) entra na <strong>narrativa</strong>
+que justifica o número. Você ganha o melhor dos dois mundos: um cálculo confiável e uma explicação rica — sem
+deixar o modelo mexer no que precisa ser exato.</p>
+
+<h3>12.5 — Caching, custo &amp; observabilidade sem PII</h3>
+<p>A postura "zero custo" (binding nº 4) continua valendo: o <code>withFocus</code> dá a cada chamada (por área, por
+candidatos) uma <strong>chave de cache distinta</strong> via os fatos, e como o Fact Builder é determinístico, repetições
+batem no cache do SPEC-005 sem chamar o LLM de novo. E os spans (<code>rebalancing.facts</code>, <code>insight.generate</code>)
+registram latência e outcome <strong>sem nenhum aporte, figura ou texto gerado</strong> (BR-505) — observabilidade de IA
+que respeita privacidade. Há ainda a superfície de <strong>prompt-injection</strong>: holdings/perfil + o aporte fluem para
+os fatos; a mitigação é dupla — o gate de não-conselho é o <strong>backstop fail-closed</strong>, e a trava de aterramento
+limita os nomes a tickers reais.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA confiável em finanças é <strong>números computados + nomes aterrados + texto verificado</strong>. O SPEC-105 entrega
+  os três: o <code>Split</code> produz a % (computada, em bps, reconciliada), o grounding guard confirma os nomes (contra
+  o universo real) e o <code>Insighter</code> verifica a prosa (explicabilidade + não-conselho, por construção). O motor,
+  no meio, faz o mínimo: monta fatos, junta o número à explicação e passa pela única porta gated. É essa
+  modéstia arquitetural — <strong>deixar a matemática à matemática e o LLM à linguagem</strong> — que torna o momento mais
+  acionável do produto <strong>seguro por design</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir</h2>
+
+<p>Com o assistente de rebalanceamento no ar, há <strong>dois</strong> consumidores da seam <code>BuildFacts</code> (insights + agora
+rebalanceamento), e o caminho "tenho R$X pra aportar" está pronto para o chat rotear.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como se conecta ao SPEC-105</th></tr>
+  <tr><td>SPEC-106</td><td>Health Score</td><td>Pontua a carteira a partir dos <strong>mesmos fatos</strong> — "saudável <em>para esse investidor</em>"; o rebalanceamento sugere <em>como aproximar</em> a carteira de um score melhor, com explicação.</td></tr>
+  <tr><td>SPEC-107</td><td>Projeções</td><td>Um <strong>aporte mensal salvo</strong> (perfil/projeção) poderia prefiller o <code>contribution_centavos</code> — fechando o ciclo "quanto aporto" ↔ "para onde".</td></tr>
+  <tr><td>SPEC-108</td><td>Copiloto Conversacional (Chat)</td><td>É o roteador natural: ao detectar "tenho R$X pra aportar", o chat chama <code>POST /rebalancing</code> e, quando o usuário pergunta "quanto em cada um?", liga o flag <code>include_asset_shares</code> (D6).</td></tr>
+  <tr><td>(futuro)</td><td>Universo nomeável de RF + alvos numéricos</td><td>Ingerir <strong>Tesouro Direto</strong> (conjunto público e finito) tornaria candidatos de RF nomeados; alvos numéricos por classe (D4/D7) inclinariam o <em>número</em> do split, não só a narrativa.</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…004</td><td>Esqueleto, persistência, auth, observabilidade</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptadores de LLM (gates)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101 / 102 / 103</td><td>Perfil / Carteira / Dashboard</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-104</td><td>AI Insight Engine (Fact Builder publicado)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-105</td><td>AI Rebalancing Assistant (% computada + candidatos aterrados)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-106 / 107 / 108</td><td>Health Score / Projeções / Chat</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que a separação número/narrativa prepara o futuro multi-agente</span>
+  Olhando longe: quando o sistema multi-agente (o "CIO") chegar, cada agente precisará produzir <strong>recomendações
+  defensáveis</strong>. O padrão que o SPEC-105 estabelece — <strong>cálculos determinísticos como ferramentas, LLM como
+  explicador/orquestrador</strong> — é exatamente o que o MCP formaliza: um loop de tool-call onde o agente <em>chama</em> o
+  allocator (uma ferramenta) e <em>explica</em> o resultado, em vez de inventar números. O <code>Split</code> e o grounding guard
+  de hoje são protótipos das ferramentas determinísticas que cada agente futuro vai chamar — atrás da mesma
+  porta gated do <code>Insighter</code>, que segue sendo o verificador inescapável.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-105 o YieldForge ganhou seu <strong>momento mais acionável</strong>: dado um aporte (<code>POST /rebalancing</code>), um
+  allocator determinístico <strong>computa</strong> a fatia por área (<code>suggested_share_bps</code>, Σ = 10 000 via <code>money.AllocateBps</code>,
+  half-up) <em>antes</em> do LLM, que só a <strong>explica</strong>; uma <strong>trava de aterramento</strong> descarta qualquer candidato cujo
+  ticker não exista no universo de FIIs; tudo emitido <strong>só</strong> pelo <code>Insighter</code> gated — então explicabilidade
+  (FR-013) e não-conselho (FR-014) valem <strong>por construção</strong>, e uma % entre áreas é uma <em>consideração</em>, não uma
+  ordem — reusando a seam <code>BuildFacts</code> (SPEC-104), com carteira vazia AINDA orientando e <code>200 available:false</code>
+  no outage total, sem nenhuma tabela nova.
+</div>
+
+<footer>
+  YieldForge · Aula 105 (SPEC-105) · gerada como material de estudo. Veja também a
+  <a href="SPEC-104-aula.html">Aula 104</a> (o motor de insights — a seam <code>BuildFacts</code> que esta spec reusa), a
+  <a href="SPEC-005-aula.html">Aula 05</a> (o port <code>Insighter</code> + os gates que tornam as travas inescapáveis), a
+  <a href="SPEC-103-aula.html">Aula 103</a> (o dashboard — a <code>Compute</code> e a disciplina de <code>ShareBps</code>), a
+  <a href="SPEC-006-aula.html">Aula 06</a> (macro &amp; cotações — o universo de FIIs aterrado), a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-105-ai-rebalancing-assistant.md">SPEC-105</a>
+  e o <a href="../03-plans/PLAN-105-ai-rebalancing-assistant.md">PLAN-105</a>.
+</footer>
+
+</div>
+</body>
+</html>
