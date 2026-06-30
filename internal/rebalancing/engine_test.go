@@ -112,6 +112,7 @@ func TestRebalance_GroundingGuardDropsUnknownTicker(t *testing.T) {
 	require.Equal(t, "HGLG11", got.Candidates[0].Ticker)
 	require.Equal(t, "logistics", got.Candidates[0].Sector)
 	require.Zero(t, got.Candidates[0].IllustrativeShareBps, "no per-asset share unless opted in")
+	require.Equal(t, 1, got.DroppedCandidates, "the dropped hallucination is counted for telemetry")
 }
 
 func TestRebalance_IncludeAssetSharesSplitsFIIArea(t *testing.T) {

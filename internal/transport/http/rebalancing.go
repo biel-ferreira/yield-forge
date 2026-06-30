@@ -76,6 +76,11 @@ func (h rebalancingHandler) postRebalancing(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	// Surface the grounding-guard drop count (no PII — a count) for hallucination-rate visibility.
+	if res.DroppedCandidates > 0 {
+		h.logger.DebugContext(r.Context(), "rebalance dropped ungrounded candidates",
+			slog.Int("dropped", res.DroppedCandidates))
+	}
 	writeJSON(w, http.StatusOK, toRebalancingResponse(res))
 }
 

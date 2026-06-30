@@ -75,16 +75,17 @@ func (s *Service) generate(ctx context.Context, userID string, facts insight.Fac
 	if err != nil {
 		return Rebalancing{}, err
 	}
-	candidates, err := s.buildCandidates(ctx, userID, facts, universe, areaShareBps(split, areaClassFII), opts)
+	candidates, dropped, err := s.buildCandidates(ctx, userID, facts, universe, areaShareBps(split, areaClassFII), opts)
 	if err != nil {
 		return Rebalancing{}, err
 	}
 
 	return Rebalancing{
-		Areas:      areas,
-		Candidates: candidates,
-		Disclaimer: insight.Disclaimer,
-		Available:  succeeded > 0, // false only when every area failed (full outage)
+		Areas:             areas,
+		Candidates:        candidates,
+		DroppedCandidates: dropped,
+		Disclaimer:        insight.Disclaimer,
+		Available:         succeeded > 0, // false only when every area failed (full outage)
 	}, nil
 }
 
@@ -129,7 +130,10 @@ func (s *Service) buildAreas(ctx context.Context, userID string, facts insight.F
 // buildCandidates asks the Insighter for named candidates and applies the grounding guard: only a
 // ticker present in the universe survives (BR-1053). When opted in, the FII area's share is split
 // evenly across the surfaced candidates as an illustrative within-area consideration (D6).
-func (s *Service) buildCandidates(ctx context.Context, userID string, facts insight.Facts, universe []marketdata.FIIQuote, fiiAreaBps int, opts Options) ([]Candidate, error) {
+// buildCandidates returns the grounded candidates plus the count of candidates the grounding guard
+// dropped for naming a ticker the system does not know (a hallucination signal surfaced for
+// edge-level telemetry, BR-1053).
+func (s *Service) buildCandidates(ctx context.Context, userID string, facts insight.Facts, universe []marketdata.FIIQuote, fiiAreaBps int, opts Options) ([]Candidate, int, error) {
 	known := tickerIndex(universe)
 	res, err := s.insighter.Generate(ctx, insight.InsightRequest{
 		Facts:  withFocus(facts, "candidates", ""),
@@ -138,16 +142,18 @@ func (s *Service) buildCandidates(ctx context.Context, userID string, facts insi
 	})
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("rebalance: %w", ctx.Err())
+			return nil, 0, fmt.Errorf("rebalance: %w", ctx.Err())
 		}
-		return nil, nil // candidates are optional — a degraded candidates call is not fatal
+		return nil, 0, nil // candidates are optional — a degraded candidates call is not fatal
 	}
 
 	var candidates []Candidate
+	dropped := 0
 	for _, in := range res.Insights {
 		q, ok := known[normalizeTicker(in.Title)]
 		if !ok {
-			continue // grounding guard: the assistant never names a ticker the system doesn't know
+			dropped++ // grounding guard: the assistant never names a ticker the system doesn't know
+			continue
 		}
 		if strings.TrimSpace(in.Explanation) == "" {
 			continue // no unexplained candidate reaches the user (FR-013)
@@ -163,7 +169,7 @@ func (s *Service) buildCandidates(ctx context.Context, userID string, facts insi
 	if opts.IncludeAssetShares {
 		assignIllustrativeShares(candidates, fiiAreaBps)
 	}
-	return candidates, nil
+	return candidates, dropped, nil
 }
 
 // withFocus returns a shallow copy of facts with the focus keys added, so each Insighter call has
@@ -209,7 +215,9 @@ func areaShareBps(split []AreaShare, class string) int {
 }
 
 // assignIllustrativeShares distributes the FII area's bps evenly across the candidates (largest
-// remainder to the first), as an illustrative within-area consideration — never an order (D6).
+// remainder to the first), as an illustrative within-area consideration — never an order (D6). The
+// candidate order is the LLM's, so which candidate absorbs the remainder is not stable across
+// providers; that is acceptable for an explicitly illustrative figure.
 func assignIllustrativeShares(candidates []Candidate, fiiAreaBps int) {
 	n := len(candidates)
 	if n == 0 || fiiAreaBps <= 0 {

@@ -37,4 +37,7 @@ type Rebalancing struct {
 	Candidates []Candidate
 	Disclaimer string
 	Available  bool
+	// DroppedCandidates counts candidates the grounding guard rejected for naming an unknown
+	// ticker — a hallucination signal for edge-level telemetry, not part of the user-facing result.
+	DroppedCandidates int
 }
