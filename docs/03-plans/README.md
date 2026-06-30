@@ -33,6 +33,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-103 | SPEC-103 | [Dashboard](PLAN-103-dashboard.md) | ✅ Done |
 | PLAN-104 | SPEC-104 | [AI Insight Engine](PLAN-104-ai-insight-engine.md) | ✅ Done |
 | PLAN-105 | SPEC-105 | [AI Rebalancing Assistant](PLAN-105-ai-rebalancing-assistant.md) | ✅ Done |
+| PLAN-106 | SPEC-106 | [Portfolio Health Score](PLAN-106-portfolio-health-score.md) | 📝 Draft |
 
 (Plans are authored just-in-time, one per spec, in the build order below.)
 
