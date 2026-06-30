@@ -13,6 +13,7 @@ import (
 	authbcrypt "github.com/biel-ferreira/yield-forge/internal/auth/bcrypt"
 	authpostgres "github.com/biel-ferreira/yield-forge/internal/auth/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
+	"github.com/biel-ferreira/yield-forge/internal/health"
 	insightengine "github.com/biel-ferreira/yield-forge/internal/insight/engine"
 	insightfactory "github.com/biel-ferreira/yield-forge/internal/insight/factory"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata/ingest"
@@ -128,12 +129,14 @@ func run() error {
 
 	// The AI features share one Fact Builder (dashboard + profile + macro seams, SPEC-104) and one
 	// gated Insighter (SPEC-005; provider config-selected, default `fake`).
-	factBuilder := insightengine.NewFactBuilder(dashboardService, profileService, marketdatapostgres.NewMacroRepository(db))
+	macroRepo := marketdatapostgres.NewMacroRepository(db)
+	factBuilder := insightengine.NewFactBuilder(dashboardService, profileService, macroRepo)
 	insighter := insightfactory.New(cfg, logger, clock.System{})
 
-	// AI Insight Engine (SPEC-104) + AI Rebalancing Assistant (SPEC-105, grounded in the FII universe).
+	// AI Insight Engine (SPEC-104), Rebalancing Assistant (SPEC-105), Health Score (SPEC-106).
 	insightEngine := insightengine.NewService(factBuilder, insighter)
 	rebalancingEngine := rebalancing.NewService(factBuilder, fiiQuoteRepo, insighter)
+	healthService := health.NewService(dashboardService, profileService, portfolioService, macroRepo, insighter)
 
 	router := transporthttp.NewRouter(transporthttp.Deps{
 		Logger:       logger,
@@ -145,6 +148,7 @@ func run() error {
 		Dashboard:    dashboardService,
 		Insights:     insightEngine,
 		Rebalancing:  rebalancingEngine,
+		HealthScore:  healthService,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,

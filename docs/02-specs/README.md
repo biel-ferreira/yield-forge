@@ -46,7 +46,7 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-103 | [Dashboard](SPEC-103-dashboard.md) | FR-004, FR-005        | ✅ Done |
 | SPEC-104 | [AI Insight Engine](SPEC-104-ai-insight-engine.md) | FR-008–FR-010 (+ FR-013/014 via SPEC-005) | ✅ Done |
 | SPEC-105 | [AI Rebalancing Assistant](SPEC-105-ai-rebalancing-assistant.md) | FR-011 (+ FR-013/014 via SPEC-005) | ✅ Done |
-| SPEC-106 | Portfolio Health Score           | FR-012                | Not started |
+| SPEC-106 | [Portfolio Health Score](SPEC-106-portfolio-health-score.md) | FR-012 (+ FR-013/014 via SPEC-005) | ✅ Done |
 | SPEC-107 | Projections (Income & Net Worth) | FR-016, FR-017        | Not started |
 | SPEC-108 | [Conversational Copilot (Chat)](SPEC-108-conversational-copilot.md) | FR-023–FR-025 (+ FR-013/014 via SPEC-005) | 📝 Draft |
 

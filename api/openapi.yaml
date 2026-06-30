@@ -462,6 +462,27 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /health-score:
+    get:
+      tags: [health-score]
+      summary: Compute the caller's reproducible Portfolio Health Score
+      operationId: getHealthScore
+      description: |-
+        A 0–100 health score with a per-factor breakdown (diversification, concentration, liquidity,
+        goal_alignment, risk_exposure). The score and breakdown are COMPUTED, not LLM-generated, and
+        reproducible — same inputs (portfolio, profile, macro) yield the same score and identical
+        breakdown; the score is market-aware (macro is an input). An optional gated AI narrative
+        explains the result using the live market and never changes the number — `narrative_available`
+        is false on an LLM outage. Scores and weights are integers; never a float.
+      responses:
+        "200":
+          description: The computed score + breakdown (+ narrative when available).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthScoreResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     cookieAuth:
@@ -664,6 +685,41 @@ components:
           type: boolean
           description: False when the LLM was fully unavailable (insights empty).
       required: [insights, disclaimer, available]
+    HealthScoreResponse:
+      type: object
+      description: A reproducible 0–100 Portfolio Health Score with a per-factor breakdown.
+      properties:
+        score:
+          type: integer
+          description: 0–100, computed (never LLM-generated), reproducible.
+        factors:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                enum: [diversification, concentration, liquidity, goal_alignment, risk_exposure]
+              score:
+                type: integer
+                description: The factor sub-score, 0–100.
+              weight_bps:
+                type: integer
+                description: The factor weight, basis points (factors sum to 10000).
+              explanation:
+                type: string
+                description: Computed, reproducible — identical for identical inputs (FR-1062).
+            required: [name, score, weight_bps, explanation]
+        narrative:
+          type: string
+          description: Optional gated AI narrative; empty when unavailable.
+        narrative_available:
+          type: boolean
+          description: False on a full LLM outage (the score + breakdown are always present).
+        disclaimer:
+          type: string
+          description: The non-advice disclaimer accompanying the narrative (FR-014).
+      required: [score, factors, narrative, narrative_available, disclaimer]
     RebalancingResponse:
       type: object
       description: Contribution guidance — areas with a computed split + grounded candidates.

@@ -19,7 +19,7 @@ type route struct {
 // The doc-serving meta-routes (/docs, /openapi.yaml) and the catch-all 404 are
 // deliberately NOT in this table — they are transport plumbing, not part of the
 // documented API surface, and are registered separately in NewRouter.
-func routeTable(api apiHandler, authH authHandler, profileH profileHandler, holdingsH holdingsHandler, dashboardH dashboardHandler, insightsH insightsHandler, rebalancingH rebalancingHandler) []route {
+func routeTable(api apiHandler, authH authHandler, profileH profileHandler, holdingsH holdingsHandler, dashboardH dashboardHandler, insightsH insightsHandler, rebalancingH rebalancingHandler, healthH healthHandler) []route {
 	return []route{
 		{http.MethodGet, "/healthz", api.healthz},
 		{http.MethodGet, "/readyz", api.readyz},
@@ -41,5 +41,6 @@ func routeTable(api apiHandler, authH authHandler, profileH profileHandler, hold
 		{http.MethodGet, "/dashboard", dashboardH.getDashboard},
 		{http.MethodGet, "/insights", insightsH.getInsights},
 		{http.MethodPost, "/rebalancing", rebalancingH.postRebalancing},
+		{http.MethodGet, "/health-score", healthH.getHealthScore},
 	}
 }
