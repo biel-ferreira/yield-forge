@@ -89,6 +89,26 @@ func AllocateBps(weights []int64) []int {
 	return shares
 }
 
+// WeightedMeanBps returns the weighted mean of values, where weightsBps are integer basis-point
+// weights expected to sum to 10000 — Σ(valueᵢ × weightᵢ) / 10000, rounded half-up (SPEC-106 BR-1061
+// — the Health Score is the reproducible weighted mean of its factor sub-scores). values and
+// weightsBps are paired by index; extra entries on either side are ignored. Non-negative inputs.
+func WeightedMeanBps(values, weightsBps []int) int {
+	n := len(values)
+	if len(weightsBps) < n {
+		n = len(weightsBps)
+	}
+	var num int64
+	for i := 0; i < n; i++ {
+		num += int64(values[i]) * int64(weightsBps[i])
+	}
+	if num <= 0 {
+		return 0
+	}
+	// half-up: (2*num + 10000) / (2*10000)
+	return int((2*num + 10000) / 20000)
+}
+
 // ApplyBps returns amount × bps / 10000, rounded half-up — the inverse of ShareBps, used to turn
 // a basis-point share into a centavos amount. Non-positive inputs yield 0; big.Int guards the
 // intermediate product against int64 overflow (SPEC-105).
