@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
 	"github.com/biel-ferreira/yield-forge/internal/insight"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 	"github.com/biel-ferreira/yield-forge/internal/platform/money"
+	"github.com/biel-ferreira/yield-forge/internal/platform/observability"
 	"github.com/biel-ferreira/yield-forge/internal/portfolio"
 	"github.com/biel-ferreira/yield-forge/internal/profile"
 )
@@ -22,21 +25,27 @@ type Service struct {
 	holdings   HoldingsReader
 	macro      MacroReader
 	insighter  insight.Insighter
+	tracer     trace.Tracer
 }
 
 // NewService builds the health service over the read seams and the gated Insighter (for the narrative).
 func NewService(d DashboardReader, p ProfileReader, h HoldingsReader, m MacroReader, insighter insight.Insighter) *Service {
-	return &Service{dashboards: d, profiles: p, holdings: h, macro: m, insighter: insighter}
+	return &Service{dashboards: d, profiles: p, holdings: h, macro: m, insighter: insighter, tracer: observability.Tracer("health")}
 }
 
 // Score builds the inputs, computes the reproducible Health Score, then attaches the gated
 // narrative. An empty portfolio short-circuits with no LLM call (FR-1066).
 func (s *Service) Score(ctx context.Context, userID string) (HealthScore, error) {
-	in, err := s.buildInputs(ctx, userID)
+	// Span over the deterministic build + compute (no content — no score, holdings, or profile
+	// reach telemetry; BR-505/FR-1067). The narrative's own span is recorded by the Insighter.
+	computeCtx, span := s.tracer.Start(ctx, "health.compute")
+	in, err := s.buildInputs(computeCtx, userID)
 	if err != nil {
+		span.End()
 		return HealthScore{}, err
 	}
 	hs := Compute(in)
+	span.End()
 	if in.CurrentValueCentavos <= 0 {
 		return hs, nil // empty portfolio: nothing to narrate
 	}
