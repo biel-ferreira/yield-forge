@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
+	"github.com/biel-ferreira/yield-forge/internal/insight"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 	"github.com/biel-ferreira/yield-forge/internal/platform/money"
 	"github.com/biel-ferreira/yield-forge/internal/portfolio"
@@ -13,27 +14,33 @@ import (
 )
 
 // Service computes the Health Score for a user (SPEC-106). It composes the dashboard/profile/
-// holdings/macro reads into the flat Inputs and runs the deterministic Compute; the score is never
-// LLM-touched (the narrative is layered on in Phase 3). Identity comes from the caller's context.
+// holdings/macro reads into the flat Inputs, runs the deterministic Compute, then layers the
+// optional gated narrative on top — the score is never LLM-touched. Identity comes from context.
 type Service struct {
 	dashboards DashboardReader
 	profiles   ProfileReader
 	holdings   HoldingsReader
 	macro      MacroReader
+	insighter  insight.Insighter
 }
 
-// NewService builds the health service over the read seams.
-func NewService(d DashboardReader, p ProfileReader, h HoldingsReader, m MacroReader) *Service {
-	return &Service{dashboards: d, profiles: p, holdings: h, macro: m}
+// NewService builds the health service over the read seams and the gated Insighter (for the narrative).
+func NewService(d DashboardReader, p ProfileReader, h HoldingsReader, m MacroReader, insighter insight.Insighter) *Service {
+	return &Service{dashboards: d, profiles: p, holdings: h, macro: m, insighter: insighter}
 }
 
-// Score builds the inputs and computes the reproducible Health Score for userID.
+// Score builds the inputs, computes the reproducible Health Score, then attaches the gated
+// narrative. An empty portfolio short-circuits with no LLM call (FR-1066).
 func (s *Service) Score(ctx context.Context, userID string) (HealthScore, error) {
 	in, err := s.buildInputs(ctx, userID)
 	if err != nil {
 		return HealthScore{}, err
 	}
-	return Compute(in), nil
+	hs := Compute(in)
+	if in.CurrentValueCentavos <= 0 {
+		return hs, nil // empty portfolio: nothing to narrate
+	}
+	return s.addNarrative(ctx, userID, in, hs), nil
 }
 
 // buildInputs composes the structured Inputs from the read seams. A not-set profile and a missing

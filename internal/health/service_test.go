@@ -7,10 +7,30 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
+	"github.com/biel-ferreira/yield-forge/internal/insight"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 	"github.com/biel-ferreira/yield-forge/internal/portfolio"
 	"github.com/biel-ferreira/yield-forge/internal/profile"
 )
+
+// stubInsighter returns a configured narrative result (or error) for the narrative call.
+type stubInsighter struct {
+	result insight.InsightResult
+	err    error
+	calls  int
+}
+
+func (s *stubInsighter) Generate(_ context.Context, _ insight.InsightRequest) (insight.InsightResult, error) {
+	s.calls++
+	return s.result, s.err
+}
+
+func okNarrative() *stubInsighter {
+	return &stubInsighter{result: insight.InsightResult{
+		Insights:   []insight.Insight{{Detail: "Sua carteira está saudável.", Explanation: "porque ..."}},
+		Disclaimer: insight.Disclaimer,
+	}}
+}
 
 type fakeDashboard struct {
 	d   dashboard.Dashboard
@@ -76,7 +96,11 @@ func sampleHoldings() portfolio.Holdings {
 }
 
 func newService(d dashboard.Dashboard, h portfolio.Holdings, p fakeProfile, m fakeMacro) *Service {
-	return NewService(fakeDashboard{d: d}, p, fakeHoldings{h: h}, m)
+	return NewService(fakeDashboard{d: d}, p, fakeHoldings{h: h}, m, okNarrative())
+}
+
+func newServiceWith(d dashboard.Dashboard, h portfolio.Holdings, p fakeProfile, m fakeMacro, ins insight.Insighter) *Service {
+	return NewService(fakeDashboard{d: d}, p, fakeHoldings{h: h}, m, ins)
 }
 
 func TestService_BuildInputs_DerivesFacts(t *testing.T) {
@@ -123,4 +147,42 @@ func TestService_Score_DeterministicAndInRange(t *testing.T) {
 	require.GreaterOrEqual(t, a.Score, 0)
 	require.LessOrEqual(t, a.Score, 100)
 	require.Len(t, a.Factors, 5)
+}
+
+func TestService_Score_AttachesGatedNarrative(t *testing.T) {
+	svc := newService(sampleDashboard(), sampleHoldings(),
+		fakeProfile{p: profile.Profile{Risk: profile.RiskModerate}}, fakeMacro{val: 1050, found: true})
+	hs, err := svc.Score(context.Background(), "u1")
+	require.NoError(t, err)
+	require.True(t, hs.NarrativeAvailable)
+	require.NotEmpty(t, hs.Narrative)
+	require.Equal(t, insight.Disclaimer, hs.Disclaimer)
+}
+
+func TestService_Score_NumberUnchangedByNarrative(t *testing.T) {
+	// THE binding guarantee (D1): the LLM never touches the number. The score is identical whether
+	// the narrative succeeds or the LLM is fully down.
+	prof := fakeProfile{p: profile.Profile{Risk: profile.RiskModerate}}
+	macro := fakeMacro{val: 1050, found: true}
+
+	on, err := newServiceWith(sampleDashboard(), sampleHoldings(), prof, macro, okNarrative()).Score(context.Background(), "u1")
+	require.NoError(t, err)
+	off, err := newServiceWith(sampleDashboard(), sampleHoldings(), prof, macro,
+		&stubInsighter{err: insight.ErrInsightsUnavailable}).Score(context.Background(), "u1")
+	require.NoError(t, err, "an LLM outage is not a hard error — the score stands")
+
+	require.Equal(t, off.Score, on.Score, "the narrative never changes the number")
+	require.Equal(t, off.Factors, on.Factors, "nor the breakdown")
+	require.True(t, on.NarrativeAvailable)
+	require.False(t, off.NarrativeAvailable)
+	require.Empty(t, off.Narrative)
+}
+
+func TestService_Score_EmptyPortfolioNoLLMCall(t *testing.T) {
+	stub := okNarrative()
+	hs, err := newServiceWith(dashboard.Dashboard{}, portfolio.Holdings{},
+		fakeProfile{err: profile.ErrProfileNotFound}, fakeMacro{}, stub).Score(context.Background(), "u1")
+	require.NoError(t, err)
+	require.Equal(t, 0, hs.Score)
+	require.Zero(t, stub.calls, "no LLM call for an empty portfolio")
 }
