@@ -5,7 +5,7 @@ export interface AllocationSegment {
   label: string;
   /** Share in basis points (1% = 100 bps) — integer, money-as-integer convention (BR-2003). */
   bps: number;
-  /** Segment color (token var or hex). */
+  /** Segment color — an aurora token var, e.g. `var(--aurora-1)`. */
   color: string;
 }
 
@@ -27,7 +27,8 @@ export function AllocationBar({
         style={{ boxShadow: "0 0 22px -2px rgba(99,102,241,.5)" }}
       >
         {segments.map((s) => (
-          <div key={s.label} style={{ width: formatShareBps(s.bps), background: s.color }} />
+          // width is layout geometry → a plain dot-decimal % (never the pt-BR display string)
+          <div key={s.label} style={{ width: `${s.bps / 100}%`, background: s.color }} />
         ))}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">

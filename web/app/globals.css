@@ -100,7 +100,13 @@
 body {
   background: var(--canvas);
   color: var(--body);
-  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    var(--font-sans),
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -150,4 +156,20 @@ body {
 /* Tabular figures for money/rates. */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Reduced-motion / reduced-glow fallback (design-system.md; a11y). Drops the ambient
+   aurora glow and neutralizes animations/transitions for users who request it. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --glow-opacity: 0;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

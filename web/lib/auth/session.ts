@@ -35,7 +35,11 @@ export function useSession() {
   return {
     user: query.data ?? null,
     isLoading: query.isLoading,
+    // isError = the server couldn't be reached / non-401 failure (distinct from a
+    // confirmed-unauthenticated 401, which resolves to `data: null`).
+    isError: query.isError,
     isAuthenticated: !!query.data,
+    refetch: query.refetch,
   };
 }
 

@@ -52,7 +52,7 @@ export function AppSidebar() {
         <div className="flex items-center gap-2.5 px-1">
           <span
             className="h-8 w-8 flex-none rounded-full"
-            style={{ background: "linear-gradient(135deg,#6366f1,#d946ef)" }}
+            style={{ background: "linear-gradient(135deg, var(--aurora-1), var(--aurora-2))" }}
           />
           <div className="min-w-0">
             <div className="truncate text-[13px] font-semibold text-on-dark">
