@@ -1,0 +1,71 @@
+<!-- @dsCard group="Aurora — Chat" name="Conversational Copilot" subtitle="Bubbles + streaming input + disclaimer" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-tint:#f4c47e; --on-primary:#120f0a; --canvas:#0a0a0c; --surface:#141317;
+    --elevated:#1c1b21; --hairline:#26242b; --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --info:#38bdf8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 16% 8%, rgba(99,102,241,.18), transparent 60%),
+      radial-gradient(50% 45% at 88% 96%, rgba(217,70,239,.12), transparent 60%); }
+  .wrap { position:relative; z-index:1; max-width:620px; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; margin:0 0 20px; color:#fff; }
+
+  .thread { display:flex; flex-direction:column; gap:14px; margin-bottom:18px; }
+  .turn { display:flex; }
+  .turn.u { justify-content:flex-end; }
+  .bubble { max-width:82%; padding:12px 16px; border-radius:16px; font-size:15px; line-height:1.55; }
+  .u .bubble { background:var(--primary); color:var(--on-primary); border-bottom-right-radius:6px; }
+  .a .bubble { background:var(--elevated); color:var(--body); border:1px solid var(--hairline); border-bottom-left-radius:6px; }
+  .a .bubble b { color:#fff; }
+  .a .num { font-family:"IBM Plex Mono",monospace; color:#fff; }
+
+  .typing { display:inline-flex; gap:4px; padding:14px 16px; background:var(--elevated); border:1px solid var(--hairline);
+    border-radius:16px; border-bottom-left-radius:6px; }
+  .typing span { width:6px; height:6px; border-radius:9999px; background:var(--muted-strong); }
+
+  .disc { display:flex; gap:9px; align-items:flex-start; font-size:12px; font-weight:500; color:var(--muted-strong);
+    background:var(--elevated); border:1px solid var(--hairline); border-radius:10px; padding:10px 13px; line-height:1.5; margin:6px 0 18px; }
+  .dot { flex:0 0 auto; width:15px; height:15px; border-radius:9999px; border:1.5px solid var(--info); color:var(--info);
+    font-size:10px; font-weight:700; text-align:center; line-height:13px; }
+
+  .composer { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--hairline);
+    border-radius:16px; padding:8px 8px 8px 16px; box-shadow:0 0 30px -14px rgba(233,169,76,.4); }
+  .composer input { flex:1; background:transparent; border:0; outline:none; color:#fff; font-family:Inter,sans-serif; font-size:15px; }
+  .composer input::placeholder { color:var(--muted); }
+  .send { background:var(--primary); color:var(--on-primary); border:0; border-radius:10px; height:40px; padding:0 18px;
+    font-weight:600; font-size:14px; cursor:pointer; box-shadow:0 0 26px -8px rgba(233,169,76,.6); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Conversational Copilot</h1>
+
+  <div class="thread">
+    <div class="turn u"><div class="bubble">Tenho R$ 2.000 pra aportar esse mês. Onde faz mais sentido olhar?</div></div>
+    <div class="turn a"><div class="bubble">Considerando sua carteira, a maior concentração hoje é em <b>logística</b> (<span class="num">26%</span> dos FIIs). Para equilibrar, vale <b>avaliar</b> segmentos com menor peso — como <b>lajes corporativas</b> (<span class="num">16%</span>) — e a parcela de renda fixa, que a SELIC atual favorece. São áreas para você analisar, não uma ordem de compra.</div></div>
+    <div class="turn u"><div class="bubble">E o meu health score, por que caiu?</div></div>
+    <div class="turn a"><div class="typing"><span></span><span></span><span></span></div></div>
+  </div>
+
+  <div class="disc"><span class="dot">i</span><span>Isto é conteúdo educacional, não recomendação de investimento. As decisões são suas.</span></div>
+
+  <div class="composer">
+    <input placeholder="Pergunte sobre sua carteira, alocação ou aportes…" />
+    <button class="send">Enviar</button>
+  </div>
+</div>
+</body>
+</html>

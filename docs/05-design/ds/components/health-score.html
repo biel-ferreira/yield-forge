@@ -1,0 +1,81 @@
+<!-- @dsCard group="Aurora — Dashboard" name="HealthScoreGauge" subtitle="0–100 score + factor breakdown" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — HealthScore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-tint:#f4c47e; --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21;
+    --hairline:#26242b; --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab;
+    --gain:#34d399; --caution:#fbbf24; --loss:#fb7185;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 16% 8%, rgba(99,102,241,.18), transparent 60%),
+      radial-gradient(50% 45% at 88% 96%, rgba(52,211,153,.10), transparent 60%); }
+  .wrap { position:relative; z-index:1; max-width:760px; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; margin:0 0 20px; color:#fff; }
+
+  .card { border-radius:20px; padding:26px; background:linear-gradient(180deg,rgba(255,255,255,.04),transparent), var(--surface);
+    border:1px solid var(--hairline); box-shadow:0 30px 70px -30px rgba(99,102,241,.5); display:flex; gap:32px; flex-wrap:wrap; }
+
+  .gauge { width:190px; height:190px; border-radius:9999px; flex:0 0 auto; position:relative;
+    background:conic-gradient(from 180deg, #4b4a56 0%, var(--caution) 40%, var(--primary) 62%, var(--gain) 78% 100%);
+    box-shadow:0 0 44px -8px rgba(233,169,76,.5); }
+  .gauge::after { content:""; position:absolute; inset:16px; border-radius:9999px; background:var(--surface); }
+  .gauge .c { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; }
+  .gauge .c .v { font-family:"IBM Plex Mono",monospace; font-size:46px; font-weight:600; color:#fff; line-height:1; }
+  .gauge .c .k { font-size:12px; color:var(--muted); margin-top:6px; }
+  .gauge .c .band { font-size:12px; font-weight:600; color:var(--gain); margin-top:2px; }
+
+  .factors { flex:1 1 300px; min-width:280px; }
+  .f { padding:11px 0; border-top:1px solid var(--hairline); }
+  .f:first-child { border-top:0; }
+  .f .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:7px; }
+  .f .name { font-size:14px; color:var(--body); }
+  .f .badge { font-size:11px; font-weight:600; padding:2px 9px; border-radius:9999px; }
+  .b-ok { color:var(--gain); background:rgba(52,211,153,.12); }
+  .b-warn { color:var(--caution); background:rgba(251,191,36,.12); }
+  .track { height:6px; border-radius:9999px; background:var(--elevated); overflow:hidden; }
+  .fill { height:100%; border-radius:9999px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HealthScoreGauge</h1>
+  <div class="card">
+    <div class="gauge"><div class="c"><span class="v">78</span><span class="k">de 100</span><span class="band">Saudável</span></div></div>
+    <div class="factors">
+      <div class="f">
+        <div class="top"><span class="name">Diversificação</span><span class="badge b-ok">Boa</span></div>
+        <div class="track"><div class="fill" style="width:82%;background:var(--gain)"></div></div>
+      </div>
+      <div class="f">
+        <div class="top"><span class="name">Concentração setorial</span><span class="badge b-warn">Atenção</span></div>
+        <div class="track"><div class="fill" style="width:48%;background:var(--caution)"></div></div>
+      </div>
+      <div class="f">
+        <div class="top"><span class="name">Liquidez</span><span class="badge b-ok">Boa</span></div>
+        <div class="track"><div class="fill" style="width:74%;background:var(--gain)"></div></div>
+      </div>
+      <div class="f">
+        <div class="top"><span class="name">Alinhamento ao objetivo</span><span class="badge b-ok">Boa</span></div>
+        <div class="track"><div class="fill" style="width:80%;background:var(--gain)"></div></div>
+      </div>
+      <div class="f">
+        <div class="top"><span class="name">Exposição a risco</span><span class="badge b-ok">Moderada</span></div>
+        <div class="track"><div class="fill" style="width:66%;background:var(--primary)"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

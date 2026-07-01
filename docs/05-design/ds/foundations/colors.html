@@ -1,0 +1,79 @@
+<!-- @dsCard group="Aurora — Foundations" name="Colors" subtitle="Near-black + warm gold + aurora glow" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — Colors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-active:#d3913a; --primary-tint:#f4c47e; --on-primary:#120f0a;
+    --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21; --hairline:#26242b;
+    --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab;
+    --gain:#34d399; --loss:#fb7185; --caution:#fbbf24; --info:#38bdf8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 18% 8%, rgba(99,102,241,.20), transparent 60%),
+      radial-gradient(45% 40% at 88% 16%, rgba(217,70,239,.16), transparent 60%),
+      radial-gradient(60% 50% at 75% 96%, rgba(56,189,248,.14), transparent 60%),
+      radial-gradient(40% 40% at 40% 60%, rgba(233,169,76,.10), transparent 60%); }
+  .wrap { position:relative; z-index:1; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:34px; font-weight:600; margin:0 0 4px; color:#fff; letter-spacing:.2px; }
+  .concept { display:inline-block; font-size:12px; font-weight:600; color:var(--primary-tint);
+    border:1px solid rgba(233,169,76,.35); border-radius:9999px; padding:5px 12px; margin:6px 0 26px;
+    box-shadow:0 0 24px -6px rgba(233,169,76,.5); }
+  p.lede { color:var(--muted-strong); font-size:14px; margin:0 0 8px; max-width:660px; line-height:1.6; }
+  h2 { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:30px 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px; }
+  .sw { border:1px solid var(--hairline); border-radius:14px; overflow:hidden; background:var(--surface); }
+  .chip { height:64px; }
+  .meta { padding:12px 14px; }
+  .name { font-size:13px; font-weight:600; color:#fff; }
+  .hex { font-size:12px; color:var(--muted); font-family:"IBM Plex Mono",monospace; }
+  .role { font-size:11px; color:var(--muted-strong); margin-top:3px; line-height:1.4; }
+  .aurora-strip { height:64px; background:linear-gradient(90deg,#6366f1,#d946ef,#f59e0b,#34d399,#38bdf8); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Colors</h1>
+  <div class="concept">Concept C · Aurora — near-black + warm gold + luminous gradients</div>
+  <p class="lede">A premium, dark, backlit feel: near-black canvas washed by soft aurora glows, one warm gold
+    accent for actions, and a signature spectrum gradient repurposed as the allocation bar. Semantic gain/loss
+    kept legible over the glow.</p>
+
+  <h2>Brand — warm gold</h2>
+  <div class="grid">
+    <div class="sw"><div class="chip" style="background:var(--primary)"></div><div class="meta"><div class="name">primary</div><div class="hex">#e9a94c</div><div class="role">Actions (often a glowing outline)</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--primary-active)"></div><div class="meta"><div class="name">primary-active</div><div class="hex">#d3913a</div><div class="role">Pressed state</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--primary-tint)"></div><div class="meta"><div class="name">primary-tint</div><div class="hex">#f4c47e</div><div class="role">Gold-as-text / link glow</div></div></div>
+    <div class="sw"><div class="chip aurora-strip"></div><div class="meta"><div class="name">aurora-gradient</div><div class="hex">signature</div><div class="role">indigo→fuchsia→amber→emerald→sky</div></div></div>
+  </div>
+
+  <h2>Semantic</h2>
+  <div class="grid">
+    <div class="sw"><div class="chip" style="background:var(--gain)"></div><div class="meta"><div class="name">gain</div><div class="hex">#34d399</div><div class="role">Positive figures — text</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--loss)"></div><div class="meta"><div class="name">loss</div><div class="hex">#fb7185</div><div class="role">Negative figures / errors</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--caution)"></div><div class="meta"><div class="name">caution</div><div class="hex">#fbbf24</div><div class="role">Risk / attention badge</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--info)"></div><div class="meta"><div class="name">info</div><div class="hex">#38bdf8</div><div class="role">Info + focus ring</div></div></div>
+  </div>
+
+  <h2>Surface &amp; text</h2>
+  <div class="grid">
+    <div class="sw"><div class="chip" style="background:var(--canvas)"></div><div class="meta"><div class="name">canvas</div><div class="hex">#0a0a0c</div><div class="role">App floor (under the glow)</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--surface)"></div><div class="meta"><div class="name">surface</div><div class="hex">#141317</div><div class="role">Glass cards base</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--elevated)"></div><div class="meta"><div class="name">elevated</div><div class="hex">#1c1b21</div><div class="role">Nested / hovered</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--body)"></div><div class="meta"><div class="name">body</div><div class="hex">#e7e5e4</div><div class="role">Primary text</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--muted-strong)"></div><div class="meta"><div class="name">muted-strong</div><div class="hex">#b6b1ab</div><div class="role">Explanation copy</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--muted)"></div><div class="meta"><div class="name">muted</div><div class="hex">#8b8681</div><div class="role">Labels, captions</div></div></div>
+  </div>
+</div>
+</body>
+</html>

@@ -14,6 +14,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Frontend track kickoff (SDD).** With the backend MVP complete (SPEC-001…108), the
+  frontend is opened as a first-class SDD track: **ADR-0006 — Frontend UI Stack & Design
+  System** (*Accepted*) decides the layer inside Next.js that [ADR-0004](docs/04-architecture/adr/ADR-0004-frontend-repository-strategy.md)
+  deferred — Next.js App Router + React + **TypeScript strict**, **Tailwind + shadcn/ui**
+  (copy-in, no lock-in), a **typed API client generated from `api/openapi.yaml`**
+  (`openapi-typescript` + `openapi-fetch` + TanStack Query, with a client-side drift check
+  mirroring the backend's), **Recharts** for the data-dense views, and the reusable component
+  library authored via **Claude Design** (`/design-sync`). The two binding guards become
+  first-class UI primitives — an `InsightCard` whose explanation slot is non-optional (FR-013)
+  and a `NonAdviceDisclaimer` (FR-014) — and money/rates stay **integer centavos/bps on the
+  client**, formatted to a `pt-BR` string only at the render edge (the `float64` ban extends
+  into the UI). Introduces the **`SPEC-2xx` frontend spec tier** (foundational `SPEC-20x`,
+  feature `SPEC-21x`, matching `PLAN-2xx`), registered in the specs index; refines ADR-0004's
+  original `SPEC-1xx` numbering (now occupied by backend features 101–108). First frontend
+  spec **SPEC-200 (App Foundation)** drafted.
+- **YieldForge design system — "Aurora"** (`docs/05-design/design-system.md`, *alpha*) — a
+  token-driven, **dark-first** (optional light theme) system for the web client, chosen after a
+  three-concept exploration (calm/emerald · modern/indigo · aurora). Aurora: a near-black canvas
+  washed by soft **aurora glows**, one warm **gold `#e9a94c`** accent (often a glowing outline),
+  **glass cards** with a colored ambient shadow, and a signature **spectrum gradient** repurposed
+  as the allocation-by-sector bar. Type is **Fraunces** (display serif) + **Inter** + **IBM Plex
+  Mono** numbers (all SIL Open Font License). Semantic gain/loss/caution/info stay reserved (figure
+  colors, never brand or a fill); the glow is decorative and never colors data. pt-BR money/rate
+  formatting at the render edge (integer centavos/bps, no float), and the binding guards as
+  **first-class components** — an `InsightCard` with a non-optional explanation slot (FR-013) and a
+  required `NonAdviceDisclaimer` (FR-014), with Buy/Sell/order affordances deliberately omitted.
+  Seeded into the `yieldforge-aurora` Claude Design project (ADR-0006); preview sources under
+  `docs/05-design/ds/`.
+
 - **SPEC-107 — Projections (Income & Net Worth)**: two deterministic, reproducible forward-looking
   views over the current portfolio — a **passive-income projection** (monthly/annual across
   pessimistic / base / optimistic, from FII dividends + fixed-income rates, base ±200 bps of yield)

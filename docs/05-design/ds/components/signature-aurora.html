@@ -1,0 +1,82 @@
+<!-- @dsCard group="Aurora — Signature" name="Aurora & Gradients" subtitle="Glow background + spectrum allocation bar + glass" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — Signature</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-tint:#f4c47e; --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21;
+    --hairline:#26242b; --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --gain:#34d399;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 16% 6%, rgba(99,102,241,.22), transparent 60%),
+      radial-gradient(48% 42% at 90% 18%, rgba(217,70,239,.16), transparent 60%),
+      radial-gradient(55% 48% at 78% 100%, rgba(56,189,248,.16), transparent 60%),
+      radial-gradient(40% 40% at 42% 55%, rgba(233,169,76,.10), transparent 60%); }
+  .wrap { position:relative; z-index:1; max-width:820px; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:34px; font-weight:600; margin:0 0 4px; color:#fff; }
+  p.lede { color:var(--muted-strong); font-size:14px; margin:0 0 26px; max-width:660px; line-height:1.6; }
+  h2 { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:26px 0 12px; }
+  .num { font-family:"IBM Plex Mono",monospace; }
+
+  /* Glass balance card with ambient glow */
+  .balance-card { position:relative; border-radius:20px; padding:26px 28px; overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.04),transparent), var(--surface);
+    border:1px solid var(--hairline);
+    box-shadow:0 30px 70px -30px rgba(99,102,241,.6), 0 0 0 1px rgba(255,255,255,.02) inset; }
+  .balance-label { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .balance-value { font-family:"IBM Plex Mono",monospace; font-size:44px; font-weight:600; color:#fff; margin:6px 0 2px; }
+  .balance-value sup { font-size:20px; color:var(--muted-strong); }
+  .balance-growth { font-size:13px; color:var(--gain); font-family:"IBM Plex Mono",monospace; }
+
+  /* Signature spectrum allocation bar */
+  .alloc-bar { height:14px; border-radius:9999px; margin:22px 0 16px;
+    background:linear-gradient(90deg,#6366f1 0%,#6366f1 26%, #d946ef 26%,#d946ef 46%, #f59e0b 46%,#f59e0b 70%, #34d399 70%,#34d399 86%, #38bdf8 86%,#38bdf8 100%);
+    box-shadow:0 0 24px -2px rgba(99,102,241,.5), 0 6px 18px -6px rgba(217,70,239,.5); }
+  .legend { display:flex; flex-wrap:wrap; gap:18px 26px; }
+  .leg { display:flex; align-items:center; gap:8px; }
+  .leg .d { width:9px; height:9px; border-radius:9999px; box-shadow:0 0 10px 1px currentColor; }
+  .leg .t { font-size:13px; color:var(--body); }
+  .leg .v { font-size:13px; color:var(--muted); font-family:"IBM Plex Mono",monospace; }
+
+  .caption { margin-top:22px; font-size:12px; color:var(--muted); line-height:1.6; max-width:640px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Aurora &amp; Gradients</h1>
+  <p class="lede">The signature you liked: a near-black canvas washed by soft colored glows, glass cards that cast a
+    colored ambient shadow, and a luminous spectrum bar — here repurposed as YieldForge's <b>allocation-by-sector</b>
+    bar (this is a real product component, not decoration).</p>
+
+  <h2>Glass balance card + spectrum allocation</h2>
+  <div class="balance-card">
+    <div class="balance-label">Patrimônio total</div>
+    <div class="balance-value">R$ 297.924<sup>,80</sup></div>
+    <div class="balance-growth">▲ +5,3% no mês</div>
+
+    <div class="alloc-bar"></div>
+    <div class="legend">
+      <div class="leg"><span class="d" style="background:#6366f1;color:#6366f1"></span><span class="t">Logística</span><span class="v">26%</span></div>
+      <div class="leg"><span class="d" style="background:#d946ef;color:#d946ef"></span><span class="t">Papel (CRI)</span><span class="v">20%</span></div>
+      <div class="leg"><span class="d" style="background:#f59e0b;color:#f59e0b"></span><span class="t">Shoppings</span><span class="v">24%</span></div>
+      <div class="leg"><span class="d" style="background:#34d399;color:#34d399"></span><span class="t">Renda fixa</span><span class="v">16%</span></div>
+      <div class="leg"><span class="d" style="background:#38bdf8;color:#38bdf8"></span><span class="t">Lajes corp.</span><span class="v">14%</span></div>
+    </div>
+  </div>
+
+  <div class="caption">The glow is decorative and used sparingly (behind hero figures and key cards) — it never
+    colors data. Gain/loss and sector identity stay legible; the aurora reads as depth, not signal. A light theme
+    would keep the gradient bar but drop the ambient glow.</div>
+</div>
+</body>
+</html>

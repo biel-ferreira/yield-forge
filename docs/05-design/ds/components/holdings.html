@@ -1,0 +1,73 @@
+<!-- @dsCard group="Aurora — Portfolio" name="HoldingRow table" subtitle="FII + fixed-income holdings" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — Holdings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21; --hairline:#26242b;
+    --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --gain:#34d399; --loss:#fb7185;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 14% 8%, rgba(99,102,241,.16), transparent 60%),
+      radial-gradient(50% 45% at 90% 96%, rgba(56,189,248,.12), transparent 60%); }
+  .wrap { position:relative; z-index:1; max-width:860px; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; margin:0 0 20px; color:#fff; }
+  .num { font-family:"IBM Plex Mono",monospace; font-feature-settings:"tnum" 1; }
+
+  .card { border-radius:20px; padding:8px 24px 20px; margin-bottom:20px; background:var(--surface);
+    border:1px solid var(--hairline); box-shadow:0 26px 60px -34px rgba(99,102,241,.5); }
+  .head { display:flex; justify-content:space-between; align-items:center; padding:18px 0 12px; }
+  .head .t { font-family:"Fraunces",serif; font-size:18px; color:#fff; }
+  .head .sum { font-size:13px; color:var(--muted-strong); }
+  .head .sum b { color:#fff; font-family:"IBM Plex Mono",monospace; font-weight:500; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:right; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; padding:8px 0; border-bottom:1px solid var(--hairline); }
+  th.l, td.l { text-align:left; }
+  td { padding:14px 0; border-bottom:1px solid var(--hairline); font-family:"IBM Plex Mono",monospace; font-size:14px; text-align:right; color:#fff; }
+  tr:last-child td { border-bottom:0; }
+  .tick { font-weight:600; }
+  .name { font-family:Inter,sans-serif; font-size:12px; color:var(--muted); font-weight:400; }
+  .up { color:var(--gain); } .down { color:var(--loss); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HoldingRow table</h1>
+
+  <div class="card">
+    <div class="head"><span class="t">FIIs</span><span class="sum">Valor atual <b>R$ 98.774,00</b> · <span class="up">▲ +6,1%</span></span></div>
+    <table>
+      <thead><tr><th class="l">Ativo</th><th>Cotas</th><th>Preço médio</th><th>Valor atual</th><th>Resultado</th></tr></thead>
+      <tbody>
+        <tr><td class="l"><div class="tick">HGLG11</div><div class="name">Logística</div></td><td>120</td><td>158,20</td><td>20.184,00</td><td class="up">▲ +6,3%</td></tr>
+        <tr><td class="l"><div class="tick">XPML11</div><div class="name">Shoppings</div></td><td>210</td><td>102,40</td><td>23.706,00</td><td class="up">▲ +10,2%</td></tr>
+        <tr><td class="l"><div class="tick">KNCR11</div><div class="name">Papel (CRI)</div></td><td>185</td><td>103,10</td><td>19.755,00</td><td class="up">▲ +3,6%</td></tr>
+        <tr><td class="l"><div class="tick">BRCO11</div><div class="name">Lajes corp.</div></td><td>145</td><td>110,90</td><td>15.804,00</td><td class="down">▼ −1,7%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="head"><span class="t">Renda fixa</span><span class="sum">Valor atual <b>R$ 54.170,00</b></span></div>
+    <table>
+      <thead><tr><th class="l">Título</th><th>Taxa</th><th>Vencimento</th><th>Investido</th><th>Valor atual</th></tr></thead>
+      <tbody>
+        <tr><td class="l"><div class="tick">CDB Banco X</div><div class="name">Liquidez diária</div></td><td>102% CDI</td><td>—</td><td>30.000,00</td><td>31.420,00</td></tr>
+        <tr><td class="l"><div class="tick">Tesouro IPCA+</div><div class="name">No vencimento</div></td><td>IPCA+5,8%</td><td>2029-05-15</td><td>21.000,00</td><td>22.750,00</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

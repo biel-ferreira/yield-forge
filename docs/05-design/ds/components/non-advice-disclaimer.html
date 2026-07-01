@@ -1,0 +1,58 @@
+<!-- @dsCard group="Aurora — Guards" name="NonAdviceDisclaimer" subtitle="Required on every AI surface (FR-014)" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — NonAdviceDisclaimer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21; --hairline:#26242b;
+    --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --info:#38bdf8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(50% 45% at 15% 8%, rgba(99,102,241,.16), transparent 60%),
+      radial-gradient(50% 45% at 88% 92%, rgba(56,189,248,.12), transparent 60%); }
+  .wrap { position:relative; z-index:1; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; margin:0 0 4px; color:#fff; }
+  p.lede { color:var(--muted-strong); font-size:14px; margin:0 0 24px; max-width:660px; line-height:1.6; }
+  h2 { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:26px 0 10px; }
+  .stack { display:flex; flex-direction:column; gap:14px; max-width:620px; }
+  .disc { display:flex; gap:10px; align-items:flex-start; font-size:12px; font-weight:500; line-height:1.55;
+    border-radius:10px; padding:12px 15px; color:var(--muted-strong);
+    background:var(--elevated); border:1px solid var(--hairline); }
+  .disc.glow { box-shadow:0 0 30px -12px rgba(56,189,248,.5); }
+  .dot { flex:0 0 auto; width:15px; height:15px; border-radius:9999px; border:1.5px solid var(--info); color:var(--info);
+    font-size:10px; font-weight:700; text-align:center; line-height:13px; margin-top:1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NonAdviceDisclaimer</h1>
+  <p class="lede">A quiet, required footer on every AI surface — insights, rebalancing, the health narrative, and
+    each chat turn. Its presence is a contract of the view, not an optional prop (FR-014).</p>
+
+  <h2>Default</h2>
+  <div class="stack">
+    <div class="disc"><span class="dot">i</span><span>Isto é conteúdo educacional, não recomendação de investimento. As decisões são suas.</span></div>
+  </div>
+
+  <h2>Emphasis variant (subtle glow)</h2>
+  <div class="stack">
+    <div class="disc glow"><span class="dot">i</span><span>Isto é conteúdo educacional, não recomendação de investimento. As decisões são suas.</span></div>
+  </div>
+
+  <h2>Extended (report / projection footer)</h2>
+  <div class="stack">
+    <div class="disc"><span class="dot">i</span><span>As projeções são estimativas não garantidas, baseadas em premissas explícitas e nos dados atuais da sua carteira. YieldForge não emite ordens de compra ou venda, metas de preço ou quantidades. Consulte um profissional habilitado antes de decidir.</span></div>
+  </div>
+</div>
+</body>
+</html>

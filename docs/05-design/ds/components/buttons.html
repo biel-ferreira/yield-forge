@@ -1,0 +1,77 @@
+<!-- @dsCard group="Aurora — Components" name="Buttons" subtitle="Gold fill + glowing outline — no order affordances" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — Buttons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-active:#d3913a; --primary-tint:#f4c47e; --on-primary:#120f0a;
+    --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21; --hairline:#26242b;
+    --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --loss:#fb7185;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(50% 45% at 12% 8%, rgba(99,102,241,.16), transparent 60%),
+      radial-gradient(45% 40% at 90% 90%, rgba(56,189,248,.12), transparent 60%),
+      radial-gradient(40% 40% at 60% 40%, rgba(233,169,76,.08), transparent 60%); }
+  .wrap { position:relative; z-index:1; }
+  h1 { font-size:26px; font-weight:600; margin:0 0 24px; color:#fff; }
+  h2 { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:30px 0 12px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  button { font-family:Inter,sans-serif; font-size:14px; font-weight:600; line-height:1; border:0; cursor:pointer; }
+  .btn-primary { background:var(--primary); color:var(--on-primary); border-radius:10px; padding:13px 22px; height:44px;
+    box-shadow:0 0 30px -6px rgba(233,169,76,.6); }
+  .btn-primary-active { background:var(--primary-active); color:var(--on-primary); border-radius:10px; padding:13px 22px; height:44px; }
+  .btn-outline { background:rgba(233,169,76,.06); color:var(--primary-tint); border:1px solid rgba(233,169,76,.5);
+    border-radius:10px; padding:13px 22px; height:44px; box-shadow:0 0 26px -8px rgba(233,169,76,.55); }
+  .btn-primary-disabled { background:#2a241a; color:#6f6552; border-radius:10px; padding:13px 22px; height:44px; cursor:not-allowed; }
+  .btn-sec { background:var(--elevated); color:#fff; border:1px solid var(--hairline); border-radius:10px; padding:13px 22px; }
+  .btn-tertiary { background:transparent; color:var(--muted-strong); padding:13px 8px; }
+  .link { color:var(--primary-tint); text-decoration:none; font-weight:500; }
+  .note { margin-top:30px; border:1px solid rgba(251,113,133,.3); border-radius:14px; padding:18px 20px;
+    background:rgba(251,113,133,.06); }
+  .note b { color:var(--loss); }
+  .note p { margin:6px 0 0; color:var(--muted-strong); font-size:13px; line-height:1.55; max-width:620px; }
+  .strike { display:inline-block; padding:12px 20px; border-radius:10px; background:rgba(52,211,153,.08); color:#4f7d6a; text-decoration:line-through; font-weight:600; font-size:14px; }
+  .strike.sell { background:rgba(251,113,133,.08); color:#8a5560; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Buttons</h1>
+
+  <h2>Primary — gold (fill · glowing outline · pressed · disabled)</h2>
+  <div class="row">
+    <button class="btn-primary">Salvar carteira</button>
+    <button class="btn-outline">Solicitar acesso</button>
+    <button class="btn-primary-active">Salvar carteira</button>
+    <button class="btn-primary-disabled" disabled>Salvar carteira</button>
+  </div>
+
+  <h2>Secondary · tertiary · link</h2>
+  <div class="row">
+    <button class="btn-sec">Cancelar</button>
+    <button class="btn-tertiary">Voltar</button>
+    <a href="#" class="link">ver detalhes →</a>
+  </div>
+
+  <div class="note">
+    <b>Deliberately absent — no order affordances.</b>
+    <p>No Buy/Sell/Long/Short button, no price-target or quantity CTA. YieldForge is a copilot, never an advisor:
+      it never issues a transaction order (FR-014). Gain/loss appear only as figure text colors — never as an action.</p>
+    <div class="row" style="margin-top:12px">
+      <span class="strike">Comprar</span>
+      <span class="strike sell">Vender</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

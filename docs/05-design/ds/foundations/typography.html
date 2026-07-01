@@ -1,0 +1,52 @@
+<!-- @dsCard group="Aurora — Foundations" name="Typography" subtitle="Fraunces serif + Inter + IBM Plex Mono" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — Typography</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --canvas:#0a0a0c; --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --hairline:#26242b; --primary:#e9a94c; --primary-tint:#f4c47e; --gain:#34d399; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 15% 6%, rgba(99,102,241,.18), transparent 60%),
+      radial-gradient(50% 40% at 90% 20%, rgba(217,70,239,.14), transparent 60%),
+      radial-gradient(50% 45% at 70% 98%, rgba(56,189,248,.12), transparent 60%); }
+  .wrap { position:relative; z-index:1; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:34px; font-weight:600; margin:0 0 4px; color:#fff; }
+  p.lede { color:var(--muted-strong); font-size:14px; margin:0 0 26px; max-width:660px; line-height:1.6; }
+  .serif { font-family:"Fraunces",Georgia,serif; }
+  .num { font-family:"IBM Plex Mono",ui-monospace,monospace; font-feature-settings:"tnum" 1; }
+  .row { display:flex; align-items:baseline; gap:20px; padding:16px 0; border-top:1px solid var(--hairline); }
+  .tag { flex:0 0 180px; color:var(--muted); font-size:12px; font-family:"IBM Plex Mono",monospace; }
+  .sample { color:#fff; }
+  .grp { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:30px 0 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Typography</h1>
+  <p class="lede">An expressive high-contrast serif (Fraunces) carries the display voice — elegant and premium —
+    over Inter body and IBM Plex Mono numbers. All three are SIL Open Font License.</p>
+
+  <div class="grp">Display — Fraunces (serif)</div>
+  <div class="row"><div class="tag">hero-display 56/600</div><div class="sample serif" style="font-size:56px;font-weight:600;letter-spacing:.3px">Invista com clareza</div></div>
+  <div class="row"><div class="tag">display-md 36/600</div><div class="sample serif" style="font-size:36px;font-weight:600">Seu patrimônio, iluminado</div></div>
+  <div class="row"><div class="tag">title-lg 22/600</div><div class="sample serif" style="font-size:22px;font-weight:600">Alocação da carteira</div></div>
+
+  <div class="grp">Body — Inter</div>
+  <div class="row"><div class="tag">body-md 15/400</div><div class="sample" style="font-size:15px;font-weight:400;line-height:1.6;max-width:560px;color:var(--body)">Sua carteira está concentrada em FIIs de logística. Considere avaliar outros segmentos — <a href="#" style="color:var(--primary-tint);text-decoration:none;font-weight:500">saiba o porquê</a>.</div></div>
+  <div class="row"><div class="tag">body-sm 13/400</div><div class="sample" style="font-size:13px;font-weight:400;color:var(--muted-strong);max-width:560px">Explicação: logística representa 62% da sua exposição a FIIs, acima da faixa típica.</div></div>
+
+  <div class="grp">Numbers — IBM Plex Mono (tabular)</div>
+  <div class="row"><div class="tag">number-display 40/600</div><div class="sample num" style="font-size:40px;font-weight:600">R$ 1.234.567,89</div></div>
+  <div class="row"><div class="tag">number-md 16/500</div><div class="sample num" style="font-size:16px;font-weight:500">R$ 8.420,00 &nbsp;·&nbsp; 10,50% a.a. &nbsp;·&nbsp; <span style="color:var(--gain)">+2,4%</span></div></div>
+</div>
+</body>
+</html>

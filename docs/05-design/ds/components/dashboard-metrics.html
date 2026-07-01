@@ -1,0 +1,74 @@
+<!-- @dsCard group="Aurora — Dashboard" name="MetricCallout row" subtitle="Net worth, invested, income, growth" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — MetricCallout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-tint:#f4c47e; --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21;
+    --hairline:#26242b; --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --gain:#34d399; --loss:#fb7185;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 16% 8%, rgba(99,102,241,.20), transparent 60%),
+      radial-gradient(48% 42% at 88% 18%, rgba(217,70,239,.14), transparent 60%),
+      radial-gradient(55% 48% at 76% 98%, rgba(56,189,248,.14), transparent 60%); }
+  .wrap { position:relative; z-index:1; max-width:860px; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; margin:0 0 20px; color:#fff; }
+  .num { font-family:"IBM Plex Mono",monospace; font-feature-settings:"tnum" 1; }
+
+  .hero { border-radius:20px; padding:26px 28px; margin-bottom:18px; overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.04),transparent), var(--surface);
+    border:1px solid var(--hairline); box-shadow:0 30px 70px -30px rgba(99,102,241,.6); }
+  .hero .label { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .hero .val { font-size:46px; font-weight:600; color:#fff; margin:6px 0 2px; }
+  .hero .val sup { font-size:20px; color:var(--muted-strong); }
+  .hero .growth { font-size:13px; color:var(--gain); }
+
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .metric { border-radius:16px; padding:20px; background:var(--surface); border:1px solid var(--hairline);
+    box-shadow:0 20px 50px -30px rgba(99,102,241,.4); }
+  .metric .label { font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+  .metric .v { font-size:24px; font-weight:600; color:#fff; margin-top:8px; }
+  .metric .sub { font-size:12px; margin-top:4px; }
+  .up { color:var(--gain); } .down { color:var(--loss); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MetricCallout row</h1>
+
+  <div class="hero">
+    <div class="label">Patrimônio total</div>
+    <div class="val num">R$ 297.924<sup>,80</sup></div>
+    <div class="growth num">▲ +5,3% no mês &nbsp;·&nbsp; +R$ 14.980,12</div>
+  </div>
+
+  <div class="grid">
+    <div class="metric">
+      <div class="label">Total investido</div>
+      <div class="v num">R$ 282.944,68</div>
+      <div class="sub up num">▲ +5,3% de valorização</div>
+    </div>
+    <div class="metric">
+      <div class="label">Renda passiva / mês</div>
+      <div class="v num">R$ 2.184,30</div>
+      <div class="sub" style="color:var(--muted-strong)">DY médio 0,77% a.m.</div>
+    </div>
+    <div class="metric">
+      <div class="label">Resultado no mês</div>
+      <div class="v num down">− R$ 1.204,49</div>
+      <div class="sub down num">▼ −0,4%</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

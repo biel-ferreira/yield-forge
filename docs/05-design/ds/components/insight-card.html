@@ -1,0 +1,82 @@
+<!-- @dsCard group="Aurora — Guards" name="InsightCard" subtitle="Glass card + glow, explanation non-optional (FR-013)" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — InsightCard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-tint:#f4c47e; --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21;
+    --hairline:#26242b; --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab;
+    --caution:#fbbf24; --info:#38bdf8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 14% 8%, rgba(99,102,241,.18), transparent 60%),
+      radial-gradient(50% 45% at 92% 30%, rgba(217,70,239,.13), transparent 60%),
+      radial-gradient(50% 45% at 70% 98%, rgba(56,189,248,.12), transparent 60%); }
+  .wrap { position:relative; z-index:1; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; margin:0 0 4px; color:#fff; }
+  p.lede { color:var(--muted-strong); font-size:14px; margin:0 0 26px; max-width:660px; line-height:1.6; }
+  .stack { display:flex; flex-direction:column; gap:18px; max-width:580px; }
+
+  .insight { position:relative; background:linear-gradient(180deg,rgba(255,255,255,.03),transparent), var(--surface);
+    border:1px solid var(--hairline); border-radius:16px; padding:22px;
+    box-shadow:0 20px 50px -24px rgba(99,102,241,.5), 0 0 0 1px rgba(255,255,255,.02) inset; overflow:hidden; }
+  .insight::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:linear-gradient(180deg,var(--primary),#d946ef); box-shadow:0 0 20px 1px rgba(233,169,76,.6); }
+  .cat { font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .headline { font-size:16px; font-weight:600; color:#fff; line-height:1.45; }
+  .why { margin-top:14px; padding:12px 14px; background:var(--elevated); border-radius:12px; border:1px solid var(--hairline); }
+  .why-label { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--primary-tint); margin-bottom:4px; }
+  .why-body { font-size:13px; color:var(--muted-strong); line-height:1.6; }
+  .badge { display:inline-block; font-size:12px; font-weight:600; padding:4px 11px; border-radius:9999px; margin-bottom:8px; }
+  .badge-caution { color:var(--caution); background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.25); }
+
+  .disclaimer { display:flex; gap:9px; align-items:flex-start; font-size:12px; font-weight:500; color:var(--muted-strong);
+    background:var(--elevated); border:1px solid var(--hairline); border-radius:10px; padding:11px 14px; line-height:1.5; }
+  .dot { flex:0 0 auto; width:15px; height:15px; border-radius:9999px; border:1.5px solid var(--info); color:var(--info);
+    font-size:10px; font-weight:700; text-align:center; line-height:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>InsightCard</h1>
+  <p class="lede">Same guarantee as the other concepts, luminous skin: glass surface, a glowing gradient edge, and
+    a <b>non-optional explanation slot</b> — an insight without a "por quê" is unrepresentable (FR-013). Every AI
+    surface closes with the required disclaimer (FR-014).</p>
+
+  <div class="stack">
+    <div class="insight">
+      <div class="cat">Alocação</div>
+      <div class="headline">Sua exposição a FIIs de logística está acima da faixa típica de diversificação.</div>
+      <div class="why">
+        <div class="why-label">Por quê</div>
+        <div class="why-body">Logística representa 62% da sua carteira de FIIs (R$ 61.240,00 de R$ 98.774,00).
+          Uma concentração acima de ~40% num único segmento aumenta a sensibilidade a um choque setorial.</div>
+      </div>
+    </div>
+
+    <div class="insight">
+      <span class="badge badge-caution">Atenção</span>
+      <div class="cat">Contexto de mercado</div>
+      <div class="headline">A SELIC atual favorece a parcela de renda fixa da sua estratégia de aportes.</div>
+      <div class="why">
+        <div class="why-label">Por quê</div>
+        <div class="why-body">Com a SELIC em 10,50% a.a., títulos pós-fixados oferecem retorno real relevante —
+          uma consideração para o seu objetivo de renda passiva, não uma ordem de compra.</div>
+      </div>
+    </div>
+
+    <div class="disclaimer"><span class="dot">i</span><span>Isto é conteúdo educacional, não recomendação de investimento. As decisões são suas.</span></div>
+  </div>
+</div>
+</body>
+</html>
