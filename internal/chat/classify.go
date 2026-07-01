@@ -78,13 +78,18 @@ func parseHorizonYears(s string) int {
 	return n
 }
 
+// maxAmountReais bounds a parsed amount well beyond any real monthly contribution — it guards the
+// centavos (and the ×1000 "mil") arithmetic against int64 overflow on absurd input (SPEC-108 §15).
+const maxAmountReais = 1_000_000_000 // R$1 billion
+
 // brlToCentavos parses a Brazilian-formatted number ("1.500", "1.500,00", "2,50", "2") to int64
-// centavos. Thousands separators (".") are dropped; the fraction after "," is the cents. Invalid → 0.
+// centavos. Thousands separators (".") are dropped; the fraction after "," is the cents. Invalid or
+// out-of-range → 0.
 func brlToCentavos(num string) int64 {
 	num = strings.ReplaceAll(num, ".", "") // drop thousands separators
 	parts := strings.SplitN(num, ",", 2)
 	reais, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
+	if err != nil || reais < 0 || reais > maxAmountReais {
 		return 0
 	}
 	cents := int64(0)

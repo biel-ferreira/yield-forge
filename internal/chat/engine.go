@@ -97,19 +97,25 @@ func (s *Service) Send(ctx context.Context, userID, threadID, content string) (R
 	if err != nil {
 		return Reply{}, fmt.Errorf("chat send: %w", err)
 	}
-	if err := s.repo.EnforceCap(ctx, userID, maxThreads); err != nil {
-		return Reply{}, fmt.Errorf("chat send: %w", err)
-	}
 
 	return Reply{Message: assistant, Disclaimer: firstNonEmpty(res.Disclaimer, insight.Disclaimer), Available: true}, nil
 }
 
-// resolveThread returns the owned thread for threadID, or creates a fresh one for the caller.
+// resolveThread returns the owned thread for threadID, or creates a fresh one for the caller and
+// enforces the rolling cap immediately — so a new-thread turn stays bounded even if it later
+// degrades (LLM outage) and never reaches the reply (FR-1086 / BR-1085).
 func (s *Service) resolveThread(ctx context.Context, userID, threadID, content string, now time.Time) (Thread, error) {
 	if threadID != "" {
 		return s.repo.GetThreadByID(ctx, userID, threadID)
 	}
-	return s.repo.CreateThread(ctx, Thread{UserID: userID, Title: title(content), CreatedAt: now, UpdatedAt: now})
+	thread, err := s.repo.CreateThread(ctx, Thread{UserID: userID, Title: title(content), CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		return Thread{}, err
+	}
+	if err := s.repo.EnforceCap(ctx, userID, maxThreads); err != nil {
+		return Thread{}, err
+	}
+	return thread, nil
 }
 
 // ground routes the turn to the matching engine's deterministic facts, degrading to the general
