@@ -225,14 +225,23 @@ removes the frontend with **zero** impact on the Go backend. No data migrations,
 ### Phase 6 — Quality Gates & Observability  *(≈ observability)*
 
 #### Tasks
-- [ ] **Money-no-float lint/convention**: forbid float arithmetic on money fields; values stay integer end to end.
+- [ ] **Frontend review lens (the primary quality gate):** the review-before-closing runs the
+      **frontend-reviewer** + **react-correctness-reviewer** subagents — the Go reviewers don't apply
+      to React/TS. `/spec-implement` and `/pr-review` are made **track-aware** so a `web/` change
+      selects these. (Under `.claude/agents` + `.claude/commands`.)
+- [ ] **Format + reminder hooks:** `prettier-edited` (PostToolUse — Prettier-on-edit, the mirror of
+      `gofmt-edited`; skips the generated `schema.ts`) and `on-stop-web` (Stop — reminder-only: run the
+      `web/` gate, update CHANGELOG, regen types). Registered in `.claude/settings.json`.
+- [ ] **Money-no-float** enforced by the `frontend-reviewer` lens + the single `money.ts` render edge
+      (a bespoke ESLint rule is deferred by the rule-of-three — add it only if it bites).
 - [ ] **Bundle-size budget** tracked in CI (informational); reduced-motion / reduced-glow fallback validated.
 - [ ] Accessibility pass: WCAG AA contrast over the dark canvas (gold-on-dark, muted text); colorblind-safe
       gain/loss (arrow + text, never color alone).
 - [ ] Confirm **no client tracing** in MVP (deferred); backend OTel (SPEC-004) covers the API calls made.
 
 #### Deliverables
-- CI enforces the money rule + bundle budget; a documented a11y check passes.
+- The frontend review agents + format/reminder hooks are in place (the `web/` quality gate, replacing
+  the Go gate); CI tracks the bundle budget; a documented a11y check passes.
 
 ---
 
@@ -262,7 +271,9 @@ removes the frontend with **zero** impact on the Go backend. No data migrations,
 - [ ] **CHANGELOG** `[Unreleased]` entry (same change).
 - [ ] **No `api/openapi.yaml` change** — assert it (this spec adds no endpoint); note it explicitly.
 - [ ] Flip **SPEC-200 + PLAN-200 → Done**; update the specs/plans indexes.
-- [ ] Produce the **PT-BR HTML lesson** `docs/lessons/SPEC-200-aula.html`.
+- [ ] Produce the **PT-BR HTML lesson** `docs/lessons/SPEC-200-aula.html` via the
+      **frontend-lesson-writer** subagent (product-focused — what the foundation/shell enables and how
+      the guards become visible UI, not a React tutorial).
 - [ ] Optional design follow-up: add `copilot-fab`/`copilot-panel` to `design-system.md` and drop chat from
       the nav mention (keeps the DS source honest with the floating-widget decision).
 
@@ -300,7 +311,7 @@ removes the frontend with **zero** impact on the Go backend. No data migrations,
 ### Quality Validation
 - [ ] Vitest/RTL + auth integration + Playwright smoke passing.
 - [ ] a11y AA contrast + colorblind-safe gain/loss.
-- [ ] Code reviewed; docs updated.
+- [ ] Reviewed by **frontend-reviewer** + **react-correctness-reviewer**; docs updated.
 
 ---
 
@@ -312,7 +323,8 @@ removes the frontend with **zero** impact on the Go backend. No data migrations,
 - [ ] Design system applied via tokens-as-code; guard components enforce FR-013/FR-014 by construction.
 - [ ] **CHANGELOG** updated; `web/README.md` + root pointer added; **`api/openapi.yaml` unchanged** (asserted).
 - [ ] **SPEC-200 + PLAN-200 flipped to Done**; specs/plans indexes updated.
-- [ ] **PT-BR lesson** `docs/lessons/SPEC-200-aula.html` produced.
+- [ ] **PT-BR lesson** `docs/lessons/SPEC-200-aula.html` produced (via **frontend-lesson-writer**).
+- [ ] Reviewed by the frontend review agents (**frontend-reviewer** + **react-correctness-reviewer**).
 - [ ] Pull Request approved.
 
 ---
@@ -326,6 +338,9 @@ removes the frontend with **zero** impact on the Go backend. No data migrations,
 
 ### Infrastructure Deliverables
 - Vercel free-tier deploy from `web/` (env-driven API base URL, host-swappable).
+- Frontend **harness**: review agents (`frontend-reviewer`, `react-correctness-reviewer`), the
+  product-focused `frontend-lesson-writer`, the `prettier-edited` + `on-stop-web` hooks, and
+  track-aware `/spec-implement` + `/pr-review`.
 
 ### Documentation Deliverables
 - `web/README.md` + root pointer, CHANGELOG entry, PT-BR lesson, specs/plans index updates.

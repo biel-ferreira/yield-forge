@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Frontend harness** — the review/verification layer for the `SPEC-2xx` track, mirroring the Go
+  one. Two subagents: **`react-correctness-reviewer`** (hooks/effects + setState-in-effect,
+  client/server boundaries, hydration, listener/stream leaks, async races, unsafe TS) and
+  **`frontend-reviewer`** (conventions + the client guards, contract-from-OpenAPI, money-no-float,
+  identity-from-server, tokens-as-code, a11y). A product-focused **`frontend-lesson-writer`**
+  (teaches the *product*, not React — the backend-contract seam in place of the hexagonal bridge).
+  Two hooks: **`prettier-edited`** (PostToolUse format-on-edit, the mirror of `gofmt-edited`; skips
+  the generated `schema.ts`) and **`on-stop-web`** (Stop reminder — run the `web/` gate, update
+  CHANGELOG, regen types). `/spec-implement` and `/pr-review` are now **track-aware** (backend Go
+  vs frontend `web/`). Recorded in PLAN-200 (Phase 6) and the `.claude/README.md` inventory.
 - **Frontend track kickoff (SDD).** With the backend MVP complete (SPEC-001…108), the
   frontend is opened as a first-class SDD track: **ADR-0006 — Frontend UI Stack & Design
   System** (*Accepted*) decides the layer inside Next.js that [ADR-0004](docs/04-architecture/adr/ADR-0004-frontend-repository-strategy.md)

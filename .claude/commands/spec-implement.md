@@ -9,6 +9,22 @@ Implement a SPEC end to end, following its PLAN and the YieldForge working agree
 an optional second token is the **mode** — `phased` (default) or `auto`. Use only `<NNN>`
 when resolving the file paths below.
 
+## Track — backend (Go) vs frontend (`web/`)
+
+YieldForge is a mono-repo with two tracks. Detect the SPEC's track and substitute the right
+tooling throughout this flow:
+
+- **Backend** (`SPEC-0xx` / `SPEC-1xx`; Go under `internal/`, `cmd/`): the gate is `task vet`
+  + `task test:short`; the review lenses are **hexagonal-reviewer** + **go-correctness-reviewer**;
+  the lesson is written by **lesson-writer**. (This is what the steps below describe by default.)
+- **Frontend** (`SPEC-2xx`; TypeScript/React under `web/`): also read **`web/CLAUDE.md`**; the
+  gate is `npm run typecheck` + `npm run lint` + `npm run build` (from `web/`, Node ≥ 20) —
+  **not** `task vet`/`go test`; the review lenses are **frontend-reviewer** +
+  **react-correctness-reviewer**; the lesson is written by **frontend-lesson-writer**. A frontend
+  spec adds **no** `api/openapi.yaml` change and has no Postgres integration gate (its integration
+  check is the auth/API flow against the running backend). Everything else — the phased cadence,
+  the SDD closeout — is identical.
+
 ## 0. Preconditions (stop if unmet)
 - Read `CLAUDE.md` (conventions + binding constraints), then the SPEC
   (`docs/02-specs/SPEC-<NNN>-*.md`) and its PLAN (`docs/03-plans/PLAN-<NNN>-*.md`)
@@ -46,6 +62,11 @@ Run two review lenses on the finished change and fix blocking findings before pr
 - **go-correctness-reviewer** subagent — nil derefs, unchecked errors, concurrency/races,
   resource leaks, SQL safety, edge cases, best practices.
 
+> **Frontend track (`SPEC-2xx`):** use **frontend-reviewer** (conventions, the guards on the
+> client, money-no-float, contract-from-OpenAPI, identity-from-server, tokens-as-code, a11y) +
+> **react-correctness-reviewer** (hooks/effects + setState-in-effect, client/server boundaries,
+> hydration, listener/stream leaks, async races, unsafe TS) instead of the Go pair.
+
 For security-sensitive specs (e.g. auth), also suggest the user run `/security-review`.
 
 ## 3. Close the spec (working agreement)
@@ -53,12 +74,16 @@ For security-sensitive specs (e.g. auth), also suggest the user run `/security-r
 - Update `README.md` if endpoints or env vars changed; update `.env.example` if config changed.
 - Flip the SPEC and PLAN **Status to Done**, and update the indexes
   (`docs/02-specs/README.md`, `docs/03-plans/README.md`).
-- Invoke the **lesson-writer** subagent to produce `docs/lessons/SPEC-<NNN>-aula.html`.
+- Invoke the **lesson-writer** subagent to produce `docs/lessons/SPEC-<NNN>-aula.html`
+  (frontend spec → invoke **frontend-lesson-writer** instead; same output path).
 - Final gate: `task vet`, `task test:short`, and `go build ./...` clean. Then the
   **integration tests**: if `TEST_DATABASE_URL` is set (or the compose Postgres on host
   port 5433 is up), run `task test:integration` and require it green. If no DB is
   available, say so explicitly — do **not** silently skip: the spec is not Done until the
   integration tests have passed against a real Postgres at least once.
+  - **Frontend track:** the final gate is `npm run typecheck` + `npm run lint` +
+    `npm run check:api` + `npm run build` (from `web/`) clean, plus the auth/API flow verified
+    against the running backend (Go API + Postgres up); there is no Go build or Postgres gate.
 - Once the change is pushed and a PR is opened, run **`/pr-review`** as the final
   pre-merge gate (architecture + correctness + SDD closeout).
 
