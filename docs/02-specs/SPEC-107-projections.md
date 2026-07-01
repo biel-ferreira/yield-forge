@@ -7,7 +7,7 @@
 | Feature Name | Projections (Passive Income & Net Worth)               |
 | Feature ID   | SPEC-107                                                |
 | Version      | 0.1.0                                                  |
-| Status       | Approved                                               |
+| Status       | Done                                                   |
 | Author       | Gabigol                                                |
 | Last Updated | 2026-06-30                                             |
 | Related PRD  | [PRD](../01-product/PRD.md) §Epic 8 & 9, FR-016, FR-017, FR-014 |

@@ -8,7 +8,7 @@
 | Related Feature | SPEC-107 — the planning layer; pure reproducible projections |
 | Related Spec    | [SPEC-107](../02-specs/SPEC-107-projections.md)             |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                       |
+| Status          | Done                                                        |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-30                                                   |
 

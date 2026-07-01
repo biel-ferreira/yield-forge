@@ -47,7 +47,7 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-104 | [AI Insight Engine](SPEC-104-ai-insight-engine.md) | FR-008–FR-010 (+ FR-013/014 via SPEC-005) | ✅ Done |
 | SPEC-105 | [AI Rebalancing Assistant](SPEC-105-ai-rebalancing-assistant.md) | FR-011 (+ FR-013/014 via SPEC-005) | ✅ Done |
 | SPEC-106 | [Portfolio Health Score](SPEC-106-portfolio-health-score.md) | FR-012 (+ FR-013/014 via SPEC-005) | ✅ Done |
-| SPEC-107 | [Projections (Income & Net Worth)](SPEC-107-projections.md) | FR-016, FR-017 | 📋 Approved |
+| SPEC-107 | [Projections (Income & Net Worth)](SPEC-107-projections.md) | FR-016, FR-017 | ✅ Done |
 | SPEC-108 | [Conversational Copilot (Chat)](SPEC-108-conversational-copilot.md) | FR-023–FR-025 (+ FR-013/014 via SPEC-005) | 📝 Draft |
 
 Every PRD functional requirement (FR-001…FR-025) maps to exactly one owning spec
