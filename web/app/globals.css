@@ -1,26 +1,153 @@
 @import "tailwindcss";
 
+/* =============================================================================
+   YieldForge — "Aurora" design tokens as code (SPEC-200 FR-2004)
+   Single source in docs/05-design/design-system.md; mirrored here for the app.
+   Dark-first; [data-theme="light"] remaps surfaces/text and drops the glow.
+   ============================================================================= */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* brand — indigo? no: warm gold (theme-invariant) */
+  --primary: #e9a94c;
+  --primary-active: #d3913a;
+  --primary-tint: #f4c47e;
+  --primary-disabled: #2a241a;
+  --on-primary: #120f0a;
+
+  /* semantic — reserved (figure/status only, never brand or a fill) */
+  --gain: #34d399;
+  --loss: #fb7185;
+  --caution: #fbbf24;
+  --info: #38bdf8;
+
+  /* aurora signature spectrum */
+  --aurora-1: #6366f1;
+  --aurora-2: #d946ef;
+  --aurora-3: #f59e0b;
+  --aurora-4: #34d399;
+  --aurora-5: #38bdf8;
+
+  /* surfaces + text — dark (default) */
+  --canvas: #0a0a0c;
+  --surface: #141317;
+  --elevated: #1c1b21;
+  --hairline: #26242b;
+  --border-strong: #3a3742;
+  --body: #e7e5e4;
+  --on-dark: #ffffff;
+  --muted: #8b8681;
+  --muted-strong: #b6b1ab;
+
+  /* glow strength (1 = on). Dropped to 0 on the light theme. */
+  --glow-opacity: 1;
 }
 
+[data-theme="light"] {
+  --canvas: #faf9f7;
+  --surface: #ffffff;
+  --elevated: #f1efe9;
+  --hairline: #eae7e1;
+  --border-strong: #cbd5e1;
+  --body: #3a3630;
+  --on-dark: #1c1a17;
+  --muted: #8a8578;
+  --muted-strong: #5a554b;
+  --glow-opacity: 0;
+}
+
+/* Map tokens to Tailwind utilities (bg-*, text-*, border-*, rounded-*, font-*).
+   `inline` so the utilities resolve to the live CSS var → theme switching works. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--primary);
+  --color-primary-active: var(--primary-active);
+  --color-primary-tint: var(--primary-tint);
+  --color-primary-disabled: var(--primary-disabled);
+  --color-on-primary: var(--on-primary);
+
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --color-caution: var(--caution);
+  --color-info: var(--info);
+
+  --color-aurora-1: var(--aurora-1);
+  --color-aurora-2: var(--aurora-2);
+  --color-aurora-3: var(--aurora-3);
+  --color-aurora-4: var(--aurora-4);
+  --color-aurora-5: var(--aurora-5);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-hairline: var(--hairline);
+  --color-border-strong: var(--border-strong);
+  --color-body: var(--body);
+  --color-on-dark: var(--on-dark);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-fraunces);
+  --font-mono: var(--font-ibm-plex-mono);
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ---- base ---- */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--body);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* =============================================================================
+   Aurora helpers (decorative; never color data)
+   ============================================================================= */
+
+/* Ambient aurora glow — fixed, behind content; fades out on the light theme. */
+.aurora-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--glow-opacity);
+  background:
+    radial-gradient(55% 45% at 16% 8%, rgba(99, 102, 241, 0.2), transparent 60%),
+    radial-gradient(48% 42% at 88% 18%, rgba(217, 70, 239, 0.16), transparent 60%),
+    radial-gradient(55% 48% at 76% 98%, rgba(56, 189, 248, 0.14), transparent 60%),
+    radial-gradient(40% 40% at 42% 58%, rgba(233, 169, 76, 0.1), transparent 60%);
+}
+
+/* Glass card surface: subtle top sheen + colored ambient shadow. */
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent), var(--surface);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 26px 60px -34px rgba(99, 102, 241, 0.5);
+}
+[data-theme="light"] .glass {
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+/* Gold action glows. */
+.glow-gold {
+  box-shadow: 0 0 30px -6px rgba(233, 169, 76, 0.6);
+}
+.glow-gold-soft {
+  box-shadow: 0 0 26px -8px rgba(233, 169, 76, 0.5);
+}
+[data-theme="light"] .glow-gold,
+[data-theme="light"] .glow-gold-soft {
+  box-shadow: none;
+}
+
+/* Tabular figures for money/rates. */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
