@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Node build tooling + auto-generated API types (not app code):
+    "scripts/**",
+    "lib/api/schema.ts",
   ]),
 ]);
 

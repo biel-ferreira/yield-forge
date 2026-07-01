@@ -29,4 +29,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run check:api # drift guard: generated types vs api/openapi.yaml
       - run: npm run build

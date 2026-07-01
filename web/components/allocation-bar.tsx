@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { formatShareBps } from "@/lib/money";
 
 export interface AllocationSegment {
   label: string;
@@ -6,11 +7,6 @@ export interface AllocationSegment {
   bps: number;
   /** Segment color (token var or hex). */
   color: string;
-}
-
-// TODO(SPEC-200 Phase 3): replace with the canonical `formatBps` from lib/money.ts.
-function pct(bps: number) {
-  return `${(bps / 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
 
 /**
@@ -31,7 +27,7 @@ export function AllocationBar({
         style={{ boxShadow: "0 0 22px -2px rgba(99,102,241,.5)" }}
       >
         {segments.map((s) => (
-          <div key={s.label} style={{ width: pct(s.bps), background: s.color }} />
+          <div key={s.label} style={{ width: formatShareBps(s.bps), background: s.color }} />
         ))}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
@@ -42,7 +38,7 @@ export function AllocationBar({
               style={{ background: s.color, boxShadow: `0 0 8px 1px ${s.color}` }}
             />
             <span>{s.label}</span>
-            <span className="tabular font-mono text-muted">{pct(s.bps)}</span>
+            <span className="tabular font-mono text-muted">{formatShareBps(s.bps)}</span>
           </div>
         ))}
       </div>

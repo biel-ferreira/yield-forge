@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Fraunces, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 
 // Inter (body/UI) — variable. Fraunces (display serif) + IBM Plex Mono (numbers) —
 // static weights we actually use. All SIL Open Font License, self-hosted by next/font
@@ -40,7 +41,9 @@ export default function RootLayout({
       className={`${inter.variable} ${fraunces.variable} ${ibmPlexMono.variable} antialiased`}
     >
       {/* aurora-bg mounts the ambient glow layer (dark-first; dropped on light) */}
-      <body className="aurora-bg min-h-screen">{children}</body>
+      <body className="aurora-bg min-h-screen">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
