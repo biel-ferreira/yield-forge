@@ -32,7 +32,9 @@ func Compute(in Inputs) Projections {
 	for _, sc := range AllScenarios {
 		adj := sc.yieldAdjBps()
 
-		annual := baseAnnual + delta*int64(adj)/spreadBps // base ± delta (exact at the endpoints)
+		// Scale the ±spreadBps income change by this scenario's adjustment: at adj = ±spreadBps the
+		// division is exact, giving base ± delta; at adj = 0 it is base. Generalises to any adj.
+		annual := baseAnnual + delta*int64(adj)/spreadBps
 		if annual < 0 {
 			annual = 0
 		}
