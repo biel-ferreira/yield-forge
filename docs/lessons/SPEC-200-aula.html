@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 200 — SPEC-200: Fundação do Frontend (o SPEC-001 do cliente web) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#e9a94c,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 200 · A Fundação do Frontend · o track SPEC-2xx começa aqui</span>
+    <h1>SPEC-200 — Fundação do Frontend (o "SPEC-001" do cliente web)</h1>
+    <p>O backend inteiro (SPEC-001…108) só entrega valor por uma <strong>API</strong>. O SPEC-200 transforma esse contrato numa
+    <strong>superfície web usável</strong> — e faz isso de um jeito em que as <strong>travas binding do produto</strong> (explicabilidade FR-013,
+    não-conselho FR-014) e a regra <strong>dinheiro-nunca-float</strong> deixam de ser disciplina de backend e viram <strong>estrutura no
+    cliente</strong>. Esta spec <strong>não entrega nenhuma tela de feature</strong>: ela é a fundação — a "costura" onde as telas SPEC-21x
+    plugam. A grande lição não é React; é <strong>como o contrato OpenAPI vira a fronteira única entre front e back</strong>, como as
+    guardas do produto viram <strong>componentes que o usuário vê</strong>, e como o shell já reserva o lugar do <strong>copiloto</strong> —
+    preparando o terreno para a SPEC-215 e a visão multi-agente/MCP. Você <strong>não precisa dominar React</strong> para acompanhar.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: a fundação que torna as travas do produto ESTRUTURAIS</a></li>
+    <li><a href="#valor">O que a fundação entrega e para quem (Rafael &amp; Carla)</a></li>
+    <li><a href="#jornada">A jornada do usuário: do login à casca autenticada</a></li>
+    <li><a href="#guardas">LIÇÃO PRINCIPAL — as travas viram UI: o <code>InsightCard</code>, o disclaimer, a ausência de botões</a></li>
+    <li><a href="#dinheiro">Dinheiro em centavos inteiros, pt-BR só na borda (e o bug que isso quase causou)</a></li>
+    <li><a href="#contrato">Conexão com o backend: o contrato OpenAPI como fronteira</a></li>
+    <li><a href="#auth">Identidade vem do servidor: o proxy same-origin e o <code>/auth/me</code></a></li>
+    <li><a href="#shell">O shell do app e o slot global do copiloto (a ponte para a SPEC-215)</a></li>
+    <li><a href="#construido">Como foi construído (visão geral, sem virar tutorial de React)</a></li>
+    <li><a href="#recorte">O que ficou de fora e por quê (o recorte da spec)</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu e verificou isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering &amp; Produto</a></li>
+    <li><a href="#next">O que vem a seguir — as telas SPEC-21x</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: a fundação que torna as travas do produto ESTRUTURAIS</h2>
+
+<p>Toda a Fase 1 do backend está pronta: perfil, carteira, dashboard, insights, rebalanceamento, health score, projeções
+e o copiloto conversacional. Mas nada disso é <em>visível</em> para o usuário — vive atrás de endpoints JSON. O SPEC-200 é o
+primeiro passo do <strong>track de frontend (SPEC-2xx)</strong>: ele monta o cliente web sob <code>web/</code> e <strong>tudo que cada tela futura vai
+depender</strong>. É o <strong>análogo frontend do SPEC-001</strong> — o esqueleto, a fiação, as convenções — não uma feature.</p>
+
+<p>O que ele entrega, em código real:</p>
+<ul>
+  <li>Um app <strong>Next.js 16 (App Router) + React 19 + TypeScript strict + Tailwind v4</strong> sob <code>web/</code>, isolado do módulo Go,
+  com CI path-scoped (só roda no que muda em <code>web/**</code>).</li>
+  <li>O <strong>design system Aurora como código</strong> — tokens em <code>@theme</code> no <code>globals.css</code>, três fontes self-hosted (Inter ·
+  Fraunces · IBM Plex Mono) — com as guardas binding como <strong>componentes estruturais</strong>: um <code>InsightCard</code> cujo prop
+  <code>explanation</code> é <strong>obrigatório</strong> (FR-013) e um <code>NonAdviceDisclaimer</code> (FR-014). <strong>Nenhum botão de comprar/vender</strong>
+  existe em lugar nenhum.</li>
+  <li>Um <strong>cliente de API tipado gerado de <code>api/openapi.yaml</code></strong> (<code>openapi-typescript</code> + <code>openapi-fetch</code> +
+  TanStack Query) — <strong>zero DTOs à mão</strong> — com um guardião de deriva (<code>npm run check:api</code>, o espelho do
+  <code>openapi_test.go</code> do backend); o <code>money.ts</code> formata centavos/bps inteiros para pt-BR só na borda de renderização; e
+  um <strong>transporte SSE de streaming</strong> pronto para o chat da SPEC-215.</li>
+  <li><strong>Auth &amp; sessão</strong> contra a SPEC-003 via um <strong>proxy same-origin do Next.js</strong> (o cookie <code>HttpOnly</code> funciona sem
+  CORS); <code>useSession</code> resolve a identidade por <code>/auth/me</code> (nunca do estado do cliente).</li>
+  <li>O <strong>shell do app</strong> — sidebar / abas no mobile, top bar, e o <strong>launcher flutuante global do copiloto</strong> em toda
+  tela — com rotas de feature "stubadas" (estados vazios) e boundaries de loading/erro compartilhados.</li>
+</ul>
+
+<div class="diagram">ANTES (SPEC-001…108 — a Fase 1 do backend)        DEPOIS (SPEC-200 — a fundação do frontend)
+  valor exposto SÓ por endpoints JSON             uma casca web usável onde as telas SPEC-21x plugam
+  FR-013/FR-014 garantidos no Insighter (Go)      as guardas viram COMPONENTES (InsightCard, disclaimer)
+  dinheiro = int64 centavos / bps (Go)            dinheiro = number centavos/bps; pt-BR só na borda (money.ts)
+  contrato em api/openapi.yaml (guardado por drift) tipos GERADOS do mesmo yaml; drift check no cliente
+  identidade do contexto (auth.UserID)            identidade do servidor via /auth/me (nunca do cliente)
+  o backend é a fonte da verdade                  o frontend é APENAS UM cliente da API entre outros futuros</div>
+
+<div class="box why">
+  <span class="lbl">Por que "fundação estrutural" é a decisão-mãe desta spec</span>
+  A tentação numa base de frontend é entregar logo uma tela bonita. O SPEC-200 faz o oposto: entrega <strong>zero telas de
+  produto</strong> e investe todo o esforço em tornar as regras do produto <strong>impossíveis de violar por acidente</strong> nas telas que
+  virão. Se o <code>InsightCard</code> <em>exige</em> a explicação como prop obrigatório, nenhuma tela futura consegue mostrar um
+  insight sem o "por quê". Se o único caminho para formatar dinheiro é o <code>money.ts</code>, nenhuma tela inventa um
+  <code>toFixed</code> com float. É <strong>parse-don't-validate aplicado a props de componente</strong> — o mesmo princípio do backend, agora
+  na borda visual. Cada tela SPEC-21x herda as travas <strong>de graça</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="valor">2. O que a fundação entrega e para quem (Rafael &amp; Carla)</h2>
+
+<p>Uma fundação não tem "tela", então o valor para as personas é <strong>indireto mas decisivo</strong>: é a promessa de que <em>toda</em>
+tela que Rafael e Carla vão usar será <strong>consistente, explicável e nunca vai empurrar uma ordem de compra</strong>.</p>
+
+<table>
+  <tr><th>Persona</th><th>A dor</th><th>O que a fundação garante (para as telas SPEC-21x)</th></tr>
+  <tr>
+    <td><strong>Rafael</strong>, o investidor de FIIs que quer entender concentração e renda</td>
+    <td>Ferramentas de investimento ou são planilhas cruas, ou apps que "recomendam comprar X" sem dizer por quê</td>
+    <td>Todo insight virá num <code>InsightCard</code> com o "por quê" <strong>sempre visível</strong>; nenhum botão "Comprar" existe no
+    app; ganho/perda aparece só como <strong>cor de número</strong>, nunca como um call-to-action</td>
+  </tr>
+  <tr>
+    <td><strong>Carla</strong>, a planejadora de longo prazo focada em patrimônio</td>
+    <td>Projeções apresentadas como "promessas" e valores mal formatados que geram desconfiança</td>
+    <td>Dinheiro em <strong>centavos inteiros</strong> formatado em <strong>pt-BR</strong> (R$ 12.345,67) — exato, nunca um float que arredonda
+    errado; o <strong>disclaimer de não-conselho</strong> presente em qualquer superfície de IA/projeção</td>
+  </tr>
+</table>
+
+<p>E há uma promessa transversal: a fundação já reserva, <strong>em todas as telas</strong>, o botão flutuante do <strong>copiloto</strong> — o
+canal onde Rafael vai perguntar <em>"estou concentrado demais em logística?"</em> em linguagem natural (o widget em si chega
+na SPEC-215). O usuário nunca fica sem o copiloto ao alcance, em qualquer parte do app.</p>
+
+<!-- ============================================================ -->
+<h2 id="jornada">3. A jornada do usuário: do login à casca autenticada</h2>
+
+<p>O único fluxo <em>vivo</em> que o SPEC-200 entrega ponta a ponta é a <strong>autenticação e a casca vazia</strong>. É simples de
+descrever e revela as decisões de produto importantes:</p>
+
+<div class="diagram">1. Usuário abre o app  ─▶  não autenticado  ─▶  redireciona para /login
+2. Envia credenciais   ─▶  backend seta o cookie HttpOnly (via o proxy same-origin)
+3. /auth/me resolve o usuário  ─▶  o shell autenticado renderiza (sidebar + top bar + copiloto)
+4. Recarrega a página  ─▶  o cookie persiste a sessão; nada some
+5. Clica em cada item do menu ─▶  rota "stubada": um ESTADO VAZIO honesto ("chega na SPEC-2xx")
+6. Logout  ─▶  o cookie é limpo, o cache é descartado  ─▶  volta para /login
+
+   Sessão inválida no meio do caminho:
+   qualquer chamada protegida retorna 401 ─▶ estado limpo ─▶ redireciona, SEM vazar dado protegido</div>
+
+<p>Repare em duas decisões de produto na jornada. A primeira: as <strong>rotas de feature são estados vazios honestos</strong> — não
+telas quebradas nem placeholders enganosos. O <code>DashboardPage</code>, por exemplo, renderiza um <code>EmptyState</code> que diz
+exatamente o que vem e quando:</p>
+
+<pre><code>// web/app/(app)/dashboard/page.tsx — o estado vazio é honesto, não um placeholder falso
+export default function DashboardPage() {
+  return (
+    &lt;EmptyState
+      title="Painel"
+      description="Seu resumo de patrimônio, alocação por setor, Health Score e insights
+                   do copiloto chega na SPEC-212 (Dashboard)."
+    /&gt;
+  );
+}</code></pre>
+
+<p>A segunda: a <strong>não há rota "Chat"</strong> no menu. O copiloto é um <strong>widget flutuante global</strong>, não uma página — uma
+decisão de produto deliberada (seção 8), registrada em código no <code>nav.ts</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="guardas">4. LIÇÃO PRINCIPAL — as travas viram UI: o <code>InsightCard</code>, o disclaimer, a ausência de botões</h2>
+
+<p>Esta é a ideia central da aula. As duas guardas binding do produto — <strong>explicabilidade (FR-013)</strong> e <strong>não-conselho
+(FR-014)</strong> — já eram garantidas no backend, dentro do <code>Insighter</code> gated. O SPEC-200 faz uma coisa poderosa: as
+transforma em <strong>componentes que o usuário vê e que o desenvolvedor não consegue burlar</strong>. É o espelho, na borda visual,
+do decorator <code>Gated</code> do backend.</p>
+
+<h3>4.1 — Explicabilidade por construção: o <code>explanation</code> é prop obrigatório</h3>
+<p>O <code>InsightCard</code> tem um slot fixo "Por quê" que <strong>sempre renderiza</strong>, e o texto dele vem de um prop <code>explanation</code>
+que é <strong>obrigatório no contrato de tipos</strong>. Um insight sem explicação é literalmente <strong>irrepresentável</strong> — o TypeScript
+recusa compilar. Não é disciplina do revisor; é o compilador.</p>
+
+<pre><code>// web/components/insight-card.tsx — o "por quê" é prop OBRIGATÓRIO (FR-013)
+export interface InsightCardProps {
+  children: ReactNode;         // a manchete do insight
+  /**
+   * O "por quê" humano. OBRIGATÓRIO por contrato — um insight sem explicação
+   * é irrepresentável (FR-013), espelhando o Gated Insighter do backend.
+   */
+  explanation: ReactNode;      // ← NÃO é opcional. Omitir = erro de tipo.
+  category?: string;
+  attention?: boolean;
+}
+
+// ...e o corpo SEMPRE renderiza o bloco "Por quê":
+&lt;div className="mt-3 rounded-md border ..."&gt;
+  &lt;div className="... text-primary-tint"&gt;Por quê&lt;/div&gt;
+  &lt;div className="... text-muted-strong"&gt;{explanation}&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+
+<h3>4.2 — Não-conselho: o disclaimer não é opcional, e não há botão de ordem</h3>
+<p>O <code>NonAdviceDisclaimer</code> é um componente cuja <strong>presença é um contrato da tela</strong>, não um prop opcional. Ele carrega o
+texto de "conteúdo educacional, não recomendação" (e uma variante estendida para projeções). E — a parte mais
+importante — <strong>não existe nenhum componente de comprar/vender no design system</strong>. Não há <code>&lt;BuyButton&gt;</code>,
+<code>&lt;OrderCTA&gt;</code>, meta de preço ou campo de quantidade. A ausência é <strong>deliberada</strong>.</p>
+
+<pre><code>// web/components/non-advice-disclaimer.tsx — presença é contrato da tela (FR-014)
+const DEFAULT_TEXT =
+  "Isto é conteúdo educacional, não recomendação de investimento. As decisões são suas.";
+const EXTENDED_TEXT =
+  "As projeções são estimativas não garantidas... YieldForge não emite ordens de compra ou
+   venda, metas de preço ou quantidades. Consulte um profissional habilitado antes de decidir.";</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que "cor de número, nunca ação" é uma decisão de produto (e de UX)</span>
+  Um ganho ou perda no YieldForge aparece <strong>só como cor do texto</strong> (verde/vermelho) — nunca como um botão, uma seta
+  piscante ou um fill que sugira "agir agora". O revisor <code>frontend-reviewer</code> vigia exatamente isto: <em>"gain/loss
+  aparecem apenas como cor da figura, nunca como ação ou fill"</em>. A razão é a trava FR-014 traduzida para UX: o produto é
+  um <strong>copiloto que informa</strong>, não um corretor que induz. Um botão "Comprar" ao lado de um número verde é uma ordem
+  disfarçada; a sua <strong>ausência estrutural</strong> é o que mantém o produto do lado certo da linha regulatória e ética. E,
+  para acessibilidade, a cor <strong>nunca é o único sinal</strong> — sempre acompanha texto/seta (colorblind-safe).
+</div>
+
+<div class="diagram">    O ÚNICO caminho de uma saída de IA até a tela do usuário:
+
+    dado do backend ─▶ &lt;InsightCard explanation={...}&gt;  ◀── o "por quê" é PROP OBRIGATÓRIO (FR-013)
+                          headline
+                          ┌─ "Por quê" ─────────────┐   ◀── slot fixo, SEMPRE renderiza
+                          └─────────────────────────┘
+                       &lt;NonAdviceDisclaimer /&gt;         ◀── presença é contrato da tela (FR-014)
+
+    NÃO EXISTE no design system:  &lt;BuyButton&gt;  &lt;SellButton&gt;  meta de preço  campo de quantidade
+    ganho/perda = SÓ cor de número (+ texto/seta), NUNCA uma ação.  ← burlar é impossível por construção</div>
+
+<!-- ============================================================ -->
+<h2 id="dinheiro">5. Dinheiro em centavos inteiros, pt-BR só na borda (e o bug que isso quase causou)</h2>
+
+<p>A regra do backend "dinheiro nunca é <code>float64</code>; é <code>int64</code> centavos, taxas em basis points" <strong>atravessa a fronteira
+JSON e entra na UI</strong>. No cliente, valores fluem por props e estado como <strong>inteiros</strong> (centavos e bps); a conversão para
+uma string localizada em <strong>pt-BR</strong> acontece <strong>só na borda de renderização</strong>, num único helper: o <code>money.ts</code> — o
+análogo cliente do <code>internal/platform/money</code>.</p>
+
+<pre><code>// web/lib/money.ts — a ÚNICA borda de formatação; inteiro entra, string pt-BR sai. Sem float.
+export function formatCentavos(centavos: number): string {
+  const reais = Math.trunc(Math.abs(centavos) / 100);   // divisão INTEIRA
+  const cents = Math.abs(centavos) % 100;               // resto INTEIRO
+  return `R$ ${reais.toLocaleString("pt-BR")},${String(cents).padStart(2, "0")}`;
+}
+// formatCentavos(1234567) === "R$ 12.345,67"     formatBps(1050) === "10,50%"</code></pre>
+
+<p>Repare: nunca há <code>centavos / 100</code> gerando um <code>12345.67</code> flutuante — é <code>Math.trunc(.../100)</code> para os reais e <code>% 100</code>
+para os centavos, tudo aritmética inteira. A vírgula/ponto do formato brasileiro é montada à mão sobre inteiros.</p>
+
+<div class="box bug">
+  <span class="lbl">O bug real que a disciplina "pt-BR só na borda" quase deixou passar — pego pelos revisores</span>
+  Há um detalhe sutil e traiçoeiro no <code>AllocationBar</code> (a barra de alocação por setor, a assinatura visual do Aurora).
+  A <strong>largura CSS</strong> de cada segmento precisa de um número <strong>com ponto decimal</strong> (<code>width: "16.5%"</code>). Mas o texto da
+  <strong>legenda</strong> precisa do <strong>pt-BR com vírgula</strong> (<code>"16,5%"</code>). Se alguém, "para ser consistente", usasse a string pt-BR
+  <em>também</em> na largura, o CSS <code>width: "16,5%"</code> seria <strong>inválido</strong> e o segmento <strong>colapsaria para largura zero</strong> — a
+  barra sumiria, silenciosamente. <code>typecheck</code>, <code>lint</code> e <code>build</code> <strong>passam</strong> (é uma string válida em TS!); só o olho de
+  um revisor de correção pega. Por isso existe um teste de regressão dedicado:
+  <pre style="margin-top:8px"><code>// web/components/allocation-bar.test.tsx — a regressão que trava o bug para sempre
+it("uses a dot-decimal CSS width for fractional shares", () =&gt; {
+  // ... bps: 1650
+  expect(segmentWidth(container)).toBe("16.5%");   // ← PONTO na largura (CSS válido)
+});
+it("shows the pt-BR percent (comma) in the legend text", () =&gt; {
+  expect(screen.getByText("16,5%")).toBeInTheDocument();  // ← VÍRGULA no texto (pt-BR)
+});</code></pre>
+  O código separa as duas preocupações com um comentário explícito: <em>"width is layout geometry → a plain dot-decimal %
+  (never the pt-BR display string)"</em>. A geometria de layout usa <code>{s.bps / 100}%</code> (ponto); a legenda usa
+  <code>formatShareBps(s.bps)</code> (vírgula). Duas bordas, dois formatos.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="contrato">6. Conexão com o backend: o contrato OpenAPI como fronteira</h2>
+
+<p>Esta seção é o coração da aula de frontend — e substitui a "ponte hexagonal" que a aula de backend ensina. No
+backend, a fronteira é o <strong>port</strong> (a interface). No frontend, a fronteira entre o cliente e o servidor é o
+<strong>contrato OpenAPI</strong> — o <code>api/openapi.yaml</code> — e ele é a <strong>fonte única da verdade</strong> para os tipos que cruzam a rede.</p>
+
+<h3>6.1 — Tipos gerados, nunca DTOs à mão</h3>
+<p>O cliente <strong>não escreve interfaces TypeScript para os payloads da API</strong>. Elas são <strong>geradas</strong> de <code>api/openapi.yaml</code>
+por <code>openapi-typescript</code> para um único arquivo <code>web/lib/api/schema.ts</code>, e consumidas por um wrapper de fetch tipado
+(<code>openapi-fetch</code>). Um <code>User</code> ou um <code>Credentials</code> no cliente são <strong>o mesmo tipo</strong> que o backend documenta — por
+construção. Escrever um DTO à mão convidaria exatamente a deriva que o <code>openapi_test.go</code> do backend combate.</p>
+
+<pre><code>// web/lib/auth/session.ts — os tipos vêm do schema GERADO, nunca escritos à mão
+import type { components } from "@/lib/api/schema";
+export type User        = components["schemas"]["User"];        // ← derivado do openapi.yaml
+export type Credentials = components["schemas"]["Credentials"];</code></pre>
+
+<h3>6.2 — O guardião de deriva: <code>npm run check:api</code>, o espelho do <code>openapi_test.go</code></h3>
+<p>E se o backend mudar o contrato e ninguém regenerar os tipos do cliente? O <code>check:api</code> falha o build. Ele regenera os
+tipos de <code>api/openapi.yaml</code> na hora e compara com o <code>schema.ts</code> commitado — se diferirem, ele <strong>quebra</strong> e exige um
+<code>gen:api</code>. É o <strong>espelho cliente</strong> do teste de drift do backend, forçando os dois lados de volta ao lockstep:</p>
+
+<pre><code>// web/scripts/check-api-types.mjs — falha se schema.ts divergir de api/openapi.yaml
+if (fresh !== committed) {
+  console.error("✖ lib/api/schema.ts is out of date vs api/openapi.yaml.\n" +
+                "  Run `npm run gen:api` and commit the result.");
+  process.exit(1);   // ← quebra o build (roda no web-ci)
+}
+console.log("✓ API types are in lockstep with api/openapi.yaml");</code></pre>
+
+<h3>6.3 — O frontend é APENAS UM cliente da API entre outros futuros</h3>
+<p>A propriedade mais importante desta arquitetura: o navegador é <strong>só mais um consumidor</strong> do mesmo contrato. Como o
+backend expõe tudo por uma API documentada e o frontend não tem lógica de domínio própria (a SPEC-200 declara: <em>"o
+frontend não tem modelo de domínio próprio"</em>), amanhã um <strong>app nativo</strong>, um <strong>servidor MCP</strong> ou um <strong>agente</strong> podem
+consumir a <em>mesma</em> API sem nenhuma reescrita. O front não é privilegiado; é um cliente.</p>
+
+<div class="diagram">                          web/lib/api/schema.ts  (GERADO)
+                                   ▲  gen:api / check:api (drift guard)
+                                   │
+     api/openapi.yaml ──── a FONTE ÚNICA DA VERDADE do contrato ────┐
+       (fonte)                                                       │
+                                                                     ▼
+   Navegador ──▶ /api/*  (mesma origem)  ──▶  Next.js proxy (rewrite)  ──▶  API Go
+   (openapi-fetch)     cookie HttpOnly same-origin           API_PROXY_TARGET     (backend)
+        │                                                                          ▲
+        └─ hoje: o cliente web é APENAS UM consumidor ── amanhã: app nativo / MCP / agente ─┘
+                          todos falam o MESMO contrato</div>
+
+<!-- ============================================================ -->
+<h2 id="auth">7. Identidade vem do servidor: o proxy same-origin e o <code>/auth/me</code></h2>
+
+<p>A regra do backend "identidade vem da sessão autenticada, nunca do payload" tem um <strong>espelho exato</strong> no cliente
+(BR-2001): <strong>o cliente nunca confia num user id guardado localmente como verdade — <code>/auth/me</code> é a autoridade</strong>.</p>
+
+<h3>7.1 — O proxy same-origin (a decisão D1)</h3>
+<p>Havia um problema clássico: a SPEC-003 usa um cookie de sessão <code>HttpOnly</code> <code>SameSite=Lax</code>. Se o app web (na Vercel) e
+a API estivessem em origens diferentes, o cookie não iria/voltaria sem CORS + <code>SameSite=None</code> — complexidade e
+risco. A decisão D1 resolve elegantemente: o navegador chama <code>/api/*</code> na <strong>própria origem</strong> do app, e o Next.js faz um
+<strong>rewrite (proxy)</strong> para o backend. O cookie <code>SameSite=Lax</code> funciona <strong>sem mudança nenhuma</strong> — sem CORS.</p>
+
+<pre><code>// web/next.config.ts — o proxy same-origin (D1): o cookie HttpOnly Lax funciona sem CORS
+const nextConfig: NextConfig = {
+  async rewrites() {
+    return [{ source: "/api/:path*", destination: `${API_PROXY_TARGET}/:path*` }];
+  },
+};
+// e o cliente sempre bate na PRÓPRIA origem, mandando o cookie:
+export const api = createClient&lt;paths&gt;({ baseUrl: "/api", credentials: "include" });</code></pre>
+
+<h3>7.2 — <code>/auth/me</code> é a autoridade; um 401 é distinto de um erro transitório</h3>
+<p>O <code>useSession</code> pergunta ao servidor quem é o usuário. Um <strong>401 confirmado</strong> resolve para "não autenticado" (<code>null</code>);
+qualquer <strong>outra falha</strong> (servidor fora do ar) é um <strong>erro transitório</strong>, tratado diferente. Essa distinção é uma
+decisão de robustez fina: nunca ejetar um usuário <em>de fato autenticado</em> por causa de uma piscada de rede.</p>
+
+<pre><code>// web/lib/auth/session.ts — o servidor é a autoridade; 401 ≠ erro transitório
+queryFn: async () =&gt; {
+  const { data, response } = await api.GET("/auth/me");
+  if (response.status === 401) return null;   // não autenticado (confirmado)
+  if (!data) throw new Error("failed to load session");  // falha transitória → isError
+  return data;
+},</code></pre>
+
+<pre><code>// web/components/auth/require-auth.tsx — três estados, não um só
+//   loading            → placeholder neutro
+//   isError (5xx/rede) → botão "Tentar novamente", NÃO um redirect (não ejeta quem está logado)
+//   401 → null         → redirect p/ /login, SEM renderizar nada protegido
+if (!isLoading && !isError && !isAuthenticated) router.replace("/login");</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que o logout limpa TODO o cache</span>
+  No <code>useLogout</code>, o <code>onSuccess</code> faz <code>qc.setQueryData(ME_KEY, null)</code> <strong>e</strong> <code>qc.clear()</code> — descarta <em>toda</em> query
+  protegida em cache. Sem isso, um dado da carteira do usuário A poderia piscar na tela para o usuário B que loga em
+  seguida no mesmo navegador. É o análogo cliente do isolamento por usuário do backend: ao trocar de identidade, o
+  estado da identidade anterior <strong>não pode sobreviver</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="shell">8. O shell do app e o slot global do copiloto (a ponte para a SPEC-215)</h2>
+
+<p>O shell autenticado é a moldura que toda tela SPEC-21x vai preencher: uma <strong>sidebar de 248px</strong> (Painel · Carteira ·
+Insights · Saúde · Projeções · Perfil) que vira <strong>abas na base no mobile</strong>, uma top bar e a área de conteúdo. Tudo
+gated pela sessão via <code>RequireAuth</code>.</p>
+
+<pre><code>// web/app/(app)/layout.tsx — o shell: sidebar/abas + top bar + conteúdo + o launcher GLOBAL do copiloto
+&lt;RequireAuth&gt;
+  &lt;div className="md:grid md:grid-cols-[248px_1fr]"&gt;
+    &lt;AppSidebar /&gt;
+    &lt;div className="flex min-h-screen flex-col"&gt;
+      &lt;TopBar /&gt;
+      &lt;main&gt;{children}&lt;/main&gt;      {/* aqui entra cada tela SPEC-21x */}
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;MobileTabBar /&gt;
+  &lt;CopilotLauncher /&gt;              {/* ← o botão flutuante do copiloto, em TODA tela */}
+&lt;/RequireAuth&gt;</code></pre>
+
+<div class="box why">
+  <span class="lbl">A decisão de produto: o copiloto é um WIDGET global, não uma rota</span>
+  Há uma escolha de UX deliberada e importante: <strong>não existe uma página "Chat"</strong> no menu. O copiloto é um <strong>botão
+  flutuante presente em todas as telas</strong> — para que Rafael possa perguntar sobre a carteira <em>enquanto olha</em> o dashboard
+  ou as projeções, sem sair do contexto. O <code>nav.ts</code> registra isso em código: <em>"Chat/Copiloto is deliberately absent —
+  it is a global floating widget, not a route (SPEC-215)"</em>. O SPEC-200 entrega <strong>só o ponto de montagem + o estado
+  aberto/fechado</strong> do launcher; o widget conversacional de verdade (turnos, streaming) é a <strong>SPEC-215</strong>. Por isso o
+  painel aberto hoje mostra um estado honesto ("chega na SPEC-215") <strong>já com o <code>NonAdviceDisclaimer</code></strong> — a guarda já
+  está no lugar antes mesmo do chat existir.
+</div>
+
+<p>É por isso que o SPEC-200 também construiu, na Fase 3, um <strong>transporte de streaming SSE</strong> (<code>lib/stream.ts</code>): quando o
+chat da SPEC-215 chegar, o encanamento de streaming de tokens já existe — o chat não vira retrabalho (decisão D5).</p>
+
+<!-- ============================================================ -->
+<h2 id="construido">9. Como foi construído (visão geral, sem virar tutorial de React)</h2>
+
+<p>Você <strong>não precisa dominar React</strong> para acompanhar. O suficiente para entender a estrutura:</p>
+
+<ul>
+  <li><strong>O shell do app (Next.js App Router).</strong> As páginas vivem em <code>web/app/</code>. O grupo <code>(app)/</code> é a área
+  autenticada (layout com sidebar); <code>login/</code> e <code>register/</code> ficam fora dele. Cada item de menu é uma pasta com uma
+  <code>page.tsx</code> — hoje um estado vazio.</li>
+  <li><strong>Os componentes do design system Aurora.</strong> Em <code>web/components/</code>: as guardas (<code>insight-card.tsx</code>,
+  <code>non-advice-disclaimer.tsx</code>), as primitivas (<code>ui/button</code>, <code>ui/card</code>, <code>ui/badge</code>, <code>ui/input</code>) e a
+  <code>allocation-bar.tsx</code>. Os tokens (cores, glow, fontes) vivem como custom properties no <code>app/globals.css</code> (Tailwind
+  v4, sem <code>tailwind.config.js</code>).</li>
+  <li><strong>O cliente tipado.</strong> <code>web/lib/api/</code>: <code>schema.ts</code> (gerado), <code>client.ts</code> (o fetch tipado). A sessão é
+  <code>web/lib/auth/session.ts</code>. O dinheiro é <code>web/lib/money.ts</code>.</li>
+  <li><strong>A sessão via <code>/auth/me</code>.</strong> Um hook <code>useSession</code> (TanStack Query) pergunta ao servidor quem está logado;
+  <code>RequireAuth</code> gateia as rotas.</li>
+</ul>
+
+<p>Se você quiser se aprofundar, os arquivos reais estão apontados acima. Mas a mensagem da aula é o <strong>porquê</strong>, não a
+mecânica de React: cada peça existe para tornar uma regra de produto <strong>estrutural</strong>.</p>
+
+<!-- ============================================================ -->
+<h2 id="recorte">10. O que ficou de fora e por quê (o recorte da spec)</h2>
+
+<table>
+  <tr><th>Ficou de fora</th><th>Por quê</th></tr>
+  <tr><td>Qualquer <strong>tela de feature</strong> (Dashboard com dados, CRUD de carteira, form de perfil, Insights, Saúde, Projeções)</td><td>Cada uma é sua própria spec SPEC-21x. O SPEC-200 entrega só <strong>rotas stubadas</strong> (estados vazios) — regra dura contra scope creep.</td></tr>
+  <tr><td>O <strong>widget do copiloto</strong> (bolhas, streaming, lógica de turno)</td><td>É a <strong>SPEC-215</strong>. O SPEC-200 possui só o slot de montagem + o estado aberto/fechado.</td></tr>
+  <tr><td>Qualquer <strong>mudança no backend</strong> ou no <code>api/openapi.yaml</code></td><td>O frontend <strong>não declara nenhum endpoint</strong>. Ele consome o contrato congelado — por isso <strong>não há edição no yaml</strong> (afirmado explicitamente).</td></tr>
+  <tr><td><strong>Rastreamento de erro/tracing no cliente</strong></td><td>Diferido no MVP; confia-se no OTel do backend (SPEC-004) para os traces das chamadas que o cliente faz.</td></tr>
+  <tr><td><strong>Tema claro por-componente completo</strong> e temização de gráficos (Recharts)</td><td>O SPEC-200 rascunha só os tokens; o tema claro completo e os gráficos das projeções são follow-ups (SPEC-214).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu e verificou isto</h2>
+
+<p>O projeto tem propósito duplo: além do produto, aprender <strong>engenharia de harness</strong> — dar à IA trilhos que <strong>baixam a
+taxa de erro</strong>. O SPEC-200 é especial porque <strong>estende o harness para um novo track</strong>: o Go tem seus revisores e hooks;
+agora o frontend ganha os seus. Veja como a máquina construiu e verificou a fundação.</p>
+
+<h3>O fluxo <code>/spec-implement</code> em fases — track-aware</h3>
+<p>A IA não atacou "faça o frontend" de uma vez. O PLAN-200 fatiou em <strong>8 fases</strong>, cada uma deixando <code>web/</code> compilando,
+lintando e type-checando verde e revisável sozinha. A ordem foi <strong>deliberada</strong> para de-riscar as duas costuras mais
+difíceis primeiro: <strong>o contrato tipado (Fase 3)</strong> e <strong>a auth cross-origin (Fase 4)</strong>. E o <code>/spec-implement</code> foi feito
+<strong>track-aware</strong>: numa mudança em <code>web/**</code>, ele seleciona os revisores de frontend — os revisores Go não se aplicam a
+React/TS.</p>
+
+<table>
+  <tr><th>Fase</th><th>O que entregou</th></tr>
+  <tr><td>1 — Fundação &amp; toolchain</td><td>O scaffold Next 16 + TS strict, isolado do módulo Go; CI path-scoped <code>web-ci</code>.</td></tr>
+  <tr><td>2 — Tokens &amp; componentes</td><td>Aurora como código (<code>@theme</code>); as guardas (<code>InsightCard</code>, disclaimer) + primitivas — <strong>sem</strong> componente de ordem.</td></tr>
+  <tr><td>3 — Cliente tipado &amp; dados</td><td><code>schema.ts</code> gerado + <code>check:api</code> (drift); <code>money.ts</code>; <code>stream.ts</code> (SSE p/ SPEC-215).</td></tr>
+  <tr><td>4 — Auth &amp; sessão</td><td>O proxy same-origin (D1); <code>useSession</code> via <code>/auth/me</code>; <code>RequireAuth</code> (401 ≠ transitório).</td></tr>
+  <tr><td>5 — Shell &amp; slot do copiloto</td><td>Sidebar/abas + top bar + o launcher global; rotas stubadas + boundaries.</td></tr>
+  <tr><td>6 — Quality gates</td><td>Os revisores de frontend + os hooks de formatação/lembrete.</td></tr>
+  <tr><td>7 — Testes</td><td>Vitest + RTL (money, guardas, a regressão da allocation-bar); smoke Playwright.</td></tr>
+  <tr><td>8 — Docs &amp; fechamento</td><td>README, CHANGELOG, specs/plans → Done, e esta aula.</td></tr>
+</table>
+
+<h3>Os dois subagentes de revisão de frontend — e o bug real que pegaram</h3>
+<p>O harness Go tem o <code>hexagonal-reviewer</code> e o <code>go-correctness-reviewer</code>. O SPEC-200 introduziu os <strong>gêmeos de
+frontend</strong>, com divisão de trabalho clara:</p>
+
+<ul>
+  <li><strong><code>frontend-reviewer</code></strong> — a lente de <strong>convenções + guardas do produto + design system</strong>. Ele cobra, em ordem de
+  severidade: contrato-do-OpenAPI (nada de DTO à mão), <strong>dinheiro-sem-float</strong> (só via <code>money.ts</code>, nada de
+  <code>toFixed</code>/<code>parseFloat</code>/<code>R$</code> concatenado à mão), as guardas binding (o <code>explanation</code> obrigatório, o disclaimer
+  presente, <strong>nenhum botão de ordem</strong>, ganho/perda só como cor), identidade-do-servidor e acessibilidade.</li>
+  <li><strong><code>react-correctness-reviewer</code></strong> — a lente de <strong>bugs de correção</strong>: regras de hooks, deps de <code>useEffect</code>,
+  <code>setState</code> em effect, fronteira client/server, hidratação, vazamento de listener/stream, races assíncronas, tipos
+  inseguros. Ele roda <code>typecheck</code>/<code>lint</code>/<code>build</code> e <strong>lê o código de perto</strong>.</li>
+</ul>
+
+<div class="box bug">
+  <span class="lbl">O bug que o <code>typecheck</code>/<code>lint</code>/<code>build</code> NÃO pegaram — mas o revisor de correção pegou</span>
+  O caso do <code>AllocationBar</code> (seção 5) é a prova viva de por que a revisão semântica importa. Usar a string pt-BR
+  <code>"16,5%"</code> como <strong>largura CSS</strong> é uma string <strong>perfeitamente válida em TypeScript</strong> — então <code>typecheck</code> passa,
+  <code>lint</code> passa, <code>build</code> passa. Mas no navegador o CSS <code>width: "16,5%"</code> é <strong>inválido</strong> e o segmento colapsa para
+  <strong>largura zero</strong>: a barra some, sem erro nenhum. Nenhum gate <em>mecânico</em> pega isso — é preciso um revisor que
+  <em>entenda</em> que largura de layout precisa de ponto decimal e legenda precisa de vírgula pt-BR. O
+  <code>react-correctness-reviewer</code> pegou, e a correção virou um <strong>teste de regressão</strong> que trava o bug para sempre. Lição de
+  harness: os gates mecânicos (typecheck/lint/build) são necessários, mas <strong>não suficientes</strong> — a lente semântica dos
+  subagentes cobre a classe de bugs que compila e quebra em runtime.
+</div>
+
+<h3>Os hooks que agiram — <code>prettier-edited</code> e <code>on-stop-web</code></h3>
+<ul>
+  <li><strong><code>prettier-edited</code></strong> (PostToolUse): roda o Prettier em todo arquivo editado sob <code>web/</code> — o espelho do
+  <code>gofmt-edited</code> do Go. Zero ruído de estilo nos diffs. Importante: ele <strong>pula o <code>schema.ts</code> gerado</strong> (não se
+  reformata um artefato de geração — isso quebraria o <code>check:api</code>).</li>
+  <li><strong><code>on-stop-web</code></strong> (Stop, só lembrete): ao encerrar, lembra de rodar o gate de <code>web/</code>
+  (<code>typecheck</code>/<code>lint</code>/<code>build</code>), atualizar o CHANGELOG e <strong>regerar os tipos</strong> se o contrato mudou.</li>
+</ul>
+
+<h3>Os gates que baixam erro (e por quê)</h3>
+<table>
+  <tr><th>Gate / disciplina</th><th>Como apareceu no SPEC-200</th><th>Por que baixa erro</th></tr>
+  <tr><td>Guardas por construção (FR-013/FR-014)</td><td><code>explanation</code> é prop obrigatório; disclaimer é contrato da tela; <strong>nenhum</strong> componente de ordem existe</td><td>Uma tela sem "por quê" ou com botão de compra é <strong>irrepresentável</strong> — não depende da vigilância do dev.</td></tr>
+  <tr><td>Contrato do OpenAPI (drift check)</td><td><code>schema.ts</code> gerado; <code>check:api</code> quebra o build se divergir do <code>api/openapi.yaml</code></td><td>Os tipos do cliente nunca apodrecem em relação ao contrato — a deriva é falha de build, não bug de runtime.</td></tr>
+  <tr><td>Dinheiro-sem-float</td><td>Centavos/bps inteiros end-to-end; a única borda de formatação é <code>money.ts</code>; o <code>frontend-reviewer</code> vigia</td><td>Valores exatos e determinísticos; nenhum <code>toFixed</code>/float arredonda dinheiro errado.</td></tr>
+  <tr><td>Tokens como código</td><td>Aurora vive em <code>@theme</code> no <code>globals.css</code>; os componentes consomem tokens, não valores mágicos</td><td>Uma única fonte de cor/espaçamento; consistência visual sem "hex solto" espalhado.</td></tr>
+  <tr><td>Gate <code>typecheck</code>/<code>lint</code>/<code>build</code> (web-ci)</td><td>CI path-scoped em <code>web/**</code>; o Go build fica intocado (ADR-0004)</td><td>Cada mudança de frontend é verificada isolada; o backend nunca quebra por uma mudança de UI.</td></tr>
+  <tr><td>Testes (Vitest + RTL)</td><td><code>money</code> table-driven, contratos das guardas, e a <strong>regressão da allocation-bar</strong>; smoke Playwright gated</td><td>A classe de bug "compila mas quebra em runtime" fica travada por teste, não por memória humana.</td></tr>
+  <tr><td>Stdlib/copy-in first; justifique cada dep</td><td>shadcn/ui é <strong>copiado para dentro</strong> (MIT), não dependência de runtime; Recharts atrás dos nossos wrappers</td><td>Zero lock-in; superfície de dependência mínima (ADR-0003) — a postura ports, no cliente.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering &amp; Produto</h2>
+
+<p>Esta fundação parece "só encanamento de frontend", mas ela é onde as <strong>garantias de governança da IA deixam de ser
+regra de backend e viram algo que o usuário vê e sente</strong>. Vamos aos elos concretos.</p>
+
+<h3>12.1 — As guardas de IA viram UI tangível</h3>
+<p>No backend, a explicabilidade (FR-013) e a não-conselho (FR-014) são invisíveis — vivem no <code>Insighter</code> gated. O
+SPEC-200 as <strong>materializa</strong>: o "por quê" vira um bloco fixo que o usuário lê em todo insight; o disclaimer vira um
+rodapé presente em toda superfície de IA; a ausência de botões de ordem vira uma <strong>experiência</strong> que comunica "somos
+um copiloto, não um corretor". A promessa abstrata do produto vira <strong>percepção do usuário</strong>.</p>
+
+<h3>12.2 — O terreno pronto para o copiloto conversacional (SPEC-215)</h3>
+<p>O SPEC-200 não implementa o chat, mas <strong>prepara todo o terreno</strong>: o <strong>slot flutuante global</strong> já está em todas as
+telas; o <strong>transporte SSE de streaming</strong> (<code>stream.ts</code>) já existe para os tokens do chat; e o <code>NonAdviceDisclaimer</code>
+já está montado no painel do copiloto — então, quando a SPEC-215 ligar o motor conversacional (que no backend é o
+capstone SPEC-108, com grounding turno a turno e gates), a guarda de não-conselho <strong>já está no lugar na UI</strong>. O chat
+não vira retrabalho: ele preenche um slot preparado.</p>
+
+<h3>12.3 — A costura para a visão multi-agente / MCP</h3>
+<p>Lembre da propriedade da seção 6: o frontend é <strong>apenas um cliente</strong> do contrato OpenAPI, sem lógica de domínio
+própria. Isso é exatamente o que sustenta a visão de futuro do produto — o <strong>CIO multi-agente</strong> e o <strong>MCP</strong>. Como toda
+a inteligência e todos os fatos vivem atrás da API (o front só renderiza), um <strong>servidor MCP</strong> ou um <strong>agente</strong> podem
+consumir o mesmo contrato para orquestrar as mesmas ferramentas — sem tocar no frontend. O cliente web, o app nativo
+futuro e o agente são <strong>consumidores irmãos</strong> da mesma fronteira. Manter o front como "só um cliente" é o que deixa a
+porta aberta para a Fase 2/3.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  Uma fundação de frontend confiável para um produto de IA financeira é: <strong>as travas viram estrutura</strong> (não disciplina),
+  <strong>o contrato é a fronteira única</strong> (não DTOs à mão), <strong>a identidade vem do servidor</strong> (não do cliente) e <strong>o dinheiro
+  é inteiro até a borda</strong> (nunca float). O SPEC-200 entrega os quatro — e, ao fazê-lo, garante que <em>toda</em> tela SPEC-21x
+  nasce com as guardas do produto embutidas, o contrato em lockstep e o copiloto ao alcance. A modéstia é a virtude:
+  <strong>zero telas de produto</strong>, tudo investido em tornar o certo <strong>inescapável</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir — as telas SPEC-21x</h2>
+
+<p>Com a fundação no ar, o track de frontend abre. Cada tela SPEC-21x <strong>preenche um slot</strong> preparado aqui, herda as
+guardas de graça, consome seu twin de backend pelo contrato congelado (sem mudar o <code>openapi.yaml</code>) e formata
+dinheiro só pela borda <code>money.ts</code>.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tela</th><th>Como se apoia no SPEC-200</th></tr>
+  <tr><td>SPEC-211</td><td>Perfil do investidor</td><td>Preenche a rota stubada <code>/profile</code>; consome o twin SPEC-101 pelo cliente tipado.</td></tr>
+  <tr><td>SPEC-212</td><td>Dashboard</td><td>Usa o <code>AllocationBar</code>, o <code>InsightCard</code> e o <code>money.ts</code> já prontos; twin SPEC-103.</td></tr>
+  <tr><td>SPEC-214</td><td>Projeções (gráficos)</td><td>Adiciona a temização Recharts (follow-up do SPEC-200); disclaimer estendido já pronto; twin SPEC-107.</td></tr>
+  <tr><td><strong>SPEC-215</strong></td><td><strong>Copiloto conversacional</strong></td><td>Preenche o <strong>slot flutuante global</strong> e reusa o <strong>transporte SSE</strong> — o twin é o capstone SPEC-108.</td></tr>
+  <tr><td>(Fase 2/3)</td><td>CIO multi-agente + MCP</td><td>Consomem o <strong>mesmo contrato OpenAPI</strong> que o front consome — o front é só um cliente irmão.</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que a fundação é o multiplicador de todo o track de frontend</span>
+  Cada trava resolvida <strong>uma vez</strong> aqui — explicabilidade estrutural, não-conselho estrutural, dinheiro-inteiro,
+  contrato-em-lockstep, identidade-do-servidor, o slot do copiloto — é uma trava que <strong>nenhuma das ~5 telas seguintes
+  precisa reimplementar ou pode acidentalmente violar</strong>. É o mesmo retorno de investimento do SPEC-001 no backend: um
+  esqueleto bem-feito paga dividendos em cada feature que se apoia nele. E os revisores de frontend + hooks garantem
+  que esse padrão <strong>se mantém</strong> conforme as telas chegam.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-200 o YieldForge ganhou a <strong>fundação do seu cliente web</strong> — o "SPEC-001" do frontend: um app Next 16 + React 19
+  + TS strict onde as travas binding do produto viram <strong>componentes estruturais</strong> (o <code>explanation</code> obrigatório do
+  <code>InsightCard</code>, o <code>NonAdviceDisclaimer</code> não-opcional, <strong>nenhum botão de ordem</strong>), dinheiro é <strong>centavos/bps inteiros</strong>
+  formatados em pt-BR <strong>só na borda</strong> (<code>money.ts</code>), os tipos são <strong>gerados do <code>api/openapi.yaml</code></strong> com um drift check
+  (<code>check:api</code>), a identidade vem do <strong>servidor via <code>/auth/me</code></strong> por um proxy same-origin, e o shell já monta o
+  <strong>launcher global do copiloto</strong> em toda tela — <strong>sem entregar nenhuma tela de produto</strong>, mas garantindo que todas as
+  telas SPEC-21x nasçam certas por construção, e verificado pelos subagentes <code>frontend-reviewer</code> +
+  <code>react-correctness-reviewer</code> (que pegaram um bug real de CSS na allocation-bar).
+</div>
+
+<footer>
+  YieldForge · Aula 200 (SPEC-200) · gerada como material de estudo. Veja também a
+  <a href="SPEC-108-aula.html">Aula 108</a> (o copiloto conversacional — o twin de backend do slot que o shell reserva), a
+  <a href="SPEC-003-aula.html">Aula 03</a> (a auth/sessão SPEC-003 que o proxy same-origin consome), a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a> (a "ponte" de backend que aqui vira o contrato OpenAPI), o
+  <a href="../02-specs/SPEC-200-app-foundation.md">SPEC-200</a>,
+  o <a href="../03-plans/PLAN-200-app-foundation.md">PLAN-200</a>,
+  o design system <a href="../05-design/design-system.md">Aurora</a>
+  e o contrato <a href="../../api/openapi.yaml">api/openapi.yaml</a>.
+</footer>
+
+</div>
+</body>
+</html>
