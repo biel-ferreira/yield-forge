@@ -7,8 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/biel-ferreira/yield-forge/internal/insight"
 	"github.com/biel-ferreira/yield-forge/internal/platform/clock"
+	"github.com/biel-ferreira/yield-forge/internal/platform/observability"
 )
 
 // Engine bounds (SPEC-108 D4/§9 — zero-cost + cost-safety). Tunable; documented.
@@ -30,12 +33,13 @@ type Service struct {
 	projection   ProjectionFactSource
 	insighter    insight.Insighter
 	clock        clock.Clock
+	tracer       trace.Tracer
 }
 
 // NewService builds the chat engine over the repository, the grounding fact sources (SPEC-104/105/107),
 // the gated Insighter (SPEC-005), and the Clock.
 func NewService(repo Repository, facts FactSource, contribution ContributionFactSource, projection ProjectionFactSource, insighter insight.Insighter, clk clock.Clock) *Service {
-	return &Service{repo: repo, facts: facts, contribution: contribution, projection: projection, insighter: insighter, clock: clk}
+	return &Service{repo: repo, facts: facts, contribution: contribution, projection: projection, insighter: insighter, clock: clk, tracer: observability.Tracer("chat")}
 }
 
 // Send handles one turn: resolve/create the thread, persist the user message, ground the turn, call
@@ -43,6 +47,11 @@ func NewService(repo Repository, facts FactSource, contribution ContributionFact
 // gate-rejected turn returns a safe reply and is NOT persisted (the thread stays readable, the user
 // can retry). An unowned/unknown thread → ErrThreadNotFound (→ 404).
 func (s *Service) Send(ctx context.Context, userID, threadID, content string) (Reply, error) {
+	// Span over the turn for latency visibility. It carries NO content — no message text, facts, or
+	// generated reply reach telemetry (BR-505/FR-1089). The Insighter records its own generate span.
+	ctx, span := s.tracer.Start(ctx, "chat.turn")
+	defer span.End()
+
 	now := s.clock.Now()
 
 	thread, err := s.resolveThread(ctx, userID, threadID, content, now)
