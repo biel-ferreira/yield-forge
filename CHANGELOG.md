@@ -29,14 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feature `SPEC-21x`, matching `PLAN-2xx`), registered in the specs index; refines ADR-0004's
   original `SPEC-1xx` numbering (now occupied by backend features 101–108). First frontend
   spec **SPEC-200 (App Foundation)** drafted.
-- **YieldForge design system** (`docs/05-design/design-system.md`, *alpha*) — a token-driven,
-  one-set light+dark system for the modern-fintech web client: **indigo `#4f46e5`** primary held
-  apart from the reserved semantic lanes (gain green / loss red / info cyan), **Inter + IBM Plex
-  Mono** (open-license) type, pt-BR money/rate formatting at the render edge (integer
-  centavos/bps, no float), and the binding guards as **first-class components** — an `InsightCard`
-  with a non-optional explanation slot (FR-013) and a required `NonAdviceDisclaimer` (FR-014), with
-  Buy/Sell/order affordances deliberately omitted. Ready to seed a Claude Design project for
-  SPEC-200 (ADR-0006).
+- **YieldForge design system — "Aurora"** (`docs/05-design/design-system.md`, *alpha*) — a
+  token-driven, **dark-first** (optional light theme) system for the web client, chosen after a
+  three-concept exploration (calm/emerald · modern/indigo · aurora). Aurora: a near-black canvas
+  washed by soft **aurora glows**, one warm **gold `#e9a94c`** accent (often a glowing outline),
+  **glass cards** with a colored ambient shadow, and a signature **spectrum gradient** repurposed
+  as the allocation-by-sector bar. Type is **Fraunces** (display serif) + **Inter** + **IBM Plex
+  Mono** numbers (all SIL Open Font License). Semantic gain/loss/caution/info stay reserved (figure
+  colors, never brand or a fill); the glow is decorative and never colors data. pt-BR money/rate
+  formatting at the render edge (integer centavos/bps, no float), and the binding guards as
+  **first-class components** — an `InsightCard` with a non-optional explanation slot (FR-013) and a
+  required `NonAdviceDisclaimer` (FR-014), with Buy/Sell/order affordances deliberately omitted.
+  Seeded into the `yieldforge-aurora` Claude Design project (ADR-0006); preview sources under
+  `docs/05-design/ds/`.
 
 - **SPEC-107 — Projections (Income & Net Worth)**: two deterministic, reproducible forward-looking
   views over the current portfolio — a **passive-income projection** (monthly/annual across

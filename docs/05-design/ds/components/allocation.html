@@ -1,0 +1,81 @@
+<!-- @dsCard group="Aurora — Dashboard" name="Allocation" subtitle="Donut + spectrum bar + sector legend" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge (Aurora) — Allocation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21; --hairline:#26242b;
+    --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab;
+    --a1:#6366f1; --a2:#d946ef; --a3:#f59e0b; --a4:#34d399; --a5:#38bdf8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); position:relative; min-height:100vh;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; padding:40px; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(55% 45% at 16% 8%, rgba(99,102,241,.18), transparent 60%),
+      radial-gradient(50% 45% at 90% 96%, rgba(56,189,248,.13), transparent 60%); }
+  .wrap { position:relative; z-index:1; max-width:820px; }
+  h1 { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; margin:0 0 20px; color:#fff; }
+  .num { font-family:"IBM Plex Mono",monospace; }
+
+  .card { border-radius:20px; padding:26px; background:linear-gradient(180deg,rgba(255,255,255,.04),transparent), var(--surface);
+    border:1px solid var(--hairline); box-shadow:0 30px 70px -30px rgba(99,102,241,.55); }
+  .card-title { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:20px; }
+
+  .cols { display:flex; gap:30px; align-items:center; flex-wrap:wrap; }
+  .donut { width:180px; height:180px; border-radius:9999px; flex:0 0 auto; position:relative;
+    background:conic-gradient(var(--a1) 0 26%, var(--a2) 26% 46%, var(--a3) 46% 70%, var(--a4) 70% 86%, var(--a5) 86% 100%);
+    box-shadow:0 0 40px -6px rgba(99,102,241,.5); }
+  .donut::after { content:""; position:absolute; inset:26px; border-radius:9999px; background:var(--surface); }
+  .donut .center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; }
+  .donut .center .k { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .donut .center .v { font-family:"IBM Plex Mono",monospace; font-size:22px; font-weight:600; color:#fff; }
+
+  .legend { flex:1 1 320px; min-width:280px; }
+  .leg { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--hairline); }
+  .leg:first-child { border-top:0; }
+  .leg .d { width:10px; height:10px; border-radius:9999px; box-shadow:0 0 10px 1px currentColor; }
+  .leg .t { flex:1; font-size:14px; color:var(--body); }
+  .leg .p { font-family:"IBM Plex Mono",monospace; font-size:14px; color:#fff; }
+  .leg .m { font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted); width:120px; text-align:right; }
+
+  .bar { height:14px; border-radius:9999px; margin:22px 0 8px;
+    background:linear-gradient(90deg,var(--a1) 0 26%,var(--a2) 26% 46%,var(--a3) 46% 70%,var(--a4) 70% 86%,var(--a5) 86% 100%);
+    box-shadow:0 0 22px -2px rgba(99,102,241,.5); }
+  .class-row { display:flex; gap:24px; font-size:13px; color:var(--muted-strong); }
+  .class-row b { color:#fff; font-family:"IBM Plex Mono",monospace; font-weight:500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Allocation</h1>
+  <div class="card">
+    <div class="card-title">Exposição por setor (FIIs)</div>
+    <div class="cols">
+      <div class="donut"><div class="center"><span class="k">FIIs</span><span class="v">R$ 98.774</span></div></div>
+      <div class="legend">
+        <div class="leg"><span class="d" style="background:var(--a1);color:var(--a1)"></span><span class="t">Logística</span><span class="p">26%</span><span class="m">R$ 25.681</span></div>
+        <div class="leg"><span class="d" style="background:var(--a3);color:var(--a3)"></span><span class="t">Shoppings</span><span class="p">24%</span><span class="m">R$ 23.706</span></div>
+        <div class="leg"><span class="d" style="background:var(--a2);color:var(--a2)"></span><span class="t">Papel (CRI)</span><span class="p">20%</span><span class="m">R$ 19.755</span></div>
+        <div class="leg"><span class="d" style="background:var(--a4);color:var(--a4)"></span><span class="t">Lajes corporativas</span><span class="p">16%</span><span class="m">R$ 15.804</span></div>
+        <div class="leg"><span class="d" style="background:var(--a5);color:var(--a5)"></span><span class="t">Híbrido / outros</span><span class="p">14%</span><span class="m">R$ 13.828</span></div>
+      </div>
+    </div>
+
+    <div class="bar"></div>
+    <div class="class-row">
+      <span>Por classe: &nbsp;FIIs <b>62%</b></span>
+      <span>Renda fixa <b>34%</b></span>
+      <span>Caixa <b>4%</b></span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
