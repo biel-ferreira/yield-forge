@@ -14,7 +14,12 @@ ahead of the user-facing features that depend on it (see PRD §13 Dependencies).
   user-facing screen of their own, but which many features depend on (project
   skeleton, persistence, auth, the `Insighter` / `MarketDataProvider` ports,
   observability). Built first.
-- **Feature (`SPEC-1xx`)** — user-facing capabilities that deliver product value.
+- **Feature (`SPEC-1xx`)** — user-facing **backend** capabilities that deliver product value.
+- **Frontend (`SPEC-2xx`)** — the Next.js web client ([ADR-0004](../04-architecture/adr/ADR-0004-frontend-repository-strategy.md),
+  [ADR-0006](../04-architecture/adr/ADR-0006-frontend-ui-stack-and-design-system.md)). Split
+  the same way: frontend-foundational (`SPEC-20x` — app shell, typed API client, design
+  system, session UI) built ahead of the per-screen features (`SPEC-21x`), each of which
+  consumes its backend twin's endpoints over the OpenAPI contract.
 
 ## Naming
 
@@ -52,6 +57,30 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 
 Every PRD functional requirement (FR-001…FR-025) maps to exactly one owning spec
 above.
+
+## Frontend Specs (`SPEC-2xx`)
+
+The Next.js web client (mono-repo `web/`, [ADR-0004](../04-architecture/adr/ADR-0004-frontend-repository-strategy.md)
++ [ADR-0006](../04-architecture/adr/ADR-0006-frontend-ui-stack-and-design-system.md)). Same
+SDD flow as the backend: SPEC → PLAN → CODE → PT-BR lesson. Each `SPEC-21x` feature consumes
+its backend twin over the checked-in OpenAPI contract; it declares **no new endpoints**, so it
+carries no `api/openapi.yaml` change of its own.
+
+| Spec ID  | Frontend capability                         | Consumes (backend)        | Status      |
+| -------- | ------------------------------------------- | ------------------------- | ----------- |
+| SPEC-200 | [App Foundation (shell, typed API client, design system, session)](SPEC-200-app-foundation.md) | OpenAPI contract, SPEC-003 | 📝 Draft |
+| SPEC-210 | Investor Profile screen                     | SPEC-101                  | 🔲 Backlog  |
+| SPEC-211 | Portfolio management (FII + FI) screens     | SPEC-102                  | 🔲 Backlog  |
+| SPEC-212 | Dashboard                                   | SPEC-103                  | 🔲 Backlog  |
+| SPEC-213 | AI Insights + Rebalancing + Health Score    | SPEC-104 / 105 / 106      | 🔲 Backlog  |
+| SPEC-214 | Projections (income & net worth)            | SPEC-107                  | 🔲 Backlog  |
+| SPEC-215 | Conversational Copilot (chat, streaming)    | SPEC-108                  | 🔲 Backlog  |
+
+> **Build order (frontend):** SPEC-200 first (everything depends on the shell + typed client +
+> design system), then the per-screen features roughly in the backend's own dependency order —
+> Profile → Portfolio → Dashboard → Insights/Rebalancing/Health → Projections → Chat. Chat
+> (SPEC-215) is last: it needs the design system's chat components and SSE streaming wired in
+> SPEC-200.
 
 ---
 

@@ -21,5 +21,6 @@ Each ADR uses: **Status · Context · Decision · Consequences**.
 | 0003 | Zero-cost infra & pluggable LLM | Accepted |
 | 0004 | [Frontend repository strategy (mono-repo)](ADR-0004-frontend-repository-strategy.md) | Proposed |
 | 0005 | [Conversational copilot orchestration](ADR-0005-conversational-copilot-orchestration.md) | Proposed |
+| 0006 | [Frontend UI stack & design system](ADR-0006-frontend-ui-stack-and-design-system.md) | Accepted |
 
 Statuses: `Proposed` · `Accepted` · `Superseded by ADR-XXXX` · `Deprecated`.
