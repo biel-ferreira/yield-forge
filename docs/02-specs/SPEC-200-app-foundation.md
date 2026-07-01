@@ -7,7 +7,7 @@
 | Feature Name | Frontend App Foundation                                               |
 | Feature ID   | SPEC-200                                                              |
 | Version      | 1.0.0                                                                 |
-| Status       | Approved                                                              |
+| Status       | Done                                                                  |
 | Author       | Gabigol                                                              |
 | Last Updated | 2026-07-01                                                            |
 | Related PRD  | [§11–§12](../01-product/PRD.md); [ADR-0004](../04-architecture/adr/ADR-0004-frontend-repository-strategy.md), [ADR-0006](../04-architecture/adr/ADR-0006-frontend-ui-stack-and-design-system.md) |

@@ -24,7 +24,7 @@ skeleton — config, structured logging, health endpoints, graceful shutdown, Do
 
 ## Tech stack
 
-Go · PostgreSQL · Next.js (later) · free/local LLM behind a swappable port · Docker ·
+Go · PostgreSQL · **Next.js** (the [`web/`](web/) client) · free/local LLM behind a swappable port · Docker ·
 OpenTelemetry. The whole stack targets **zero cost** (free tiers /
 free-forever / local) — see [ADR-0003](docs/04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md).
 

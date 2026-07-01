@@ -52,15 +52,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required `NonAdviceDisclaimer` (FR-014), with Buy/Sell/order affordances deliberately omitted.
   Seeded into the `yieldforge-aurora` Claude Design project (ADR-0006); preview sources under
   `docs/05-design/ds/`.
-- **SPEC-200 (App Foundation) approved + PLAN-200 drafted.** The first frontend spec is flipped to
-  **Approved**; the copilot is reframed as a **global floating widget** (the shell owns an overlay
-  slot; there is **no Chat route** — SPEC-215 implements the widget). **PLAN-200** lays out the build
-  in 8 frontend-adapted phases (scaffold → tokens-as-code → typed API client + `money.ts` + SSE
-  transport → auth/session → shell + copilot slot → quality gates → tests → docs), resolving five
-  decisions: a same-origin **Next.js proxy** for the SPEC-003 cookie, CSR-by-default, Vitest + RTL +
-  Playwright, login/register inside SPEC-200, and building the streaming transport up front. Adds the
-  full **Dashboard page mockup** (`docs/05-design/ds/pages/dashboard.html`) — app shell + summary +
-  allocation + health + insights + the floating copilot — which doubles as the shell spec.
+- **SPEC-200 — Frontend App Foundation** (Done): the Next.js web client under `web/`, the foundation
+  every `SPEC-21x` screen builds on. **Next.js 16 (App Router) + React 19 + TypeScript strict +
+  Tailwind v4**, isolated from the Go module with path-scoped CI (ADR-0004/0006). The **Aurora design
+  system as code** (tokens in `@theme`; Inter + Fraunces + IBM Plex Mono, self-hosted) with the binding
+  guards as **structural components** — an `InsightCard` whose `explanation` prop is required (FR-013)
+  and a required `NonAdviceDisclaimer` (FR-014); **no Buy/Sell/order affordances** anywhere. A **typed
+  API client generated from `api/openapi.yaml`** (`openapi-typescript` + `openapi-fetch` + TanStack
+  Query) — no hand-written DTOs — with a **drift guard** (`check:api`, the client mirror of
+  `openapi_test.go`); `money.ts` formats integer centavos/bps to pt-BR only at the render edge (no float
+  on the wire or in the UI); an SSE **streaming transport** ready for chat (SPEC-215). **Auth & session**
+  against SPEC-003 via a same-origin **Next.js proxy** (the `HttpOnly` cookie works with no CORS);
+  `useSession` resolves identity from `/auth/me` (never client state) and `RequireAuth` distinguishes a
+  confirmed 401 from a transient error. The **app shell** — sidebar / mobile tabs, top bar, and the
+  **global floating copilot launcher** on every screen (SPEC-200 owns the slot; the widget is SPEC-215)
+  — with stubbed feature routes and shared loading/error boundaries. **Vitest + RTL** unit/component
+  tests (money, guards, allocation regression) in CI; a **Playwright** smoke scaffolded. Reviewed by the
+  frontend-reviewer + react-correctness-reviewer agents (they caught a real allocation-bar CSS bug). No
+  `api/openapi.yaml` change (the frontend adds no endpoint). PT-BR lesson
+  `docs/lessons/SPEC-200-aula.html`; the copilot mockup lives at `docs/05-design/ds/pages/dashboard.html`.
 
 - **SPEC-107 — Projections (Income & Net Worth)**: two deterministic, reproducible forward-looking
   views over the current portfolio — a **passive-income projection** (monthly/annual across

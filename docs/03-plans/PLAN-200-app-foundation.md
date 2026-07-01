@@ -6,9 +6,9 @@
 | --------------- | --------------------------------------- |
 | Plan Name       | Frontend App Foundation                 |
 | Related Feature | Frontend App Foundation                 |
-| Related Spec    | [SPEC-200](../02-specs/SPEC-200-app-foundation.md) (Approved) |
-| Version         | 0.1.0 (Draft)                           |
-| Status          | Draft                                   |
+| Related Spec    | [SPEC-200](../02-specs/SPEC-200-app-foundation.md) (Done) |
+| Version         | 1.0.0                                   |
+| Status          | Completed                               |
 | Author          | Gabigol                                 |
 | Last Updated    | 2026-07-01                              |
 
