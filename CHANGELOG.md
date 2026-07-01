@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-107 — Projections (Income & Net Worth)**: two deterministic, reproducible forward-looking
+  views over the current portfolio — a **passive-income projection** (monthly/annual across
+  pessimistic / base / optimistic, from FII dividends + fixed-income rates, base ±200 bps of yield)
+  and a **net-worth projection** (value over a configurable horizon, compounding reinvested income +
+  a configurable monthly contribution, emitted as yearly `{year, value}` points for charting). Like
+  the dashboard, it is **pure computation, no LLM** — same `(holdings, market, contribution, horizon)`
+  → same figures + series; integer centavos/bps, half-up monthly compounding, no float. Each scenario
+  exposes its assumptions; the output is a labelled non-guaranteed estimate (FR-014). New
+  `GET /projections?monthly_contribution_centavos=&horizon_years=` (auth-scoped; integer query params,
+  defaults 0/10, horizon 1–40; bad params → 400). Adds the `internal/projection` engine; no new
+  tables; documented in `api/openapi.yaml`; PT-BR lesson `docs/lessons/SPEC-107-aula.html`.
 - **SPEC-106 — Portfolio Health Score**: a reproducible **0–100 score** with a per-factor breakdown
   (diversification, concentration, liquidity, goal alignment, risk exposure). Unlike the Insight
   Engine and Rebalancing Assistant, the **score and breakdown are computed, not LLM-generated** — the

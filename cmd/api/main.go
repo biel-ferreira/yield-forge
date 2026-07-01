@@ -29,6 +29,7 @@ import (
 	portfoliopostgres "github.com/biel-ferreira/yield-forge/internal/portfolio/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/profile"
 	profilepostgres "github.com/biel-ferreira/yield-forge/internal/profile/postgres"
+	"github.com/biel-ferreira/yield-forge/internal/projection"
 	"github.com/biel-ferreira/yield-forge/internal/rebalancing"
 	transporthttp "github.com/biel-ferreira/yield-forge/internal/transport/http"
 )
@@ -138,6 +139,9 @@ func run() error {
 	rebalancingEngine := rebalancing.NewService(factBuilder, fiiQuoteRepo, insighter)
 	healthService := health.NewService(dashboardService, profileService, portfolioService, macroRepo, insighter)
 
+	// Projections (SPEC-107): deterministic income + net-worth projections over the dashboard + holdings.
+	projectionService := projection.NewService(dashboardService, portfolioService)
+
 	router := transporthttp.NewRouter(transporthttp.Deps{
 		Logger:       logger,
 		Build:        buildinfo.Get(),
@@ -149,6 +153,7 @@ func run() error {
 		Insights:     insightEngine,
 		Rebalancing:  rebalancingEngine,
 		HealthScore:  healthService,
+		Projections:  projectionService,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,

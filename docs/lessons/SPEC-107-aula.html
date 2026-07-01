@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 107 — SPEC-107: Projeções (Renda & Patrimônio) — Computação Pura, Determinística, SEM LLM | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 107 · As Projeções · o que a carteira vai render, e onde ela te leva</span>
+    <h1>SPEC-107 — Projeções (Renda &amp; Patrimônio): Computação Pura, Determinística, SEM LLM</h1>
+    <p>Esta é a <strong>camada de planejamento</strong> do YieldForge: duas visões <strong>prospectivas</strong> sobre a carteira atual. Uma
+    <strong>projeção de renda passiva</strong> (mensal e anual, em três cenários — FR-016) que responde <em>"quanto isto vai me
+    pagar?"</em>; e uma <strong>projeção de patrimônio</strong> (o valor da carteira ao longo de um horizonte configurável, com um
+    aporte mensal — FR-017) que responde <em>"onde isto me leva?"</em>. A lição central — e o que a aproxima do Dashboard
+    (SPEC-103) e do núcleo do Health Score (SPEC-106), e a <strong>afasta</strong> do Insighter (SPEC-104) e do Rebalanceamento
+    (SPEC-105) — é que aqui <strong>não há LLM nenhum</strong>. A FR-016 exige <em>"determinístico e reproduzível"</em>, então isto é
+    <strong>matemática pura</strong>: nada de <code>float</code>, nada de <code>time.Now</code> (usamos <em>offsets de ano</em>, não datas de calendário),
+    inteiros em centavos e basis points, composição <strong>mensal</strong> meio-para-cima, seguro contra overflow. Cada cenário
+    expõe suas premissas e vem rotulado como <strong>estimativa, não garantia</strong> — e a FR-014 (não-conselho) vale <strong>por
+    construção</strong>: sem LLM, não há como uma projeção conter uma ordem.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: duas projeções sobre a carteira atual (FR-016/017)</a></li>
+    <li><a href="#nollm">LIÇÃO PRINCIPAL — determinístico, SEM LLM: por que projeção é cálculo puro</a></li>
+    <li><a href="#math">A matemática: renda base reconciliada + cenários ±200 bps + composição mensal</a></li>
+    <li><a href="#scenarios">Os três cenários e as premissas transparentes (FR-1073 / FR-014)</a></li>
+    <li><a href="#basis">A base de retorno conservadora (D6): renda reinvestida + aporte, sem valorização</a></li>
+    <li><a href="#service">O service: compõe os reads na borda, o core fica puro</a></li>
+    <li><a href="#endpoint">O endpoint <code>GET /projections</code> e os query params</a></li>
+    <li><a href="#decisoes">As 7 decisões (D1–D7) e por quê</a></li>
+    <li><a href="#fases">As 6 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: duas projeções sobre a carteira atual (FR-016/017)</h2>
+
+<p>Os SPECs anteriores olham para o <strong>presente</strong> da carteira: o dashboard mostra <em>o que você tem</em> (SPEC-103), os
+insights <em>observam</em> (SPEC-104), o rebalanceamento <em>orienta</em> (SPEC-105) e o health score <em>resume</em> (SPEC-106). O
+SPEC-107 olha para o <strong>futuro</strong>: ele transforma <em>"o que isso vai produzir?"</em> e <em>"onde isso me leva?"</em> em números
+concretos e <strong>gráficáveis</strong>. É a camada de planejamento — e é a fonte de dados que o Copiloto Conversacional
+(SPEC-108) vai ler para turnos do tipo <em>"tenho R$X pra aportar, e daqui a 10 anos?"</em>.</p>
+
+<p>O que ele entrega é um novo pacote-feature <code>internal/projection</code> e um endpoint que devolve <strong>duas projeções
+de uma vez</strong>:</p>
+<ul>
+  <li>A <strong>projeção de renda passiva</strong> — para cada cenário, uma renda <strong>mensal e anual</strong> em <code>int64</code> centavos +
+  as premissas. A renda base concilia com o dashboard (dividendos de FII) + a renda fixa (investido × taxa).</li>
+  <li>A <strong>projeção de patrimônio</strong> — para cada cenário, uma <strong>série temporal</strong> <code>{year, value_centavos}</code> do valor
+  atual até o horizonte, compondo a renda reinvestida + um <strong>aporte mensal</strong> configurável.</li>
+  <li>A <strong><code>Compute(Inputs) Projections</code></strong> — o <strong>coração</strong>: uma <strong>função pura</strong> que produz as duas projeções a partir
+  de um snapshot plano de inteiros. <strong>Nenhum LLM, nenhum <code>float</code>, nenhum relógio.</strong></li>
+  <li>O <strong><code>Service.Project</code></strong> — compõe <strong>dois reads</strong> (dashboard + holdings) na <strong>borda</strong> e roda a <code>Compute</code>.</li>
+  <li><strong>Um único endpoint</strong> <code>GET /projections</code>. <strong>Nenhuma tabela, nenhuma migration</strong> — tudo computado sob demanda.</li>
+</ul>
+
+<div class="diagram">ANTES (SPEC-103 / 102 / 006)                    DEPOIS (SPEC-107)
+  dashboard: valor atual + renda mensal FII    projection.Compute: DUAS projeções (PURAS, sem LLM)
+  holdings:  RF investida + taxas anuais       renda: mensal/anual × 3 cenários (base ±200 bps)
+  money:     ShareBps / ApplyBps (half-up)     patrimônio: série {ano, valor} compondo MENSALMENTE
+  (nenhuma feature de futuro ainda)            aporte mensal configurável + horizonte 1–40 anos
+                                               premissas expostas + disclaimer (estimativa, não garantia)
+  LLM? Insighter existe (105/106)              LLM aqui? NENHUM — "mesmos inputs → mesmo resultado"</div>
+
+<p>O endpoint novo (atrás da auth deny-by-default, fora da allowlist pública):</p>
+<pre><code>GET /projections?monthly_contribution_centavos=&amp;horizon_years=
+   → 200 { income[]{scenario,monthly_centavos,annual_centavos,assumptions},
+           net_worth[]{scenario,points[]{year,value_centavos},assumptions},
+           disclaimer }
+   | 400 (contribuição negativa / horizonte fora de 1–40 / não-inteiro)
+   | 401 (sem sessão)</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que esta spec é a "prova de fogo" da reprodutibilidade determinística — e por que NÃO tem LLM</span>
+  As três specs de IA (104/105/106) usam o LLM em graus decrescentes: no 104 ele <strong>explica</strong> fatos; no 105 ele
+  <strong>explica</strong> uma % e <strong>nomeia</strong> candidatos aterrados; no 106 ele só <strong>narra</strong> uma nota já computada. O SPEC-107 dá o
+  passo final: <strong>ele não usa o LLM de jeito nenhum</strong>. Por quê? Porque uma projeção é uma <strong>previsão numérica que
+  precisa ser reproduzível ao centavo</strong> (FR-016) e <strong>gráficável</strong> (FR-017) — exatamente o tipo de saída que <strong>não</strong>
+  deve sair de um modelo probabilístico. Um LLM não daria a mesma série duas vezes; um gráfico que "treme" entre
+  chamadas é inútil. A regra binding nº 3 do PRD ("o LLM nunca inventa números") fecha o argumento: uma projeção é
+  <strong>puro cálculo sobre fatos determinísticos</strong>, com as premissas expostas. O LLM só voltaria à cena como uma camada
+  narrativa opcional — e essa é a tarefa do SPEC-108, que <em>lê</em> estas projeções computadas.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="nollm">2. LIÇÃO PRINCIPAL — determinístico, SEM LLM: por que projeção é cálculo puro</h2>
+
+<p>Esta é a ideia mais importante da aula. A <code>Compute</code> (em <code>internal/projection/compute.go</code>) é uma <strong>função
+pura</strong>: ela recebe um snapshot estruturado e plano (<code>Inputs</code>) e devolve as duas projeções, sem tocar em SQL,
+HTTP, LLM ou relógio. Três disciplinas garantem que "mesmos inputs → mesmo resultado", ao centavo:</p>
+
+<h3>2.1 — Só inteiros: nada de <code>float</code>, nunca</h3>
+<p>Todo o dinheiro é <code>int64</code> em <strong>centavos</strong>; toda taxa/percentual é <code>int</code> em <strong>basis points</strong> (1 bp = 0,01%). A
+composição usa <code>money.ApplyBps</code> (a mesma primitiva half-up do dashboard) e o rendimento base usa
+<code>money.ShareBps</code>. <code>float64</code> sabotaria a reprodutibilidade de duas formas: a aritmética binária acumula erros
+(0,1 + 0,2 ≠ 0,3) e a ordem das operações importa. Com inteiros + <strong>uma regra de arredondamento documentada</strong>
+(meio-para-cima), o resultado é totalmente determinístico.</p>
+
+<h3>2.2 — Sem <code>time.Now</code>: offsets de ano, não datas de calendário</h3>
+<p>Este é o detalhe mais sutil e mais fácil de errar. A projeção <strong>não usa o relógio</strong>. A série de patrimônio é
+indexada por <strong>offset de ano</strong> (<code>Year: 0, 1, 2, …</code>) a partir do valor atual — não por datas de calendário. Se
+usasse <code>time.Now()</code>, a mesma carteira daria projeções <strong>diferentes a cada dia</strong> (o "ano 1" cairia numa data
+diferente), quebrando a reprodutibilidade. Usando offsets, o ano 0 é sempre o valor atual e o ano <em>N</em> é sempre
+<em>N × 12</em> meses de composição adiante — <strong>independente de quando você chama</strong>.</p>
+
+<pre><code>// internal/projection/compute.go — a série é indexada por OFFSET de ano, nunca por data de calendário
+points := make([]NetWorthPoint, 0, in.HorizonYears+1)
+points = append(points, NetWorthPoint{Year: 0, ValueCentavos: value})  // ano 0 = valor ATUAL
+
+months := in.HorizonYears * 12
+for m := 1; m &lt;= months; m++ {
+    value += money.ApplyBps(value, monthlyRateBps) + in.MonthlyContributionCentavos
+    if m%12 == 0 {
+        points = append(points, NetWorthPoint{Year: m / 12, ValueCentavos: value})  // snapshot anual
+    }
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que inteiros + offsets de ano = reprodutibilidade "ao ponto"</span>
+  A reprodutibilidade do PRD não é "mais ou menos a mesma série"; é <strong>a mesma série, ao centavo</strong>, todas as vezes.
+  Os dois inimigos clássicos disso são o <code>float</code> (deriva de arredondamento) e o <em>tempo</em> (a saída passa a depender
+  de <em>quando</em> você chama). A <code>Compute</code> elimina os dois: aritmética 100% inteira + half-up, e o horizonte expresso
+  em <strong>anos de offset</strong> em vez de datas. É por isso que o teste de reprodutibilidade pode comparar duas chamadas com
+  os mesmos <code>Inputs</code> e exigir séries <strong>byte-idênticas</strong> — não há fonte de aleatoriedade nem de deriva temporal.
+  É a mesma filosofia da <code>ShareBps</code>/<code>ApplyBps</code> do dashboard e da <code>WeightedMeanBps</code> do health score.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="math">3. A matemática: renda base reconciliada + cenários ±200 bps + composição mensal</h2>
+
+<p>A <code>Compute</code> tem duas metades: calcular a <strong>renda</strong> (mensal/anual por cenário) e projetar o <strong>patrimônio</strong>
+(a série anual por cenário). Ambas partem da mesma <strong>renda base</strong> e do mesmo <strong>yield base</strong> — o que garante que as
+duas projeções contam a mesma história.</p>
+
+<h3>3.1 — A renda base concilia com o dashboard + a renda fixa</h3>
+<p>A renda anual base é <strong>FII + renda fixa</strong>: os dividendos de FII vêm do dashboard (renda mensal × 12, reusando o
+SPEC-103) e a renda fixa é <strong>investido × taxa anual</strong>. O <strong>yield base</strong> é essa renda anual sobre o valor atual da
+carteira — <code>money.ShareBps</code>, em basis points:</p>
+
+<pre><code>// internal/projection/compute.go — a renda base + o yield base (inteiros, sem float)
+func Compute(in Inputs) Projections {
+    baseAnnual   := in.FIIAnnualIncomeCentavos + in.FIAnnualIncomeCentavos       // FII (dashboard) + RF
+    baseYieldBps := money.ShareBps(baseAnnual, in.CurrentValueCentavos)          // yield anual, em bps
+    // A variação de renda para um movimento de ±spreadBps no yield = essa fatia do valor atual:
+    delta := money.ApplyBps(in.CurrentValueCentavos, spreadBps)
+    // ...</code></pre>
+
+<p>Repare no <strong>truque do <code>delta</code></strong>: em vez de recalcular a renda a partir de um yield ajustado (o que reintroduziria
+divisões e deriva), a <code>Compute</code> calcula <strong>uma vez</strong> quanto ±200 bps de yield representam em reais
+(<code>ApplyBps(valor, 200)</code>) e soma/subtrai esse <code>delta</code> exato. Assim, os cenários são <strong>exatos nos extremos</strong>: a
+renda pessimista é <code>base − delta</code>, a otimista é <code>base + delta</code>, sem arredondamento intermediário.</p>
+
+<h3>3.2 — Os três cenários ajustam o yield em ±200 bps (D5)</h3>
+<p>Para cada cenário, o ajuste de yield (<code>yieldAdjBps</code>) é aplicado à renda e ao yield de composição. A renda anual
+nunca fica negativa (<code>clamp</code> em 0), e a mensal é <strong>anual/12 meio-para-cima</strong>:</p>
+
+<pre><code>// internal/projection/compute.go — por cenário: aplica o ajuste, produz renda + série
+for _, sc := range AllScenarios {
+    adj := sc.yieldAdjBps()                            // -200 (pess.) | 0 (base) | +200 (otim.)
+
+    annual := baseAnnual + delta*int64(adj)/spreadBps  // base ± delta (exato nos extremos)
+    if annual &lt; 0 { annual = 0 }
+    income = append(income, ScenarioIncome{
+        Scenario: sc, AnnualCentavos: annual, MonthlyCentavos: monthlyFromAnnual(annual),
+        Assumptions: IncomeAssumptions{YieldAdjBps: adj,
+            Note: fmt.Sprintf("rendimento base ajustado em %+d bps; valores nominais.", adj)},
+    })
+
+    scenarioYieldBps := baseYieldBps + adj             // o yield de COMPOSIÇÃO do patrimônio
+    if scenarioYieldBps &lt; 0 { scenarioYieldBps = 0 }
+    netWorth = append(netWorth, ScenarioNetWorth{
+        Scenario: sc, Points: projectNetWorth(in, scenarioYieldBps), Assumptions: /* ... */ })
+}
+
+// monthlyFromAnnual: anual/12 meio-para-cima — (2*anual + 12) / (2*12)
+func monthlyFromAnnual(annual int64) int64 {
+    if annual &lt;= 0 { return 0 }
+    return (annual*2 + 12) / 24
+}</code></pre>
+
+<h3>3.3 — O patrimônio compõe MENSALMENTE e emite pontos ANUAIS (D4)</h3>
+<p>Esta é a decisão de granularidade mais importante: a composição acontece <strong>mês a mês</strong> (mais precisa — reflete
+o aporte mensal e o reinvestimento mensal), mas a série emitida é <strong>anual</strong> (leve para o gráfico, ≤ 41 pontos num
+horizonte de 40 anos). O yield anual do cenário é dividido por 12 para virar a taxa mensal, e cada mês soma
+<strong>o rendimento reinvestido + o aporte</strong>:</p>
+
+<pre><code>value += money.ApplyBps(value, yieldBps/12) + aporte      // a cada mês: rendimento + aporte
+// … e a cada 12 meses, um ponto {year, value} é emitido</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Por que compor mensalmente mas emitir anualmente (e por que o ano 0 = valor atual)</span>
+  Compor <strong>anualmente</strong> seria mais simples, mas erraria a matemática do aporte: um aporte de R$500/mês reinveste 12
+  vezes por ano, não uma. Compor <strong>mensalmente</strong> captura isso corretamente. Ao mesmo tempo, mandar 480 pontos
+  mensais para o front seria um payload gordo e desnecessário — um gráfico de patrimônio de longo prazo se lê bem
+  em passos anuais. Então a <code>Compute</code> faz a conta certa por dentro (mensal) e expõe a visão certa por fora
+  (anual). E o <strong>ano 0 é sempre o valor atual</strong> — a série começa em "onde você está hoje", o que dá ao gráfico uma
+  âncora honesta e torna a curva de crescimento imediatamente legível.
+</div>
+
+<div class="box warn">
+  <span class="lbl">A segurança contra overflow num horizonte longo</span>
+  Um horizonte de 40 anos são <strong>480 meses</strong> de composição. Se a aritmética estourasse um <code>int64</code>, a série viraria
+  lixo. Duas defesas: (1) o <code>money.ApplyBps</code> usa <strong>big.Int</strong> internamente para o produto <code>valor × bps</code>, então o
+  intermediário nunca transborda antes de voltar a <code>int64</code>; e (2) o patrimônio em centavos <code>int64</code> comporta
+  ~R$9×10¹⁴ com folga para carteiras reais, e o <strong>horizonte é limitado a 1–40 anos na borda</strong>. Há um teste
+  explícito de overflow a 40 anos (PLAN-107 §8).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="scenarios">4. Os três cenários e as premissas transparentes (FR-1073 / FR-014)</h2>
+
+<p>O <code>Scenario</code> é um <strong>enum fechado</strong> (parse-don't-validate) com uma <strong>ordem fixa de apresentação</strong> — parte do que
+torna a saída reprodutível (a lista sempre sai na mesma ordem):</p>
+
+<pre><code>// internal/projection/projection.go — enum fechado + ordem fixa + spread documentado (D5)
+type Scenario string
+const (
+    ScenarioPessimistic Scenario = "pessimistic"
+    ScenarioBase        Scenario = "base"
+    ScenarioOptimistic  Scenario = "optimistic"
+)
+var AllScenarios = []Scenario{ScenarioPessimistic, ScenarioBase, ScenarioOptimistic}  // ordem fixa
+
+const spreadBps = 200   // o ajuste de yield ± aplicado ao cenário base (documentado e ajustável)
+
+func ParseScenario(s string) (Scenario, error) {   // normaliza (trim + lower) e devolve sentinela via %w
+    switch sc := Scenario(strings.ToLower(strings.TrimSpace(s))); sc {
+    case ScenarioPessimistic, ScenarioBase, ScenarioOptimistic: return sc, nil
+    default: return "", fmt.Errorf("parse scenario %q: %w", s, ErrUnknownScenario)
+    }
+}</code></pre>
+
+<p>A transparência é o ponto: cada cenário <strong>expõe suas premissas</strong> como campos inteiros estruturados + uma nota
+legível. Ninguém precisa adivinhar de onde a série veio — o ajuste de yield, o aporte, o horizonte e o fato de
+serem valores <strong>nominais (sem inflação)</strong> estão todos no payload:</p>
+
+<pre><code>// internal/projection/projection.go — as premissas viajam como inteiros + uma nota
+type NetWorthAssumptions struct {
+    YieldAdjBps                 int    // o ajuste de yield do cenário (±200)
+    MonthlyContributionCentavos int64  // o aporte configurado
+    HorizonYears                int    // o horizonte
+    Note                        string // "rendimento reinvestido a X bps a.a. + aporte; sem valorização; nominal."
+}</code></pre>
+
+<p>E toda a resposta carrega um <strong>disclaimer</strong> que a rotula como <strong>estimativa, não garantia</strong> — o cumprimento da
+FR-014 (não-conselho), que aqui vale <strong>por construção</strong>:</p>
+
+<pre><code>// internal/projection/projection.go — o disclaimer é uma constante do domínio (FR-1074 / FR-014)
+const Disclaimer = "Estas projeções são estimativas baseadas nos dados atuais e nas premissas " +
+    "mostradas — não são garantias de rentabilidade futura nem recomendação de investimento."</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que a FR-014 (não-conselho) vale "por construção" aqui</span>
+  No SPEC-105 o não-conselho era um <strong>gate ativo</strong> sobre o texto do LLM (rejeitando ordens, quantidades,
+  preços-alvo). No SPEC-107 não há gate a rodar — <strong>porque não há LLM e não há texto livre</strong>. Uma projeção é um
+  conjunto de <strong>números computados</strong> + premissas estruturadas + um disclaimer fixo. Um número não pode conter uma
+  ordem de compra imperativa; uma série <code>{ano, valor}</code> não é um preço-alvo. A não-geração é a defesa: como o
+  sistema não <em>gera</em> prosa, ele não <em>pode</em> emitir conselho acidentalmente. É o padrão "torne o estado ruim
+  irrepresentável" aplicado à conformidade regulatória.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="basis">5. A base de retorno conservadora (D6): renda reinvestida + aporte, sem valorização</h2>
+
+<p>Uma escolha de modelagem merece destaque, porque é o que torna a projeção <strong>honesta e defensável</strong>. A projeção
+de patrimônio cresce por apenas <strong>duas fontes</strong>: a <strong>renda reinvestida</strong> (o rendimento do cenário, composto
+mensalmente) e o <strong>aporte mensal</strong>. Ela <strong>não</strong> modela <strong>valorização de preço</strong> especulativa (a cota do FII ou a ação
+subindo de preço).</p>
+
+<table>
+  <tr><th>Fonte de crescimento</th><th>No MVP?</th><th>Por quê</th></tr>
+  <tr><td>Renda reinvestida (dividendos + juros)</td><td>✅ Sim</td><td>É computável a partir dos fatos atuais (dashboard + taxas); conservador.</td></tr>
+  <tr><td>Aporte mensal configurável</td><td>✅ Sim</td><td>É um input do usuário, determinístico; o motor do planejamento.</td></tr>
+  <tr><td>Valorização de preço (cota/ação subindo)</td><td>❌ Não (diferido, §15)</td><td>É <strong>especulativo</strong> — assumir uma taxa de valorização inventaria um número que não vem dos fatos.</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que deixar a valorização de fora é a escolha correta (por ora)</span>
+  Modelar valorização de preço exigiria <strong>assumir uma taxa de crescimento de capital</strong> — e essa taxa não sai de
+  nenhum fato da carteira; ela seria um palpite. Isso violaria o espírito da regra "fatos são computados, não
+  gerados": inflaria a projeção com um número inventado e otimista. A escolha do MVP (D6) — <strong>só renda reinvestida
+  + aporte</strong> — é deliberadamente <strong>conservadora</strong>: ela projeta apenas o que a carteira <em>comprovadamente</em> produz hoje.
+  O resultado é uma estimativa que o investidor pode <strong>defender</strong> ("isto é o que a renda atual, reinvestida, mais
+  meus aportes, constroem") — e a valorização fica como uma premissa opcional e explícita para o futuro (§15).
+</div>
+
+<h3>5.1 — Os casos de borda, todos como estados (não erros)</h3>
+<table>
+  <tr><th>Cenário</th><th>Comportamento</th></tr>
+  <tr><td>Carteira vazia</td><td>renda <strong>zero</strong>; o patrimônio ainda cresce <strong>só do aporte</strong> (valor futuro dos aportes); sem panic</td></tr>
+  <tr><td>Aporte 0 + carteira vazia</td><td>série de patrimônio <strong>plana em zero</strong> (sem divisão por zero)</td></tr>
+  <tr><td>Renda zero (sem dividendos/taxas)</td><td>cenários de renda são zero; o patrimônio cresce só dos aportes</td></tr>
+  <tr><td>Horizonte longo (40 anos / 480 meses)</td><td>composição inteira segura contra overflow (big.Int no <code>ApplyBps</code>)</td></tr>
+  <tr><td>Params inválidos</td><td><code>400</code> <strong>antes</strong> de qualquer computação (contribuição negativa / horizonte fora de 1–40 / não-inteiro)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="service">6. O service: compõe os reads na borda, o core fica puro</h2>
+
+<p>A regra de pureza (BR-1072) diz: <strong>o core de projeção é puro</strong> (sem SQL/HTTP/LLM/time); os reads acontecem na
+<strong>borda</strong> (o service). O <code>Service.Project</code> faz exatamente essa divisão: monta os <code>Inputs</code> a partir de <strong>dois
+reads</strong> (dashboard + holdings) e roda a <code>Compute</code> pura. A identidade vem do contexto; os <strong>únicos</strong> inputs do
+cliente são o aporte + o horizonte, já validados na borda:</p>
+
+<pre><code>// internal/projection/service.go — a borda compõe; o core computa
+func (s *Service) Project(ctx context.Context, userID string, monthlyContributionCentavos int64, horizonYears int) (Projections, error) {
+    ctx, span := s.tracer.Start(ctx, "projection.compute")   // span SEM conteúdo (BR-505)
+    defer span.End()
+
+    d, err := s.dashboards.GetDashboard(ctx, userID)         // read 1: valor atual + renda mensal FII
+    if err != nil { return Projections{}, fmt.Errorf("project: dashboard: %w", err) }
+    held, err := s.holdings.ListHoldings(ctx, userID)        // read 2: renda fixa (investido + taxas)
+    if err != nil { return Projections{}, fmt.Errorf("project: holdings: %w", err) }
+
+    return Compute(Inputs{                                    // ← o core PURO decide as projeções
+        CurrentValueCentavos:        d.Summary.CurrentValueCentavos,
+        FIIAnnualIncomeCentavos:     d.Summary.MonthlyIncomeCentavos * 12,   // FII mensal → anual
+        FIAnnualIncomeCentavos:      fixedIncomeAnnual(held.FixedIncome),
+        MonthlyContributionCentavos: monthlyContributionCentavos,
+        HorizonYears:                horizonYears,
+    }), nil
+}
+
+// fixedIncomeAnnual: Σ investido × taxa anual (a derivação da renda fixa, em centavos)
+func fixedIncomeAnnual(fi []portfolio.FixedIncomeHolding) int64 {
+    var total int64
+    for _, h := range fi {
+        total += money.ApplyBps(h.InvestedAmountCentavos, h.AnnualRateBps)
+    }
+    return total
+}</code></pre>
+
+<p>Os <code>Inputs</code> são <strong>flat e primitivos</strong> de propósito — só inteiros (centavos, bps, contagens). É isso que torna a
+<code>Compute</code> uma função pura e fácil de testar table-driven: ela não conhece <code>dashboard.Dashboard</code> nem
+<code>portfolio.Holdings</code>; ela conhece apenas o snapshot numérico que o service extraiu. Repare também que a
+<strong>reconciliação com o dashboard é literal</strong>: a renda de FII é <code>d.Summary.MonthlyIncomeCentavos * 12</code> — exatamente
+o número que o dashboard já mostra, só anualizado.</p>
+
+<!-- ============================================================ -->
+<h2 id="endpoint">7. O endpoint <code>GET /projections</code> e os query params</h2>
+
+<p>O handler é deliberadamente magro: lê a identidade do contexto (nunca do payload, BR-1074), <strong>parseia e valida
+os query params</strong>, chama o serviço e mapeia para o DTO. Os params são parseados como <strong>inteiros</strong> — um valor não
+inteiro é rejeitado com <code>400</code> antes de qualquer computação:</p>
+
+<pre><code>// internal/transport/http/projections.go
+func (h projectionsHandler) getProjections(w http.ResponseWriter, r *http.Request) {
+    userID, ok := callerID(w, r)   // identidade do contexto, nunca do payload (BR-1074)
+    if !ok { return }
+    contribution, horizon, ok := parseProjectionParams(w, r)   // valida ANTES de computar
+    if !ok { return }                                          // já escreveu o 400
+    ps, err := h.service.Project(r.Context(), userID, contribution, horizon)
+    if err != nil { /* erro REAL de serviço → 500 */ }
+    writeJSON(w, http.StatusOK, toProjectionsResponse(ps))
+}</code></pre>
+
+<p>O parsing dos params merece atenção: a contribuição é <code>≥ 0</code> (default 0) e o horizonte é <code>1–40</code> (default 10).
+Qualquer <code>float</code>, negativo ou fora de faixa vira <code>400</code> — o ban do <code>float</code> se estende à <strong>fronteira de entrada</strong>:</p>
+
+<pre><code>// internal/transport/http/projections.go — inteiros, nunca float; limitado; defaults (D7)
+const ( defaultHorizonYears = 10; minHorizonYears = 1; maxHorizonYears = 40 )
+
+func parseProjectionParams(w http.ResponseWriter, r *http.Request) (contribution int64, horizon int, ok bool) {
+    q := r.URL.Query()
+    contribution = 0
+    if v := q.Get("monthly_contribution_centavos"); v != "" {
+        n, err := strconv.ParseInt(v, 10, 64)           // ParseInt → "1.5" ou "abc" falham
+        if err != nil || n &lt; 0 {
+            writeError(w, http.StatusBadRequest, "monthly_contribution_centavos must be a non-negative integer")
+            return 0, 0, false
+        }
+        contribution = n
+    }
+    horizon = defaultHorizonYears
+    if v := q.Get("horizon_years"); v != "" {
+        n, err := strconv.Atoi(v)
+        if err != nil || n &lt; minHorizonYears || n &gt; maxHorizonYears {
+            writeError(w, http.StatusBadRequest, "horizon_years must be an integer between 1 and 40")
+            return 0, 0, false
+        }
+        horizon = n
+    }
+    return contribution, horizon, true
+}</code></pre>
+
+<p>O DTO de resposta espelha as duas projeções + as premissas + o disclaimer. Dinheiro sai como <strong>inteiros</strong>
+(<code>*_centavos</code>) e taxas como <code>*_bps</code> — o ban do <code>float</code> se estende ao contrato:</p>
+
+<pre><code>// internal/transport/http/projections.go — DTOs (inteiros, nunca float)
+type projectionsResponse struct {
+    Income     []incomeScenarioResponse   `json:"income"`
+    NetWorth   []netWorthScenarioResponse `json:"net_worth"`
+    Disclaimer string                     `json:"disclaimer"`
+}
+type netWorthPointResponse struct {
+    Year          int   `json:"year"`
+    ValueCentavos int64 `json:"value_centavos"`   // centavos, nunca float
+}</code></pre>
+
+<p>Como toda spec que toca um endpoint, o contrato vive em <strong>lockstep</strong> em dois lugares guardados pelo teste de
+drift: a <code>routeTable</code> (<code>internal/transport/http/routes.go</code>) e <code>api/openapi.yaml</code>. O dinheiro aparece como
+inteiros <code>*_centavos</code> e as taxas como <code>*_bps</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">8. As 7 decisões (D1–D7) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>LLM ou determinístico?</td>
+    <td><strong>Determinístico, sem LLM.</strong> Matemática pura + premissas expostas</td>
+    <td>A FR-016 exige "determinístico e reproduzível"; uma projeção reproduzível não pode sair de um modelo probabilístico. Narrativa opcional é tarefa do SPEC-108, que lê estas projeções.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Um endpoint ou dois?</td>
+    <td><strong>Um <code>GET /projections</code></strong> devolvendo renda + patrimônio</td>
+    <td>As duas projeções compartilham inputs e cenários e são uma só visão de "planejamento"; dois endpoints seriam mais superfície sem benefício.</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Onde mora o motor?</td>
+    <td><strong>Novo pacote-feature <code>internal/projection</code></strong> — <code>Compute</code> pura + service magro</td>
+    <td>Espelha a forma do dashboard (SPEC-103) e do health score (SPEC-106); o core fica puro, os reads na borda.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Granularidade do gráfico?</td>
+    <td><strong>Compor mensal, emitir pontos anuais</strong> (<code>{year, value_centavos}</code>, ≤ 41 pontos)</td>
+    <td>Mensal captura o aporte + reinvestimento corretamente; anual é leve para o gráfico e para o payload.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Parâmetros dos cenários?</td>
+    <td><strong>base = yield atual; pessimista = yield − 200 bps; otimista = yield + 200 bps</strong></td>
+    <td>Um spread documentado e ajustável; a calibração fina fica como dívida técnica (§15).</td>
+  </tr>
+  <tr>
+    <td><strong>D6</strong></td><td>Base de retorno do patrimônio?</td>
+    <td><strong>Só renda reinvestida + aporte</strong> (sem valorização de preço)</td>
+    <td>Conservador e defensável; a valorização é especulativa (inventaria um número) e fica diferida (§15).</td>
+  </tr>
+  <tr>
+    <td><strong>D7</strong></td><td>Entrada de aporte + horizonte?</td>
+    <td><strong>Query params</strong> no <code>GET</code> (<code>monthly_contribution_centavos</code> ≥ 0, <code>horizon_years</code> 1–40; defaults 0/10)</td>
+    <td>Inteiros, nunca float; parseados e limitados na borda; um <code>GET</code> idempotente e cacheável.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">9. As 6 fases, uma a uma</h2>
+
+<p>Bottom-up, como nas specs anteriores — core/domínio primeiro, borda depois, cada fase compilando e revisável
+sozinha. Com <strong>três fios condutores</strong>: "computação pura e reproduzível" (a <code>Compute</code> sem <code>time.Now</code> nem
+<code>float</code>), "disciplina de dinheiro inteiro" (<code>int64</code> centavos / bps, half-up mensal via <code>money.ApplyBps</code>,
+big.Int-guarded) e "premissas transparentes" (cada cenário expõe seus ajustes em bps).</p>
+
+<h3>Fase 1 — Domínio &amp; o motor de projeção (o coração)</h3>
+<p>O enum fechado <code>Scenario</code> (+ <code>ParseScenario</code>), os tipos <code>Assumptions</code>/<code>ScenarioIncome</code>/<code>NetWorthPoint</code>/
+<code>ScenarioNetWorth</code>/<code>Projections</code>, o spread ±200 bps (D5); os <code>Inputs</code> flat; a <strong>renda</strong> (base = FII + RF,
+yield = <code>ShareBps</code>, cenários via <code>delta</code>); o <strong>patrimônio</strong> (composição <strong>mensal</strong>, snapshots anuais, D4/D6); e a
+<code>Compute</code>. <strong>As projeções foram provadas antes de qualquer borda</strong> — testes table-driven: renda base reconcilia +
+haircut/uplift; série de patrimônio contra valores calculados à mão; <strong>reprodutibilidade</strong> (mesmos inputs → saída
+idêntica); carteira vazia (renda 0, patrimônio = valor futuro dos aportes); <strong>segurança de overflow</strong> a 40 anos;
+zero-<code>float</code>.</p>
+
+<h3>Fase 2 — Inputs &amp; o service (compõe os reads)</h3>
+<p>Os ports consumer-defined <code>DashboardReader</code>/<code>HoldingsReader</code>; o <code>projection.Service.Project</code> compondo os dois
+reads nos <code>Inputs</code> (valor atual + renda FII do dashboard; Σ investido × taxa da renda fixa) e chamando a
+<code>Compute</code>. Testes da derivação da renda fixa + da composição, sobre <strong>fakes</strong>.</p>
+
+<h3>Fase 3 — API (transporte)</h3>
+<p><code>transport/http/projections.go</code>: <code>GET /projections</code> → parse do aporte (≥ 0) + horizonte (1–40) da query
+(inteiros, <strong>nunca float</strong>; defaults 0/10; inválido → <code>400</code>), identidade via <code>auth.UserID(ctx)</code>; DTO (renda +
+patrimônio + premissas + disclaimer); erro de serviço → 500. <code>Deps.Projections</code>, registro na <code>routeTable</code>, path +
+schema em <code>api/openapi.yaml</code> (drift verde) e a fiação no <code>cmd/api</code> (reusa dashboard + portfolio).</p>
+
+<h3>Fase 4 — Observabilidade</h3>
+<p>A rota herda o span do <code>otelhttp</code>; um span <code>projection.compute</code> <strong>sem conteúdo</strong> (nenhum valor/holdings/série
+vai para telemetria — BR-505). Um teste garante <strong>nenhum valor de fato / série no span</strong>.</p>
+
+<h3>Fase 5 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: cenários de renda; composição de patrimônio + monotonicidade; parsing de cenário;
+reprodutibilidade; overflow; handler (identidade-do-contexto, parse de params, <code>400</code> em params ruins, forma
+<code>200</code>, <code>401</code>). Integração <strong>gated</strong>: Postgres real (<code>TEST_DATABASE_URL</code>, <code>-p 1</code>) — semeia holdings + cotações,
+chama <code>GET /projections</code>, asserta que a renda base reconcilia com os dados semeados, que a série de patrimônio de
+um cenário positivo é <strong>monotônica</strong>, que <strong>duas chamadas devolvem uma projeção idêntica</strong> (reprodutibilidade
+ponta a ponta) e o isolamento por usuário.</p>
+
+<h3>Fase 6 — Documentação &amp; aula</h3>
+<p><code>README.md</code> (endpoint <code>/projections</code>), <code>CHANGELOG.md</code>, <code>api/openapi.yaml</code> (path + schema), SPEC-107 +
+PLAN-107 marcados <strong>Done</strong>, índices e status do <code>CLAUDE.md</code> atualizados, e esta aula. 🙂</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">10. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o service
+importando o repositório <em>concreto</em>. O SPEC-107 é um caso particularmente limpo para a <strong>tradução</strong>, porque o
+"repositório" do motor é, na verdade, <strong>duas fontes de leitura de outras features</strong> (dashboard, holdings) — e o
+"núcleo de negócio" é uma <strong>função pura sem nenhum port de LLM</strong>. (Para a teoria completa, veja a
+<a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>; aqui aplicamos ela ao
+SPEC-107.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-107</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>projectionsHandler</code> (<strong>driving adapter</strong> — traduz HTTP ↔ caso de uso, lê a identidade do contexto, parseia os query params)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO de response</td><td><code>projectionsResponse</code> / <code>incomeScenarioResponse</code> / <code>netWorthScenarioResponse</code> — continuam DTOs, na borda, com <code>*_centavos</code>/<code>*_bps</code>/<code>year</code>/<code>note</code> (inteiros, nunca float)</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Enum/value object de domínio</td><td><code>projection.Scenario</code> (enum fechado + <code>ParseScenario</code>) e <code>ScenarioIncome</code>/<code>ScenarioNetWorth</code>/<code>NetWorthPoint</code>/<code>Assumptions</code>/<code>Projections</code></td><td>Domínio (<code>projection</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>projection.Service</code> — o caso de uso "computar as projeções", que <strong>vive no core da feature</strong> e depende de <strong>ports</strong> (os dois readers); compõe os reads + chama a <code>Compute</code>, não conversa com SQL/HTTP/LLM</td><td>Core da feature (<code>projection</code>)</td></tr>
+  <tr><td>Lógica de negócio pura</td><td><code>Compute</code> + <code>projectNetWorth</code> + <code>monthlyFromAnnual</code> + <code>money.ShareBps</code>/<code>ApplyBps</code> — funções puras (sem SQL/HTTP/LLM/time), totalmente testáveis</td><td>Domínio (<code>projection</code> / <code>platform/money</code>)</td></tr>
+  <tr><td>Repository concreto</td><td>Vira <strong>dois ports</strong>: <code>DashboardReader</code> e <code>HoldingsReader</code> — satisfeitos por services de <em>outras</em> features (dashboard 103, portfolio 102) na fiação. <strong>Nenhum port de LLM</strong> (feature determinística)</td><td>Interfaces no <code>projection</code>; implementações na borda/features vizinhas</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> os repositórios concretos — a seta aponta <strong>para fora</strong>, rumo à infra. No
+SPEC-107 o motor <strong>define as interfaces que precisa</strong> e features vizinhas as satisfazem — a seta aponta <strong>para
+dentro</strong>:</p>
+
+<pre><code>// internal/projection/ports.go — o service DEFINE os ports de que precisa (consumer-defined):
+type DashboardReader interface { GetDashboard(ctx, userID) (dashboard.Dashboard, error) }
+type HoldingsReader  interface { ListHoldings(ctx, userID) (portfolio.Holdings, error) }
+
+// As OUTRAS peças os satisfazem — sem saber que o projection existe:
+//   dashboard.Service (103)   já tem GetDashboard  → satisfaz DashboardReader
+//   portfolio.Service (102)   já tem ListHoldings  → satisfaz HoldingsReader
+// A fiação acontece só no cmd/api. NÃO há Insighter — a feature é determinística.
+// Todas as setas de dependência apontam PARA DENTRO.</code></pre>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem <em>aciona</em> a aplicação): o <code>projectionsHandler</code> chama o serviço pela interface
+  <code>ProjectionEngine</code> definida no próprio transporte (consumer-defined). Fica à <strong>esquerda</strong> do hexágono.</li>
+  <li><strong>Driven ports</strong> (o que a aplicação <em>aciona</em>): os dois readers (<code>DashboardReader</code>, <code>HoldingsReader</code>). Ficam à
+  <strong>direita</strong>. <strong>Note a ausência</strong>: não há port de LLM — é a assinatura de uma feature puramente determinística.</li>
+  <li><strong>Domínio / core puro</strong>: o enum <code>Scenario</code>, os tipos de projeção, a <code>Compute</code>/<code>projectNetWorth</code> e as primitivas
+  <code>money.*</code> — tudo sem SQL/HTTP/LLM/time. <strong>Aplicação</strong>: o <code>Service</code> (compõe os reads, computa). <strong>Borda</strong>: o
+  handler e os DTOs (HTTP); os adapters de banco das features vizinhas.</li>
+</ul>
+
+<div class="diagram">           ┌──────── internal/projection (core da feature) ──────────────┐
+ HTTP ─▶ getProjections ─▶│  Service.Project  (compõe reads + COMPUTA)              │
+ (driving)                │      │                                                  │
+   ?contribution&horizon  │      ├─▶ DashboardReader.GetDashboard ◀── dashboard (103)│
+   (parseados na borda)   │      ├─▶ HoldingsReader.ListHoldings  ◀── portfolio (102)│
+                          │      └─▶ Compute(Inputs)  [PURO, sem LLM, sem time, sem  │
+                          │             float; composição mensal, pontos anuais]     │
+                          └─────────────────────────────────────────────────────────┘
+   Acíclico: projection → {dashboard, portfolio, money}. Compute PURO. SEM Insighter.</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA trilhos que
+<strong>baixam a taxa de erro</strong>. Veja, no SPEC-107, como o harness construiu e verificou.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase — a matemática antes da borda</h3>
+<p>A IA não atacou "faça as projeções" de uma vez. O PLAN-107 fatiou em 6 fases bottom-up, e a ordenação foi
+<strong>deliberada</strong>: a <strong>Fase 1 lança a <code>Compute</code> + a composição mensal + a renda por cenário antes de tudo</strong>, com
+testes table-driven provando a reconciliação da renda, a série contra valores calculados à mão, a
+<strong>reprodutibilidade byte-idêntica</strong>, a segurança de overflow a 40 anos e zero-<code>float</code>. Isso significa que as
+projeções já estavam <strong>provadas e mecânicas</strong> quando o service (Fase 2) e o handler (Fase 3) entraram. O harness
+força a matemática a ser escrita e testada primeiro, então a borda só a expõe — nunca a implementa.</p>
+
+<h3>O hook determinístico <code>block-layering</code> (e por que ele empurrou o teste de integração para o transporte)</h3>
+<p>O hook <code>block-layering</code> (PostToolUse, <code>exit 2</code>) barra <strong>mecanicamente</strong> qualquer import de <code>database/sql</code>,
+<code>net/http</code> ou SDK de vendor dentro de um core de feature. Importar os <strong>tipos de domínio puros</strong> de outras
+features (<code>dashboard.Dashboard</code>, <code>portfolio.Holdings</code>) <strong>passa</strong>; um <code>database/sql</code> dentro de
+<code>internal/projection</code> seria <strong>bloqueado</strong> — sem revisão humana. É o que garante, na prática, que a <code>Compute</code>
+ficou pura e que os reads ficaram na borda (atrás dos readers). É <strong>por isso</strong> que o teste de integração ponta a
+ponta com o handler vive na <strong>camada de transporte</strong> (<code>internal/transport/http/projections_integration_test.go</code>):
+o teste que exercita <code>GET /projections</code> com um router HTTP real precisa dos adapters concretos (Postgres, HTTP),
+e a regra de layering proíbe justamente esse tipo de import no core — então o teste que os usa mora onde eles
+já vivem, na borda.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>O revisor especializado cobrou as regras mais sensíveis daqui: a <strong>direção de dependência</strong> (o grafo acíclico
+<code>projection → {dashboard, portfolio, money}</code>, sem ciclo de volta), a <strong>ausência de qualquer port de infra no
+core</strong> e — o ponto mais crítico — a <strong>pureza da <code>Compute</code></strong>: que o motor de projeção não chama SQL/HTTP/LLM/time,
+e que os reads acontecem <strong>só</strong> no service (a borda), a partir dos dois readers consumer-defined.</p>
+
+<h3>O <code>go-correctness-reviewer</code> e a disciplina de "reproduzível ao ponto"</h3>
+<p>Sendo a feature onde a <strong>reprodutibilidade</strong> é a métrica-mãe, a lente de correção vigiou os riscos nº 1 do plano
+(PLAN-107 §8): a <strong>projeção não-reprodutível</strong> (<code>float</code> / <code>time.Now</code> / deriva de arredondamento), o <strong>overflow
+inteiro</strong> num horizonte longo e o <strong>off-by-one</strong> na composição (mês/ano). Ela garantiu que tudo é <strong>inteiro</strong> (sem
+float); que <strong>não há <code>time.Now</code></strong> (offsets de ano); que a composição é <strong>mensal com snapshot exato na fronteira
+do ano</strong> (o ano 0 = valor atual); o <code>%w</code> + prefixo minúsculo nos erros (<code>"project: dashboard: %w"</code>) e o <code>ctx</code>
+como primeiro parâmetro.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que a reprodutibilidade vale — a série não se move</span>
+  É a <strong>estrutura</strong> que prova: sem <code>float</code>, sem <code>time.Now</code>, sem LLM, a <code>Compute</code> é uma função de inteiros puros —
+  a mesma entrada <strong>tem</strong> que dar a mesma saída. Some a isso o teste de reprodutibilidade byte-idêntica (duas
+  chamadas → séries iguais), o teste de composição contra valores calculados à mão, o teste de overflow a 40 anos,
+  o teste de monotonicidade de um cenário positivo, e o hook <code>block-layering</code> (sem SQL/time no core) — e você tem
+  a FR-016 <strong>garantida por construção</strong>, não por boa-fé.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>block-layering</strong>: o bloqueio duro que provou que o <code>projection</code> ficou livre de SQL/HTTP/time, ao mesmo
+  tempo que <em>permitiu</em> o consumo dos tipos de domínio puros das features vizinhas — e que empurrou o teste de
+  integração para a camada de transporte, onde os adapters vivem.</li>
+  <li><strong>O teste de drift do OpenAPI</strong>: ao adicionar <code>GET /projections</code> na <code>routeTable</code>, o <code>openapi_test.go</code>
+  <em>exigiu</em> a entrada correspondente em <code>api/openapi.yaml</code> — senão o build falharia (<a href="#endpoint">seção 7</a>).</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-107 referencia ADR-0002, mas <strong>não o edita</strong> — se a IA tentasse
+  "atualizar" um ADR aceito, o hook barraria. ADR é imutável; supersede, nunca edita.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos — e os testes
+  unitários passam <strong>sem rede e sem DB</strong> (a <code>Compute</code> é pura). A integração (seed de holdings + cotações,
+  reprodutibilidade ponta a ponta) fica atrás do gate de <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-107</th><th>Por que baixa erro</th></tr>
+  <tr><td>Fatos são computados, não gerados</td><td>Toda a projeção é cálculo determinístico sobre os fatos atuais (dashboard + taxas); <strong>zero LLM</strong></td><td>A projeção é auditável e reproduzível; nenhum número é inventado.</td></tr>
+  <tr><td>Reprodutibilidade ("mesmos inputs → mesmo resultado")</td><td>Só inteiros + half-up + <strong>offsets de ano em vez de <code>time.Now</code></strong> + ordem fixa de cenários</td><td>A FR-016 vale ao ponto; teste de série byte-idêntica.</td></tr>
+  <tr><td>Não-conselho por construção (FR-014)</td><td>Sem LLM e sem texto livre — números + premissas + disclaimer fixo</td><td>Um número não pode conter uma ordem; conformidade inescapável.</td></tr>
+  <tr><td>Dinheiro/taxas nunca são <code>float64</code> (incl. a wire)</td><td>Centavos <code>int64</code>, taxas <code>int</code> bps; <code>*_centavos</code>/<code>*_bps</code> no JSON e no OpenAPI; params parseados como inteiros</td><td>A série é exata; um <code>float</code> na query vira <code>400</code>, não deriva silenciosa.</td></tr>
+  <tr><td>Enums fechados parse-don't-validate</td><td><code>Scenario</code> é <code>type X string</code> + <code>ParseScenario</code> (trim+lower, sentinela <code>%w</code>)</td><td>Um cenário inválido é irrepresentável; normalização consistente.</td></tr>
+  <tr><td>Domínio é puro</td><td>A <code>Compute</code> + a composição não tocam SQL/HTTP/LLM/time; os reads ficam no service (borda)</td><td>Testável sem infra; o hook <code>block-layering</code> garante mecanicamente.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td>Os 2 readers + <code>ProjectionEngine</code> no transporte; <code>accept interfaces, return structs</code></td><td>Fakes triviais nos testes; o motor depende de contratos que ele desenha.</td></tr>
+  <tr><td>Identidade do contexto, nunca do payload</td><td><code>callerID</code> lê <code>auth.UserID(ctx)</code>; os únicos inputs do cliente são o aporte + o horizonte</td><td>Cada um só vê a própria projeção — sem vazamento cross-user.</td></tr>
+  <tr><td>OpenAPI em lockstep</td><td><code>GET /projections</code> na <code>routeTable</code> + em <code>api/openapi.yaml</code>, guardado pelo teste de drift</td><td>O contrato nunca apodrece; doc e código não divergem.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só o stack existente + <code>money.ShareBps</code>/<code>ApplyBps</code></td><td>Zero download novo; superfície de ataque e manutenção mínimas (ADR-0003).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering</h2>
+
+<p>O SPEC-107 é uma feature <strong>que não usa IA</strong> — e é justamente por isso que ela ensina uma das lições mais
+importantes da engenharia de IA de produto: <strong>saber onde NÃO usar o LLM</strong>. Vamos às conexões, todas ancoradas no
+código desta spec.</p>
+
+<h3>12.1 — Desenhar a fronteira: cálculo determinístico vs. geração</h3>
+<p>A lição central aqui é negativa e poderosa: <strong>nem tudo deve passar pelo LLM</strong>. Uma projeção que precisa ser
+<strong>reprodutível ao ponto</strong> (FR-016) e <strong>gráficável</strong> (FR-017) é exatamente o tipo de saída que <strong>não</strong> deve sair de
+um modelo probabilístico — porque um LLM, por construção, não dá a mesma série duas vezes. Saber <strong>onde traçar
+essa fronteira</strong> — cálculo determinístico de um lado, geração de linguagem do outro — é metade da engenharia de
+IA de produto. O SPEC-107 fica <strong>inteiramente</strong> do lado do cálculo, e faz isso conscientemente.</p>
+
+<h3>12.2 — Fundação para grounding: a projeção como um "fato" que o LLM futuro vai ler</h3>
+<p>Embora o SPEC-107 não use IA, ele <strong>alimenta</strong> a IA futura. As projeções computadas são precisamente o tipo de
+<strong>fato determinístico</strong> que o Fact Builder do SPEC-104 empacota para o LLM raciocinar <em>sobre</em>. Quando o SPEC-108
+(o Copiloto Conversacional) responder <em>"mantendo R$500/mês, em 10 anos você projeta ~R$X"</em>, ele não vai
+<strong>calcular</strong> o R$X — ele vai <strong>chamar</strong> <code>GET /projections</code> e <strong>verbalizar</strong> a série já computada. A <code>Compute</code> de hoje
+é a <strong>ferramenta determinística</strong> que o agente conversacional de amanhã vai invocar em vez de inventar números.</p>
+
+<h3>12.3 — Não-conselho sem gate: a não-geração como defesa</h3>
+<p>No SPEC-105 o não-conselho (FR-014) era um <strong>gate ativo</strong> sobre o texto do LLM. Aqui não há gate a rodar —
+<strong>porque não há texto gerado</strong>. Isso ilustra um princípio de segurança em IA: a forma mais robusta de impedir uma
+saída proibida é <strong>não ter a capacidade de produzi-la</strong>. Uma projeção é números + premissas estruturadas + um
+disclaimer fixo; ela <strong>não pode</strong> emitir uma ordem de compra imperativa porque o sistema não gera prosa livre. É o
+"torne o estado ruim irrepresentável" aplicado à conformidade.</p>
+
+<h3>12.4 — Ausência de superfície de prompt-injection</h3>
+<p>Uma consequência direta de não haver LLM: <strong>a feature nunca envia dados da carteira a um modelo</strong>, então <strong>não
+existe vetor de prompt-injection</strong> aqui. Compare com o SPEC-106, onde a narrativa passava holdings pelo LLM e
+precisava de um gate fail-closed como backstop. No SPEC-107 essa superfície de ataque simplesmente <strong>não
+existe</strong> — o que reforça que o próprio <em>ato de escolher não usar o LLM</em> é, às vezes, a decisão de segurança mais
+forte disponível.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  IA confiável em finanças é <strong>saber o que NÃO entregar ao modelo</strong>. O SPEC-107 entrega a lição na forma mais
+  pura: uma projeção precisa ser <strong>reproduzível ao centavo</strong>, então ela é <strong>puro cálculo determinístico</strong> —
+  inteiros, half-up, offsets de ano, sem <code>time.Now</code>, sem <code>float</code>, sem LLM. A camada de linguagem (a narrativa
+  conversacional) fica para o SPEC-108, que <strong>lê</strong> estas projeções computadas em vez de recalculá-las. É essa
+  <strong>modéstia arquitetural</strong> — <strong>deixar a matemática à matemática e reservar o LLM só para a linguagem</strong> — que torna as
+  projeções um número em que o investidor pode <strong>confiar e planejar</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir</h2>
+
+<p>Com as projeções no ar, o YieldForge tem sua <strong>camada de planejamento</strong>: o dashboard mostra o presente, e as
+projeções mostram o futuro — ambos sobre os mesmos fatos computados.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como se conecta ao SPEC-107</th></tr>
+  <tr><td>SPEC-103</td><td>Dashboard</td><td>A projeção <strong>reconcilia</strong> com o dashboard: a renda base de FII é literalmente a renda mensal do dashboard × 12 — o presente e o futuro contam a mesma história.</td></tr>
+  <tr><td>SPEC-106</td><td>Health Score</td><td>Combinar um aporte mensal projetado com a nota de saúde mostra como a carteira <em>evolui em saúde</em> ao longo do tempo.</td></tr>
+  <tr><td>SPEC-108</td><td>Copiloto Conversacional (Chat)</td><td>É o consumidor natural: ao detectar "tenho R$X pra aportar, e em 10 anos?", o chat chama <code>GET /projections</code> e <strong>narra</strong> a série computada — a narrativa que o SPEC-107 deliberadamente deixou de fora.</td></tr>
+  <tr><td>(futuro)</td><td>Valorização &amp; termos reais</td><td>Uma premissa de valorização de preço explícita e uma visão em termos reais (ajustada por IPCA) enriqueceriam a projeção — limpo de adicionar porque o core é determinístico e as premissas já são expostas.</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…004</td><td>Esqueleto, persistência, auth, observabilidade</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-005</td><td>Port <code>Insighter</code> &amp; adaptadores de LLM (gates)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; worker de ingestão</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101 / 102 / 103</td><td>Perfil / Carteira / Dashboard</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-104</td><td>AI Insight Engine (Fact Builder publicado)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-105</td><td>AI Rebalancing Assistant (% computada + candidatos aterrados)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-106</td><td>Portfolio Health Score (nota computada + narrativa do professor)</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-107</td><td>Projeções (renda &amp; patrimônio — computação pura, sem LLM)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-108</td><td>Copiloto Conversacional (Chat)</td><td>⬜ A seguir</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que uma ferramenta determinística prepara o futuro multi-agente</span>
+  Olhando longe: quando o sistema multi-agente (o "CIO") chegar, cada agente precisará produzir <strong>conclusões
+  defensáveis</strong>. O padrão que o SPEC-107 estabelece — <strong>cálculos determinísticos como ferramentas, LLM apenas como
+  explicador</strong> — é exatamente o que o MCP formaliza: um loop de tool-call onde o agente <em>chama</em> a projeção (uma
+  ferramenta) e <em>verbaliza</em> a série, em vez de inventar números. A <code>Compute</code> de hoje é o protótipo das ferramentas
+  determinísticas que cada agente futuro vai chamar — e o SPEC-108 será a primeira feature a <em>ler</em> estas projeções
+  para responder em linguagem natural. A projeção vira uma das primeiras <em>tools</em> que o copiloto consulta para
+  raciocinar sobre o futuro da carteira.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-107 o YieldForge ganhou sua <strong>camada de planejamento</strong>: duas projeções <strong>computadas</strong> (não geradas) — renda
+  passiva (mensal/anual, três cenários base ±200 bps) e patrimônio (série anual sobre um horizonte configurável,
+  compondo <strong>mensalmente</strong> a renda reinvestida + um aporte) — numa <code>Compute</code> pura, <strong>reproduzível ao centavo</strong>
+  ("mesmos inputs → mesmo resultado") porque é <strong>só inteiros, half-up, offsets de ano, sem <code>float</code>, sem
+  <code>time.Now</code> e sem LLM</strong>; conservadora por design (só renda + aporte, sem valorização — D6), com premissas
+  expostas e um disclaimer de estimativa (FR-014 por construção) — exposta em <code>GET /projections</code>, com carteira
+  vazia crescendo só do aporte, sem nenhuma tabela nova.
+</div>
+
+<footer>
+  YieldForge · Aula 107 (SPEC-107) · gerada como material de estudo. Veja também a
+  <a href="SPEC-106-aula.html">Aula 106</a> (o health score — a nota computada e a narrativa do professor), a
+  <a href="SPEC-105-aula.html">Aula 105</a> (o rebalanceamento — a % computada e o grounding guard), a
+  <a href="SPEC-104-aula.html">Aula 104</a> (o motor de insights — a seam <code>BuildFacts</code> e o grounding), a
+  <a href="SPEC-103-aula.html">Aula 103</a> (o dashboard — a <code>Compute</code> e a disciplina de <code>ShareBps</code>/<code>ApplyBps</code>), a
+  <a href="SPEC-102-aula.html">Aula 102</a> (a carteira — os holdings de FII e renda fixa que a projeção lê), a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-107-projections.md">SPEC-107</a>
+  e o <a href="../03-plans/PLAN-107-projections.md">PLAN-107</a>.
+</footer>
+
+</div>
+</body>
+</html>

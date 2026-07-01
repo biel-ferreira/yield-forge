@@ -483,6 +483,48 @@ paths:
                 $ref: "#/components/schemas/HealthScoreResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /projections:
+    get:
+      tags: [projections]
+      summary: Compute the caller's income & net-worth projections
+      operationId: getProjections
+      description: |-
+        Two deterministic, reproducible projections over the current portfolio: a passive-income
+        projection (monthly/annual, three scenarios) and a net-worth projection (value over the
+        horizon from current value + reinvested income + the monthly contribution, three scenarios,
+        as yearly points for charting). Figures are computed, not LLM-generated; each scenario shows
+        its assumptions; the response is a labelled estimate, never a transaction order. Money is
+        integer centavos; never a float.
+      parameters:
+        - name: monthly_contribution_centavos
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            default: 0
+          description: New money contributed each month, in centavos (≥ 0).
+        - name: horizon_years
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 40
+            default: 10
+          description: Projection horizon in years (1–40).
+      responses:
+        "200":
+          description: The computed income + net-worth projections.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectionsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     cookieAuth:
@@ -685,6 +727,71 @@ components:
           type: boolean
           description: False when the LLM was fully unavailable (insights empty).
       required: [insights, disclaimer, available]
+    ProjectionsResponse:
+      type: object
+      description: Deterministic passive-income and net-worth projections across three scenarios.
+      properties:
+        income:
+          type: array
+          items:
+            type: object
+            properties:
+              scenario:
+                type: string
+                enum: [pessimistic, base, optimistic]
+              monthly_centavos:
+                type: integer
+                format: int64
+              annual_centavos:
+                type: integer
+                format: int64
+              assumptions:
+                type: object
+                properties:
+                  yield_adj_bps:
+                    type: integer
+                  note:
+                    type: string
+                required: [yield_adj_bps, note]
+            required: [scenario, monthly_centavos, annual_centavos, assumptions]
+        net_worth:
+          type: array
+          items:
+            type: object
+            properties:
+              scenario:
+                type: string
+                enum: [pessimistic, base, optimistic]
+              points:
+                type: array
+                description: Yearly points (year 0 = current value) for charting.
+                items:
+                  type: object
+                  properties:
+                    year:
+                      type: integer
+                    value_centavos:
+                      type: integer
+                      format: int64
+                  required: [year, value_centavos]
+              assumptions:
+                type: object
+                properties:
+                  yield_adj_bps:
+                    type: integer
+                  monthly_contribution_centavos:
+                    type: integer
+                    format: int64
+                  horizon_years:
+                    type: integer
+                  note:
+                    type: string
+                required: [yield_adj_bps, monthly_contribution_centavos, horizon_years, note]
+            required: [scenario, points, assumptions]
+        disclaimer:
+          type: string
+          description: Labels the projection a non-guaranteed estimate (FR-014).
+      required: [income, net_worth, disclaimer]
     HealthScoreResponse:
       type: object
       description: A reproducible 0–100 Portfolio Health Score with a per-factor breakdown.
