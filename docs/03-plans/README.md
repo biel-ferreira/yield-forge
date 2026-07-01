@@ -16,7 +16,9 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 
 - **Foundational (`PLAN-0xx`)** — cross-cutting groundwork (scaffolding,
   persistence, auth, ports, observability), planned and built first.
-- **Feature (`PLAN-1xx`)** — user-facing capabilities.
+- **Feature (`PLAN-1xx`)** — user-facing backend capabilities.
+- **Frontend (`PLAN-2xx`)** — the Next.js web client (foundational `PLAN-20x`,
+  feature `PLAN-21x`); mirrors the [`SPEC-2xx` tier](../02-specs/README.md#frontend-specs-spec-2xx).
 
 ## Plans
 
@@ -46,6 +48,12 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-106 | SPEC-106 | Portfolio Health Score           | Done |
 | PLAN-107 | SPEC-107 | [Projections (Income & Net Worth)](PLAN-107-projections.md) | ✅ Done |
 | PLAN-108 | SPEC-108 | [Conversational Copilot (Chat)](PLAN-108-conversational-copilot.md) | ✅ Done |
+
+### Frontend (`PLAN-2xx`)
+
+| Plan ID  | Spec     | Title                            | Status      |
+| -------- | -------- | -------------------------------- | ----------- |
+| PLAN-200 | SPEC-200 | [Frontend App Foundation](PLAN-200-app-foundation.md) | 📝 Draft |
 
 ## Standard Phase Order (per the template)
 
