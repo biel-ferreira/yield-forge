@@ -8,7 +8,7 @@
 | Related Feature | SPEC-108 — the capstone; orchestrates 104/105/107 behind chat |
 | Related Spec    | [SPEC-108](../02-specs/SPEC-108-conversational-copilot.md)   |
 | Version         | 0.1.0                                                        |
-| Status          | Draft                                                       |
+| Status          | Done                                                        |
 | Author          | Gabigol                                                      |
 | Last Updated    | 2026-06-30                                                   |
 
