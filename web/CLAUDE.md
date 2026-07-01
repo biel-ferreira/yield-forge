@@ -87,5 +87,22 @@ here or improvise a structure:
 
 ## Commands
 
-_To be filled in by SPEC-200 once the toolchain exists (lint/format/typecheck/test/dev/build)._
-Until then, the SDD loop is unchanged: `/spec-new`, `/plan-new`, `/spec-implement`, `/pr-review`.
+Node **20 LTS** (pinned in `.nvmrc`); package manager **npm** (PLAN-200 D-note: pnpm 11 requires
+Node 22, so the MVP uses the bundled npm — switch to pnpm@9+ later if desired). Run from `web/`:
+
+| Need                            | Command                                   |
+| ------------------------------- | ----------------------------------------- |
+| Install deps                    | `npm install`                             |
+| Dev server                      | `npm run dev`                             |
+| Quality gate (run before done)  | `npm run typecheck` + `npm run lint` + `npm run build` |
+| Type-check                      | `npm run typecheck` (`tsc --noEmit`)      |
+| Lint                            | `npm run lint` (ESLint 9 flat config)     |
+| Format / check                  | `npm run format` / `npm run format:check` |
+| Production build                | `npm run build` (Next 16, Turbopack)      |
+
+The path-scoped `web-ci` workflow (`.github/workflows/web-ci.yml`) enforces typecheck + lint + build
+on every `web/**` change. Tests (Vitest + React Testing Library, Playwright smoke) arrive in a later
+SPEC-200 phase; this section grows as scripts are added.
+
+- **Stack:** Next.js 16 (App Router) · React 19 · TypeScript `strict` · Tailwind CSS **v4**
+  (CSS-first `@theme` in `app/globals.css` — the Aurora tokens live there, no `tailwind.config.js`).
