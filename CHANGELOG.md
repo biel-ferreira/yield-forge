@@ -42,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required `NonAdviceDisclaimer` (FR-014), with Buy/Sell/order affordances deliberately omitted.
   Seeded into the `yieldforge-aurora` Claude Design project (ADR-0006); preview sources under
   `docs/05-design/ds/`.
+- **SPEC-200 (App Foundation) approved + PLAN-200 drafted.** The first frontend spec is flipped to
+  **Approved**; the copilot is reframed as a **global floating widget** (the shell owns an overlay
+  slot; there is **no Chat route** — SPEC-215 implements the widget). **PLAN-200** lays out the build
+  in 8 frontend-adapted phases (scaffold → tokens-as-code → typed API client + `money.ts` + SSE
+  transport → auth/session → shell + copilot slot → quality gates → tests → docs), resolving five
+  decisions: a same-origin **Next.js proxy** for the SPEC-003 cookie, CSR-by-default, Vitest + RTL +
+  Playwright, login/register inside SPEC-200, and building the streaming transport up front. Adds the
+  full **Dashboard page mockup** (`docs/05-design/ds/pages/dashboard.html`) — app shell + summary +
+  allocation + health + insights + the floating copilot — which doubles as the shell spec.
 
 - **SPEC-107 — Projections (Income & Net Worth)**: two deterministic, reproducible forward-looking
   views over the current portfolio — a **passive-income projection** (monthly/annual across

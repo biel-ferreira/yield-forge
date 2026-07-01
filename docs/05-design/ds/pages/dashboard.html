@@ -1,0 +1,298 @@
+<!-- @dsCard group="Aurora — Pages" name="Dashboard (full page)" subtitle="App shell + summary + allocation + health + insights" -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YieldForge — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary:#e9a94c; --primary-active:#d3913a; --primary-tint:#f4c47e; --on-primary:#120f0a;
+    --canvas:#0a0a0c; --surface:#141317; --elevated:#1c1b21; --hairline:#26242b;
+    --body:#e7e5e4; --muted:#8b8681; --muted-strong:#b6b1ab; --on-dark:#fff;
+    --gain:#34d399; --loss:#fb7185; --caution:#fbbf24; --info:#38bdf8;
+    --a1:#6366f1; --a2:#d946ef; --a3:#f59e0b; --a4:#34d399; --a5:#38bdf8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--body); font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif; }
+  .num { font-family:"IBM Plex Mono",ui-monospace,monospace; font-feature-settings:"tnum" 1; }
+  .serif { font-family:"Fraunces",Georgia,serif; }
+  a { text-decoration:none; color:inherit; }
+
+  /* ---- app shell ---- */
+  .app { display:grid; grid-template-columns:248px 1fr; min-height:100vh; position:relative; }
+  .app::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(50% 40% at 14% 4%, rgba(99,102,241,.18), transparent 60%),
+      radial-gradient(45% 38% at 92% 12%, rgba(217,70,239,.12), transparent 60%),
+      radial-gradient(55% 45% at 80% 100%, rgba(56,189,248,.12), transparent 60%),
+      radial-gradient(35% 35% at 45% 55%, rgba(233,169,76,.06), transparent 60%); }
+
+  /* ---- sidebar ---- */
+  .sidebar { position:relative; z-index:1; background:var(--surface); border-right:1px solid var(--hairline);
+    padding:20px 14px; display:flex; flex-direction:column; }
+  .brand { display:flex; align-items:center; gap:10px; padding:6px 8px 20px; }
+  .brand .mark { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--primary),var(--a2));
+    box-shadow:0 0 20px -4px rgba(233,169,76,.6); }
+  .brand .name { font-family:"Fraunces",serif; font-size:18px; font-weight:600; color:#fff; }
+  .nav { display:flex; flex-direction:column; gap:2px; margin-top:8px; }
+  .nav a { display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:8px; color:var(--muted-strong);
+    font-size:14px; font-weight:500; }
+  .nav a svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.7; }
+  .nav a:hover { background:var(--elevated); color:var(--body); }
+  .nav a.active { background:var(--elevated); color:#fff; box-shadow:inset 2px 0 0 var(--primary); }
+  .nav a.active svg { stroke:var(--primary); }
+  .side-foot { margin-top:auto; display:flex; align-items:center; gap:10px; padding:12px 8px; border-top:1px solid var(--hairline); }
+  .avatar { width:32px; height:32px; border-radius:9999px; background:linear-gradient(135deg,#6366f1,#d946ef); }
+  .side-foot .who { font-size:13px; }
+  .side-foot .who b { color:#fff; display:block; font-weight:600; }
+  .side-foot .who span { color:var(--muted); font-size:12px; }
+
+  /* ---- content ---- */
+  .content { position:relative; z-index:1; padding:24px 32px 40px; max-width:1200px; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
+  .topbar .h { font-family:"Fraunces",serif; font-size:28px; font-weight:600; color:#fff; }
+  .topbar .h span { display:block; font-family:Inter,sans-serif; font-size:13px; font-weight:400; color:var(--muted); margin-top:2px; }
+  .topbar .tools { display:flex; align-items:center; gap:10px; }
+  .toggle { display:flex; background:var(--surface); border:1px solid var(--hairline); border-radius:9999px; padding:3px; }
+  .toggle button { border:0; background:transparent; color:var(--muted); font-size:12px; font-weight:600; padding:6px 12px; border-radius:9999px; cursor:pointer; }
+  .toggle button.on { background:var(--elevated); color:#fff; }
+  .btn-outline { background:rgba(233,169,76,.06); color:var(--primary-tint); border:1px solid rgba(233,169,76,.5);
+    border-radius:10px; padding:10px 16px; font-weight:600; font-size:13px; cursor:pointer; box-shadow:0 0 22px -8px rgba(233,169,76,.5); }
+
+  .card { background:linear-gradient(180deg,rgba(255,255,255,.03),transparent), var(--surface);
+    border:1px solid var(--hairline); border-radius:20px; box-shadow:0 26px 60px -34px rgba(99,102,241,.5); }
+  .card-title { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+
+  /* hero */
+  .hero { padding:26px 28px; margin-bottom:16px; }
+  .hero .val { font-size:44px; font-weight:600; color:#fff; margin:6px 0 2px; }
+  .hero .val sup { font-size:19px; color:var(--muted-strong); }
+  .hero .growth { font-size:13px; color:var(--gain); }
+  .bar { height:12px; border-radius:9999px; margin:20px 0 12px;
+    background:linear-gradient(90deg,var(--a1) 0 26%,var(--a3) 26% 50%,var(--a2) 50% 70%,var(--a4) 70% 86%,var(--a5) 86% 100%);
+    box-shadow:0 0 22px -2px rgba(99,102,241,.5); }
+  .barleg { display:flex; flex-wrap:wrap; gap:16px; }
+  .barleg .l { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--body); }
+  .barleg .d { width:9px; height:9px; border-radius:9999px; box-shadow:0 0 8px 1px currentColor; }
+  .barleg .p { color:var(--muted); font-family:"IBM Plex Mono",monospace; }
+
+  /* metric row */
+  .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
+  .metric { padding:18px 20px; }
+  .metric .k { font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+  .metric .v { font-size:23px; font-weight:600; color:#fff; margin-top:8px; }
+  .metric .s { font-size:12px; margin-top:4px; }
+  .up { color:var(--gain); } .down { color:var(--loss); }
+
+  /* two-column band */
+  .band { display:grid; grid-template-columns:1.15fr 1fr; gap:16px; margin-bottom:16px; }
+  .pad { padding:22px 24px; }
+
+  /* donut */
+  .donut-row { display:flex; gap:24px; align-items:center; margin-top:16px; }
+  .donut { width:150px; height:150px; border-radius:9999px; flex:0 0 auto; position:relative;
+    background:conic-gradient(var(--a1) 0 26%, var(--a3) 26% 50%, var(--a2) 50% 70%, var(--a4) 70% 86%, var(--a5) 86% 100%);
+    box-shadow:0 0 36px -6px rgba(99,102,241,.5); }
+  .donut::after { content:""; position:absolute; inset:22px; border-radius:9999px; background:var(--surface); }
+  .donut .c { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; }
+  .donut .c .k { font-size:10px; color:var(--muted); text-transform:uppercase; }
+  .donut .c .v { font-family:"IBM Plex Mono",monospace; font-size:16px; font-weight:600; color:#fff; }
+  .seclist { flex:1; }
+  .seclist .r { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--hairline); font-size:13px; }
+  .seclist .r:first-child { border-top:0; }
+  .seclist .d { width:9px; height:9px; border-radius:9999px; box-shadow:0 0 8px 1px currentColor; }
+  .seclist .t { flex:1; color:var(--body); }
+  .seclist .p { font-family:"IBM Plex Mono",monospace; color:#fff; }
+
+  /* health */
+  .gauge { width:132px; height:132px; border-radius:9999px; flex:0 0 auto; position:relative;
+    background:conic-gradient(from 180deg,#4b4a56 0%, var(--caution) 40%, var(--primary) 62%, var(--gain) 78% 100%);
+    box-shadow:0 0 40px -8px rgba(233,169,76,.5); }
+  .gauge::after { content:""; position:absolute; inset:13px; border-radius:9999px; background:var(--surface); }
+  .gauge .c { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; }
+  .gauge .c .v { font-family:"IBM Plex Mono",monospace; font-size:34px; font-weight:600; color:#fff; line-height:1; }
+  .gauge .c .k { font-size:11px; color:var(--gain); margin-top:3px; font-weight:600; }
+  .factors { flex:1; }
+  .factors .f { padding:7px 0; border-top:1px solid var(--hairline); }
+  .factors .f:first-child { border-top:0; }
+  .factors .top { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; color:var(--body); }
+  .factors .badge { font-size:11px; font-weight:600; padding:1px 8px; border-radius:9999px; }
+  .b-ok { color:var(--gain); background:rgba(52,211,153,.12); }
+  .b-warn { color:var(--caution); background:rgba(251,191,36,.12); }
+  .track { height:5px; border-radius:9999px; background:var(--elevated); overflow:hidden; }
+  .track > i { display:block; height:100%; border-radius:9999px; }
+
+  /* insights */
+  .insights-head { display:flex; align-items:center; justify-content:space-between; margin:6px 2px 12px; }
+  .insights-head .t { font-family:"Fraunces",serif; font-size:20px; color:#fff; }
+  .insights-head a { font-size:13px; color:var(--primary-tint); }
+  .ins-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .insight { position:relative; background:var(--surface); border:1px solid var(--hairline); border-radius:14px; padding:20px 20px 20px 22px; overflow:hidden; }
+  .insight::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:linear-gradient(180deg,var(--primary),var(--a2)); box-shadow:0 0 16px 1px rgba(233,169,76,.6); }
+  .insight .cat { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:7px; }
+  .insight .hl { font-size:15px; font-weight:600; color:#fff; line-height:1.45; }
+  .insight .why { margin-top:11px; padding:10px 12px; background:var(--elevated); border-radius:10px; }
+  .insight .why b { display:block; font-size:10px; text-transform:uppercase; color:var(--primary-tint); margin-bottom:3px; letter-spacing:.04em; }
+  .insight .why p { margin:0; font-size:12.5px; color:var(--muted-strong); line-height:1.55; }
+  .chip-caution { display:inline-block; font-size:11px; font-weight:600; color:var(--caution); background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.25); padding:2px 9px; border-radius:9999px; margin-bottom:8px; }
+  .disclaimer { display:flex; gap:9px; align-items:center; font-size:12px; font-weight:500; color:var(--muted-strong);
+    background:var(--elevated); border:1px solid var(--hairline); border-radius:10px; padding:10px 14px; margin-top:16px; }
+  .dot { flex:0 0 auto; width:15px; height:15px; border-radius:9999px; border:1.5px solid var(--info); color:var(--info); font-size:10px; font-weight:700; text-align:center; line-height:13px; }
+
+  /* ---- floating copilot widget (global, over any page) ---- */
+  .copilot { position:fixed; right:28px; bottom:28px; width:384px; z-index:60; }
+  .cp-panel { display:flex; flex-direction:column; height:568px; border-radius:20px; overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.03),transparent), var(--surface);
+    border:1px solid rgba(233,169,76,.28); box-shadow:0 40px 90px -28px rgba(0,0,0,.75), 0 0 70px -22px rgba(233,169,76,.4); }
+  .cp-head { display:flex; align-items:center; gap:10px; padding:13px 12px 13px 14px; border-bottom:1px solid var(--hairline);
+    background:linear-gradient(180deg,rgba(233,169,76,.10),transparent); }
+  .cp-ic { width:30px; height:30px; border-radius:9px; flex:0 0 auto; background:linear-gradient(135deg,var(--primary),var(--a2));
+    box-shadow:0 0 18px -3px rgba(233,169,76,.7); }
+  .cp-t { flex:1; } .cp-t b { display:block; color:#fff; font-size:14px; font-weight:600; }
+  .cp-t span { font-size:11px; color:var(--muted); }
+  .cp-btn { background:transparent; border:0; color:var(--muted); font-size:17px; width:28px; height:28px; border-radius:8px; cursor:pointer; }
+  .cp-btn:hover { background:var(--elevated); color:#fff; }
+  .cp-thread { flex:1; overflow-y:auto; padding:16px 14px; display:flex; flex-direction:column; gap:10px; }
+  .cp-turn { display:flex; } .cp-turn.u { justify-content:flex-end; }
+  .cp-bub { max-width:86%; padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.5; }
+  .cp-bub.a { background:var(--elevated); color:var(--body); border:1px solid var(--hairline); border-bottom-left-radius:5px; }
+  .cp-bub.a b { color:#fff; } .cp-bub .num { font-family:"IBM Plex Mono",monospace; color:#fff; }
+  .cp-bub.u { background:var(--primary); color:var(--on-primary); border-bottom-right-radius:5px; }
+  .cp-typing { display:inline-flex; gap:4px; padding:12px 14px; background:var(--elevated); border:1px solid var(--hairline);
+    border-radius:14px; border-bottom-left-radius:5px; }
+  .cp-typing span { width:6px; height:6px; border-radius:9999px; background:var(--muted-strong); }
+  .cp-disc { display:flex; gap:8px; align-items:center; font-size:11px; color:var(--muted); padding:8px 14px; border-top:1px solid var(--hairline); }
+  .cp-composer { display:flex; gap:8px; padding:11px 12px; border-top:1px solid var(--hairline); }
+  .cp-composer input { flex:1; background:var(--elevated); border:1px solid var(--hairline); border-radius:10px; padding:10px 12px;
+    color:#fff; font-family:Inter,sans-serif; font-size:13.5px; outline:none; }
+  .cp-composer input::placeholder { color:var(--muted); }
+  .cp-send { background:var(--primary); color:var(--on-primary); border:0; border-radius:10px; width:42px; cursor:pointer;
+    font-size:15px; box-shadow:0 0 20px -6px rgba(233,169,76,.6); }
+  /* collapsed launcher (shown as a hint pill above the panel) */
+  .cp-hint { position:absolute; right:2px; bottom:calc(100% + 12px); font-size:11px; color:var(--muted);
+    background:var(--elevated); border:1px solid var(--hairline); border-radius:9999px; padding:5px 11px; white-space:nowrap; }
+  .cp-hint b { color:var(--primary-tint); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><span class="mark"></span><span class="name">YieldForge</span></div>
+    <nav class="nav">
+      <a class="active" href="#"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Painel</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/></svg>Carteira</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M5 12H2M22 12h-3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/><circle cx="12" cy="12" r="3.5"/></svg>Insights</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M20.8 5.6a5 5 0 0 0-8.8-1.2A5 5 0 0 0 3.2 5.6C1.5 8 3 12 12 20c9-8 10.5-12 8.8-14.4Z"/></svg>Saúde</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l4-5 3 3 5-7"/></svg>Projeções</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Perfil</a>
+    </nav>
+    <div class="side-foot"><span class="avatar"></span><span class="who"><b>Rafael M.</b><span>Plano gratuito</span></span></div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+    <div class="topbar">
+      <div class="h">Olá, Rafael<span>Segunda-feira, 1 de julho · sua carteira num relance</span></div>
+      <div class="tools">
+        <div class="toggle"><button class="on">Escuro</button><button>Claro</button></div>
+        <button class="btn-outline">+ Adicionar ativo</button>
+      </div>
+    </div>
+
+    <!-- Hero balance -->
+    <section class="card hero">
+      <div class="card-title">Patrimônio total</div>
+      <div class="val num">R$ 297.924<sup>,80</sup></div>
+      <div class="growth num">▲ +5,3% no mês &nbsp;·&nbsp; +R$ 14.980,12</div>
+      <div class="bar"></div>
+      <div class="barleg">
+        <span class="l"><span class="d" style="background:var(--a1);color:var(--a1)"></span>Logística <span class="p">26%</span></span>
+        <span class="l"><span class="d" style="background:var(--a3);color:var(--a3)"></span>Shoppings <span class="p">24%</span></span>
+        <span class="l"><span class="d" style="background:var(--a2);color:var(--a2)"></span>Papel (CRI) <span class="p">20%</span></span>
+        <span class="l"><span class="d" style="background:var(--a4);color:var(--a4)"></span>Lajes corp. <span class="p">16%</span></span>
+        <span class="l"><span class="d" style="background:var(--a5);color:var(--a5)"></span>Outros <span class="p">14%</span></span>
+      </div>
+    </section>
+
+    <!-- Metric row -->
+    <section class="metrics">
+      <div class="card metric"><div class="k">Total investido</div><div class="v num">R$ 282.944,68</div><div class="s up num">▲ +5,3% de valorização</div></div>
+      <div class="card metric"><div class="k">Renda passiva / mês</div><div class="v num">R$ 2.184,30</div><div class="s" style="color:var(--muted-strong)">DY médio 0,77% a.m.</div></div>
+      <div class="card metric"><div class="k">Resultado no mês</div><div class="v num down">− R$ 1.204,49</div><div class="s down num">▼ −0,4%</div></div>
+    </section>
+
+    <!-- Allocation + Health -->
+    <section class="band">
+      <div class="card pad">
+        <div class="card-title">Exposição por setor (FIIs)</div>
+        <div class="donut-row">
+          <div class="donut"><div class="c"><span class="k">FIIs</span><span class="v">R$ 98,7k</span></div></div>
+          <div class="seclist">
+            <div class="r"><span class="d" style="background:var(--a1);color:var(--a1)"></span><span class="t">Logística</span><span class="p">26%</span></div>
+            <div class="r"><span class="d" style="background:var(--a3);color:var(--a3)"></span><span class="t">Shoppings</span><span class="p">24%</span></div>
+            <div class="r"><span class="d" style="background:var(--a2);color:var(--a2)"></span><span class="t">Papel (CRI)</span><span class="p">20%</span></div>
+            <div class="r"><span class="d" style="background:var(--a4);color:var(--a4)"></span><span class="t">Lajes corporativas</span><span class="p">16%</span></div>
+            <div class="r"><span class="d" style="background:var(--a5);color:var(--a5)"></span><span class="t">Híbrido / outros</span><span class="p">14%</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card pad">
+        <div class="card-title">Health Score</div>
+        <div class="donut-row" style="gap:20px">
+          <div class="gauge"><div class="c"><span class="v">78</span><span class="k">Saudável</span></div></div>
+          <div class="factors">
+            <div class="f"><div class="top"><span>Diversificação</span><span class="badge b-ok">Boa</span></div><div class="track"><i style="width:82%;background:var(--gain)"></i></div></div>
+            <div class="f"><div class="top"><span>Concentração</span><span class="badge b-warn">Atenção</span></div><div class="track"><i style="width:48%;background:var(--caution)"></i></div></div>
+            <div class="f"><div class="top"><span>Liquidez</span><span class="badge b-ok">Boa</span></div><div class="track"><i style="width:74%;background:var(--gain)"></i></div></div>
+            <div class="f"><div class="top"><span>Alinhamento</span><span class="badge b-ok">Boa</span></div><div class="track"><i style="width:80%;background:var(--gain)"></i></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Insights -->
+    <div class="insights-head"><span class="t">Insights do copiloto</span><a href="#">ver todos →</a></div>
+    <section class="ins-grid">
+      <div class="insight">
+        <div class="cat">Alocação</div>
+        <div class="hl">Sua exposição a FIIs de logística está acima da faixa típica de diversificação.</div>
+        <div class="why"><b>Por quê</b><p>Logística é 26% da carteira e 42% dos seus FIIs. Acima de ~40% num único segmento eleva a sensibilidade a um choque setorial.</p></div>
+      </div>
+      <div class="insight">
+        <span class="chip-caution">Atenção</span>
+        <div class="cat">Contexto de mercado</div>
+        <div class="hl">A SELIC atual favorece a parcela de renda fixa da sua estratégia de aportes.</div>
+        <div class="why"><b>Por quê</b><p>Com a SELIC em 10,50% a.a., pós-fixados oferecem retorno real relevante — uma consideração para renda passiva, não uma ordem.</p></div>
+      </div>
+    </section>
+    <div class="disclaimer"><span class="dot">i</span><span>Isto é conteúdo educacional, não recomendação de investimento. As decisões são suas.</span></div>
+  </main>
+
+  <!-- Floating copilot widget (global — collapses to a gold launcher bubble) -->
+  <div class="copilot">
+    <div class="cp-hint">💬 Colapsa em um botão flutuante <b>·</b> disponível em todas as telas</div>
+    <div class="cp-panel">
+      <div class="cp-head">
+        <span class="cp-ic"></span>
+        <div class="cp-t"><b>Copiloto</b><span>Pergunte sobre sua carteira</span></div>
+        <button class="cp-btn" title="Minimizar">–</button>
+        <button class="cp-btn" title="Fechar">×</button>
+      </div>
+      <div class="cp-thread">
+        <div class="cp-turn a"><div class="cp-bub a">Olá, Rafael 👋 Posso explicar seu Health Score, sua alocação, ou ajudar a pensar onde aportar. O que você quer ver?</div></div>
+        <div class="cp-turn u"><div class="cp-bub u">Tenho R$ 2.000 pra aportar. Onde olhar?</div></div>
+        <div class="cp-turn a"><div class="cp-bub a">Sua maior concentração é <b>logística</b> (<span class="num">26%</span>). Para equilibrar, vale <b>avaliar</b> lajes corporativas (<span class="num">16%</span>) e a renda fixa, que a SELIC atual favorece. São áreas para analisar, não uma ordem.</div></div>
+        <div class="cp-turn a"><div class="cp-typing"><span></span><span></span><span></span></div></div>
+      </div>
+      <div class="cp-disc"><span class="dot">i</span><span>Conteúdo educacional, não recomendação.</span></div>
+      <div class="cp-composer"><input placeholder="Pergunte ao copiloto…" /><button class="cp-send">➤</button></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -6,10 +6,10 @@
 | ------------ | --------------------------------------------------------------------- |
 | Feature Name | Frontend App Foundation                                               |
 | Feature ID   | SPEC-200                                                              |
-| Version      | 0.1.0                                                                 |
-| Status       | Draft                                                                 |
+| Version      | 1.0.0                                                                 |
+| Status       | Approved                                                              |
 | Author       | Gabigol                                                              |
-| Last Updated | 2026-06-30                                                            |
+| Last Updated | 2026-07-01                                                            |
 | Related PRD  | [§11–§12](../01-product/PRD.md); [ADR-0004](../04-architecture/adr/ADR-0004-frontend-repository-strategy.md), [ADR-0006](../04-architecture/adr/ADR-0006-frontend-ui-stack-and-design-system.md) |
 
 ---
@@ -112,14 +112,20 @@ No money arithmetic happens on the client in the MVP.
 
 ### FR-2006 — App shell, routing & error/loading states
 
-A responsive app shell (nav, authenticated layout) with route-level loading and error
-boundaries and a consistent `{ "error": "..." }` envelope handling.
+A responsive app shell (sidebar nav + top bar, authenticated layout) with route-level
+loading and error boundaries and a consistent `{ "error": "..." }` envelope handling.
+The shell also exposes a **global overlay slot** for the floating copilot launcher.
 
 #### Acceptance Criteria
 
-- [ ] Authenticated layout with navigation to the (stubbed) feature routes.
+- [ ] Authenticated layout (248px sidebar + top bar + content) with navigation to the
+      (stubbed) feature routes — Painel, Carteira, Insights, Saúde, Projeções, Perfil.
+      There is **no Chat route**: the copilot is a global floating widget.
+- [ ] The shell provides a **global overlay slot** that mounts the floating copilot
+      launcher on every authenticated screen (the widget itself is implemented in
+      SPEC-215; SPEC-200 only owns the mount point + open/closed shell state).
 - [ ] Loading and error states render from a shared pattern; API `{"error":...}` surfaces cleanly.
-- [ ] Responsive at mobile + desktop breakpoints.
+- [ ] Responsive at mobile + desktop breakpoints (sidebar → bottom tabs on mobile).
 
 ### FR-2007 — Zero-cost deploy from `web/`
 
