@@ -9,8 +9,8 @@
 | Related PRD  | [PRD.md](../01-product/PRD.md) — FR-023, FR-024, FR-025, FR-013, FR-014, FR-019/020/021, Epic 10, §6 Principles |
 | Related ADRs | [ADR-0005](../04-architecture/adr/ADR-0005-conversational-copilot-orchestration.md), [ADR-0003](../04-architecture/adr/ADR-0003-zero-cost-and-pluggable-llm.md), [ADR-0002](../04-architecture/adr/ADR-0002-tech-stack-and-layering.md) |
 | Version      | 0.1.0                                                  |
-| Status       | Draft                                                  |
-| Plan         | PLAN-108 (authored next via /plan-new 108, after approval) |
+| Status       | Approved                                               |
+| Plan         | PLAN-108 (authored next via /plan-new 108)             |
 
 ---
 
@@ -49,9 +49,11 @@ what keeps the answer a reasoned *consideration* rather than an order.
   composes the bounded prior-turn context + facts + the new question into an `insight.InsightRequest`
   with a **`chat` task**, calls the `Insighter` (gates included), and persists + returns the gated
   assistant reply with its explanation and the non-advice disclaimer.
-- **Lightweight intent routing** so a *"tenho R$X pra aportar"* turn is grounded with
-  contribution/rebalancing facts (reusing SPEC-105 when present; degrading to allocation facts
-  otherwise), while a general turn is grounded with the standard portfolio fact set.
+- **Lightweight intent routing** over the now-complete engine set: a *"tenho R$X pra aportar"* turn
+  is grounded with the **SPEC-105 Rebalancing Assistant** facts; a *"como fica meu patrimônio daqui a
+  N anos?"* turn is grounded with the **SPEC-107 Projections** facts; a general turn is grounded with
+  the standard SPEC-104 portfolio fact set. Each falls back to the general facts if its engine errors
+  (runtime resilience), never a hard failure.
 - **Conversation persistence** — per-user threads + messages, **bounded and clearable** (rolling
   eviction at a configurable cap), consistent with the FR-022 memory posture.
 - HTTP endpoints (per-user, auth-protected): create/continue a conversation, list threads, read a
@@ -96,17 +98,23 @@ what keeps the answer a reasoned *consideration* rather than an order.
       never float; the same portfolio state + question yields the same facts.
 - [ ] The fact snapshot is built for `auth.UserID(ctx)` only — no cross-user data.
 
-### FR-1083 — Contribution-Strategy Intent ("tenho R$X pra aportar") (FR-024, FR-011)
+### FR-1083 — Strategy Intents: Contribution (FR-024, FR-011) & Projection (FR-024, FR-016/017)
+
+The engine deterministically classifies a turn and grounds it with the matching engine's facts, so
+the copilot orchestrates the whole reasoning set (SPEC-104 / 105 / 107) behind one chat surface.
 
 #### Acceptance Criteria
 
-- [ ] When a turn expresses a **monthly contribution** intent with an amount, the engine grounds it
-      with contribution/rebalancing facts — reusing the SPEC-105 Rebalancing Assistant when present,
-      and **degrading to allocation facts** (asset-class mix vs the profile) when SPEC-105 is not yet
-      built — and the reply frames *areas* and *named candidate assets* as considerations, never an
-      order.
-- [ ] A parsed contribution amount is handled as `int64` centavos (never float); an unparseable or
-      absent amount falls back to the general portfolio fact set (no error).
+- [ ] A **contribution** turn ("tenho R$2.000 pra aportar") grounds with the **SPEC-105 Rebalancing
+      Assistant** facts (computed split + grounded candidates); the reply frames *areas* and *named
+      candidate assets* as considerations, never an order. The amount is parsed to `int64` centavos
+      (never float).
+- [ ] A **projection** turn ("como fica meu patrimônio daqui a 10 anos?", "quanto de renda passiva
+      isso gera?") grounds with the **SPEC-107 Projections** facts (income + net-worth scenarios); the
+      reply is framed as a labelled estimate. An optional horizon is parsed to an integer (bounded);
+      absent → the default horizon.
+- [ ] An unparseable/absent amount or horizon falls back to the general SPEC-104 fact set (no error);
+      if the routed engine errors at runtime, the turn degrades to the general facts (resilience).
 
 ### FR-1084 — Explainability, by construction (FR-013)
 
@@ -240,8 +248,8 @@ Closed enum — `user` | `assistant`. `type Role string` + `ParseRole(s string) 
 
 ### Value object: Intent (internal)
 
-Closed enum classifying a turn for grounding — `general` | `contribution`. Parsed from the message
-deterministically (amount detection); never trusted from the client.
+Closed enum classifying a turn for grounding — `general` | `contribution` | `projection`. Parsed
+from the message deterministically (amount / horizon detection); never trusted from the client.
 
 ### Entities
 
@@ -272,10 +280,16 @@ type FactSource interface {
     BuildFacts(ctx context.Context, userID string) (insight.Facts, error)
 }
 
-// ContributionFactSource grounds a "tenho R$X pra aportar" turn (the SPEC-105 rebalancer when
-// present). Optional at the wiring edge; absence degrades to the general FactSource.
+// ContributionFactSource grounds a "tenho R$X pra aportar" turn (the SPEC-105 rebalancer). A
+// runtime error degrades the turn to the general FactSource (resilience).
 type ContributionFactSource interface {
     BuildContributionFacts(ctx context.Context, userID string, amountCentavos int64) (insight.Facts, error)
+}
+
+// ProjectionFactSource grounds a "daqui a N anos" / passive-income turn (the SPEC-107 projections).
+// A runtime error degrades the turn to the general FactSource (resilience).
+type ProjectionFactSource interface {
+    BuildProjectionFacts(ctx context.Context, userID string, monthlyContributionCentavos int64, horizonYears int) (insight.Facts, error)
 }
 
 // Repository persists threads + messages, bounded and clearable, per-user scoped.
@@ -335,8 +349,9 @@ transient facts, never persisted as floats).
 | New conversation (no `thread_id`) | Create a thread for the context user; title from the first message. |
 | Empty portfolio | Conversation works; empty-state facts; copilot explains no holdings yet (FR-1087). |
 | Profile not set | Build facts without profile-specific fields; still answer portfolio/market questions. |
-| "tenho R$X pra aportar" + SPEC-105 absent | Degrade to allocation facts; still framed as considerations (FR-1083). |
-| Contribution amount unparseable | Fall back to general fact set; no error. |
+| "tenho R$X pra aportar" | Route to the SPEC-105 contribution facts; if the rebalancer errors at runtime, degrade to general facts; framed as considerations (FR-1083). |
+| "daqui a N anos / renda passiva" | Route to the SPEC-107 projection facts; framed as a labelled estimate; a projection error degrades to general facts. |
+| Contribution amount / horizon unparseable | Fall back to the general fact set; no error. |
 | LLM unavailable | "Copilot temporarily unavailable" reply for the turn; thread stays readable (FR-1087). |
 | Gate rejects the output | Safe "considerações, não ordens" reply; no ungated text surfaced (FR-1085). |
 | `thread_id` not owned / unknown | `ErrThreadNotFound` → `404`; never an existence oracle (double-scoped `WHERE id=$1 AND user_id=$2`). |
@@ -378,13 +393,13 @@ transient facts, never persisted as floats).
 ### Unit Tests
 
 - **Intent classifier** — table-driven: contribution phrasings with/without a parseable amount
-  ("tenho 2 mil pra aportar", "R$ 1.500", "quero investir esse mês") vs general questions; amount
-  parsed to `int64` centavos; unparseable → general.
+  ("tenho 2 mil pra aportar", "R$ 1.500") vs projection phrasings ("daqui a 10 anos", "quanto de renda
+  passiva") vs general questions; amount → `int64` centavos, horizon → int; unparseable → general.
 - **Engine** with hand-written fakes (a deterministic `insight.Fake` Insighter + fake `FactSource` /
-  `ContributionFactSource` / `Repository`): a grounded turn round-trips and persists; bounded prior-turn
-  window; contribution routing (and degradation when `ContributionFactSource` is nil); degradation
-  (Insighter `ErrInsightsUnavailable` → unavailable reply); gate-rejected turn → safe reply; empty
-  portfolio.
+  `ContributionFactSource` / `ProjectionFactSource` / `Repository`): a grounded turn round-trips and
+  persists; bounded prior-turn window; contribution + projection routing (and runtime degradation to
+  general facts when a routed source errors); degradation (Insighter `ErrInsightsUnavailable` →
+  unavailable reply); gate-rejected turn → safe reply; empty portfolio.
 - **Memory** — rolling eviction at the cap; `ClearThreads`; per-user isolation.
 - **Handler** — identity-from-context, body-`user_id` rejected, `404` on unowned thread, `401`,
   empty/degraded shapes.
@@ -420,7 +435,7 @@ transient facts, never persisted as floats).
 
 ---
 
-## 14. Decisions (proposed — confirm in review)
+## 14. Decisions (resolved)
 
 | # | Decision | Recommendation |
 | - | -------- | -------------- |
@@ -428,7 +443,7 @@ transient facts, never persisted as floats).
 | D2 | Grounding strategy | **Pre-built fact snapshot per turn** (reuse SPEC-104 Fact Builder), **not** an agentic live tool-call loop. This keeps the MVP deterministic and zero-cost while leaving the `Insighter` seam intact for the Phase 2 multi-agent CIO + Phase 3 MCP tool-calling evolution (ADR-0005). |
 | D3 | Response delivery | **Full message** (request/response) for MVP; **SSE streaming deferred** — the cache + a spinner suffice (Open Question). |
 | D4 | Conversation memory | Persist threads/messages, **bounded by a configurable per-user cap with rolling eviction**, user-clearable — the FR-022 posture applied to chat (FR-025). Distinct from the Insighter cache. |
-| D5 | Contribution intent | Detect a "tenho R$X" turn deterministically and route to contribution/rebalancing facts (SPEC-105 when present, else allocation facts). Keeps "qual a melhor estratégia de aporte do mês" first-class without coupling chat to SPEC-105's availability. |
+| D5 | Strategy-intent routing (105 + 107) | Detect **contribution** and **projection** turns deterministically and ground each with the matching engine's facts (SPEC-105 rebalancing; SPEC-107 projections), else the general SPEC-104 facts. **Ground from the DETERMINISTIC computed data, not a second LLM call:** SPEC-107's projection service is already LLM-free (call it directly); for SPEC-105, ground from the computed **split** (not `Rebalance`, which runs the per-area LLM) — so a chat turn never double-invokes/double-charges the LLM. This likely means exposing a small deterministic facts/split method on the SPEC-105 service (a plan-level integration detail). |
 | D6 | Relationship to FR-022 (insight history) | FR-022 (per-category insight history, owned by SPEC-104) and FR-025 (conversation threads, this spec) are **distinct memories**; both share the bounded/clearable/per-user/non-advice posture. No overlap in storage. |
 | D7 | Endpoint shape | A single `POST /chat/messages` that creates-or-continues a thread (optional `thread_id`), plus `GET /chat/threads`, `GET /chat/threads/{id}`, `DELETE /chat/threads/{id}`, `DELETE /chat/threads` (clear all). |
 
