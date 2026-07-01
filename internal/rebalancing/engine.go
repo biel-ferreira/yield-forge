@@ -51,6 +51,19 @@ func (s *Service) Rebalance(ctx context.Context, userID string, contribution Con
 	return s.generate(ctx, userID, facts, split, universe, opts)
 }
 
+// BuildContributionFacts returns the DETERMINISTIC grounding facts for a contribution — the base
+// portfolio facts + the FII universe + the computed split — WITHOUT any LLM call. It is the seam the
+// Conversational Copilot (SPEC-108) uses to ground a "tenho R$X pra aportar" chat turn without
+// re-running the per-area rebalancing LLM (no double-generate). A non-positive amount is an error.
+func (s *Service) BuildContributionFacts(ctx context.Context, userID string, amountCentavos int64) (insight.Facts, error) {
+	contribution, err := ParseContribution(amountCentavos)
+	if err != nil {
+		return nil, fmt.Errorf("contribution facts: %w", err)
+	}
+	facts, _, _, err := s.buildFacts(ctx, userID, contribution)
+	return facts, err
+}
+
 // buildFacts reuses the published seam + the FII universe and computes the split, all inside the
 // rebalancing.facts span (FR-1058).
 func (s *Service) buildFacts(ctx context.Context, userID string, contribution Contribution) (insight.Facts, []AreaShare, []marketdata.FIIQuote, error) {

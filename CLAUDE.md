@@ -154,5 +154,6 @@ Done: SPEC-001 (skeleton), SPEC-002 (persistence), SPEC-003 (auth), SPEC-004
 (observability), SPEC-005 (Insighter port + LLM adapters), SPEC-006 (MarketDataProvider
 port + ingestion worker), SPEC-101 (investor profile), SPEC-102 (portfolio management),
 SPEC-103 (dashboard), SPEC-104 (AI insight engine), SPEC-105 (AI rebalancing assistant), SPEC-106
-(portfolio health score), SPEC-107 (projections). Next: SPEC-108 (conversational copilot). See
+(portfolio health score), SPEC-107 (projections), SPEC-108 (conversational copilot). **The Phase-1
+backend (SPEC-001…108) is complete.** Next: the frontend track (SPEC-2xx). See
 [docs/02-specs/README.md](docs/02-specs/README.md) for the live index.

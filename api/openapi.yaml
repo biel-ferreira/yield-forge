@@ -525,6 +525,107 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /chat/messages:
+    post:
+      tags: [chat]
+      summary: Send a conversational-copilot turn (create or continue a thread)
+      operationId: postChatMessage
+      description: |-
+        A multi-turn, fact-grounded chat turn. Omit `thread_id` to start a new thread, or supply one
+        to continue it. Every reply is grounded in the user's computed facts and emitted only through
+        the gated Insighter — it carries an `explanation` and the non-advice `disclaimer`, never a
+        transaction order (FR-013/FR-014). `available` is false when the copilot was temporarily
+        unavailable (the turn is not persisted; the thread stays readable). Identity is from the
+        session; the content is length-bounded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                thread_id:
+                  type: string
+                  description: Optional — omit to start a new thread.
+                content:
+                  type: string
+                  description: The user's message (1–2000 characters).
+              required: [content]
+      responses:
+        "200":
+          description: The gated assistant reply (possibly degraded — see `available`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatReplyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /chat/threads:
+    get:
+      tags: [chat]
+      summary: List the caller's conversation threads
+      operationId: listChatThreads
+      responses:
+        "200":
+          description: The caller's threads, most-recently-updated first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatThreadResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [chat]
+      summary: Clear all the caller's conversation history
+      operationId: clearChatThreads
+      responses:
+        "204":
+          description: All threads cleared.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /chat/threads/{id}:
+    get:
+      tags: [chat]
+      summary: Read a thread and its messages
+      operationId: getChatThread
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The thread and its ordered messages.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThreadDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [chat]
+      summary: Delete a thread and its messages
+      operationId: deleteChatThread
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: The thread was deleted (or did not exist — no existence oracle).
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     cookieAuth:
@@ -568,6 +669,14 @@ components:
             $ref: "#/components/schemas/Error"
           example:
             error: holding not found
+    NotFound:
+      description: No such resource owned by the caller.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: thread not found
   schemas:
     Error:
       type: object
@@ -700,6 +809,62 @@ components:
           type: string
           format: date-time
       required: [id, ticker, quantity, average_price_centavos, created_at, updated_at]
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        explanation:
+          type: string
+          description: Present on assistant messages — the explainability gate guarantees it (FR-013).
+        created_at:
+          type: string
+          format: date-time
+      required: [id, role, content, created_at]
+    ChatThreadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, title, created_at, updated_at]
+    ChatThreadDetailResponse:
+      type: object
+      properties:
+        thread:
+          $ref: "#/components/schemas/ChatThreadResponse"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+      required: [thread, messages]
+    ChatReplyResponse:
+      type: object
+      description: The gated assistant reply to a chat turn.
+      properties:
+        thread_id:
+          type: string
+        message:
+          $ref: "#/components/schemas/ChatMessage"
+        disclaimer:
+          type: string
+          description: The non-advice disclaimer (FR-014).
+        available:
+          type: boolean
+          description: False when the copilot was temporarily unavailable (turn not persisted).
+      required: [thread_id, message, disclaimer, available]
     InsightsResponse:
       type: object
       description: AI insights aggregated across categories, with the non-advice disclaimer.

@@ -12,6 +12,8 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/auth"
 	authbcrypt "github.com/biel-ferreira/yield-forge/internal/auth/bcrypt"
 	authpostgres "github.com/biel-ferreira/yield-forge/internal/auth/postgres"
+	"github.com/biel-ferreira/yield-forge/internal/chat"
+	chatpostgres "github.com/biel-ferreira/yield-forge/internal/chat/postgres"
 	"github.com/biel-ferreira/yield-forge/internal/dashboard"
 	"github.com/biel-ferreira/yield-forge/internal/health"
 	insightengine "github.com/biel-ferreira/yield-forge/internal/insight/engine"
@@ -142,6 +144,10 @@ func run() error {
 	// Projections (SPEC-107): deterministic income + net-worth projections over the dashboard + holdings.
 	projectionService := projection.NewService(dashboardService, portfolioService)
 
+	// Conversational Copilot (SPEC-108): grounds each turn via the SPEC-104/105/107 deterministic
+	// facts and emits only through the shared gated Insighter; persists bounded per-user threads.
+	chatService := chat.NewService(chatpostgres.New(db), factBuilder, rebalancingEngine, projectionService, insighter, clock.System{})
+
 	router := transporthttp.NewRouter(transporthttp.Deps{
 		Logger:       logger,
 		Build:        buildinfo.Get(),
@@ -154,6 +160,7 @@ func run() error {
 		Rebalancing:  rebalancingEngine,
 		HealthScore:  healthService,
 		Projections:  projectionService,
+		Chat:         chatService,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,

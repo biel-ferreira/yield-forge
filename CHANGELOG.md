@@ -93,14 +93,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (a partial result when only some categories fail). The Fact Builder is a **published,
   reusable seam** the Conversational Copilot (SPEC-108) and SPEC-105/106 consume. No new
   tables; documented in `api/openapi.yaml`; PT-BR lesson `docs/lessons/SPEC-104-aula.html`.
-- **SPEC-108 — Conversational Copilot (Chat)** (Draft): a multi-turn, fact-grounded chat where the
-  investor asks free-form questions about their portfolio, allocation, market context, and the
-  current month's contribution strategy ("tenho R$X pra aportar"). It introduces no new reasoning
-  engine — it **orchestrates** the SPEC-104 Fact Builder and emits every reply through the SPEC-005
-  `Insighter` (so the explainability + non-advice gates hold turn by turn), adds a `chat`
-  `insight.Task`, persists **bounded, clearable** per-user threads/messages (FR-025), and is the
-  deliberate bridge into the Phase 2 multi-agent CIO + Phase 3 MCP. Registered in the specs index and
-  the plans index (PLAN-108 pending approval).
+- **SPEC-108 — Conversational Copilot (Chat)**: the capstone — a multi-turn, fact-grounded chat
+  where the investor asks free-form questions and every reply is grounded in computed facts and
+  emitted **only** through the gated `Insighter` (SPEC-005), so explainability (FR-013) and
+  non-advice (FR-014) hold turn by turn. It invents no new engine — a deterministic **intent
+  classifier** routes each turn to the matching engine's facts (general → SPEC-104 `BuildFacts`;
+  "tenho R$X pra aportar" → SPEC-105's computed split; "daqui a N anos" → SPEC-107 projections),
+  **grounding from the deterministic data with no second LLM call** (new `rebalancing.
+  BuildContributionFacts` + `projection.BuildProjectionFacts`, both LLM-free). Prior assistant text
+  is dialogue context, never a source of figures. Persists **bounded, clearable** per-user
+  threads/messages (rolling eviction, new migration `0006_chat`); a degraded/gate-rejected turn
+  returns a safe reply and is not persisted (the thread stays readable). New `POST /chat/messages`
+  (create/continue a thread, content ≤ 2000 chars) + `GET/DELETE /chat/threads[/{id}]` — all
+  auth-scoped, double-scoped (`ErrThreadNotFound` → 404, no existence oracle), spans/logs carry ids
+  only (never message content). Adds a `chat` `insight.Task` (gates unchanged); the deliberate bridge
+  into the Phase-2 multi-agent CIO + Phase-3 MCP (ADR-0005). Documented in `api/openapi.yaml`; PT-BR
+  lesson `docs/lessons/SPEC-108-aula.html`. **Completes the Phase-1 backend (SPEC-001…108).**
 - **ADR-0005 — Conversational Copilot Orchestration** (Proposed): ground each chat turn with a
   pre-built deterministic fact snapshot and emit only through the `Insighter` port; keep live agentic
   MCP tool-calling out of the MVP, behind the same seam, so the multi-agent CIO lands later as an

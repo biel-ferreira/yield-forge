@@ -45,7 +45,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-105 | SPEC-105 | AI Rebalancing Assistant         | Done |
 | PLAN-106 | SPEC-106 | Portfolio Health Score           | Done |
 | PLAN-107 | SPEC-107 | [Projections (Income & Net Worth)](PLAN-107-projections.md) | ✅ Done |
-| PLAN-108 | SPEC-108 | Conversational Copilot (Chat)    | Not started — authored after SPEC-108 is approved |
+| PLAN-108 | SPEC-108 | [Conversational Copilot (Chat)](PLAN-108-conversational-copilot.md) | ✅ Done |
 
 ## Standard Phase Order (per the template)
 

@@ -193,6 +193,11 @@ counts, freshness) — no payloads.
 | POST   | `/rebalancing`   | session | Contribution guidance — `{contribution_centavos, include_asset_shares?}` → suggested areas with a **computed** `suggested_share_bps` (Σ 10000) + grounded named FII candidates nested in the FII area; every item explained (FR-013), non-advice `disclaimer` (FR-014); SPEC-105 |
 | GET    | `/health-score`  | session | Reproducible 0–100 **computed** Portfolio Health Score + per-factor breakdown (diversification / concentration / liquidity / goal_alignment / risk_exposure, weights as `*_bps`); market-aware (macro is an input); an optional gated AI `narrative` explains it (`narrative_available:false` on outage) but never changes the number; SPEC-106 |
 | GET    | `/projections`   | session | Deterministic income + net-worth projections (pessimistic / base / optimistic), query `?monthly_contribution_centavos=&horizon_years=` (int, defaults 0/10, horizon 1–40); net-worth as yearly `{year, value_centavos}` points; computed (not LLM), assumptions + estimate `disclaimer` shown (FR-014); SPEC-107 |
+| POST   | `/chat/messages` | session | Conversational copilot turn — `{thread_id?, content}` → gated assistant reply (`explanation` + `disclaimer`); grounds each turn in computed facts (general / "tenho R$X" → SPEC-105 / "daqui a N anos" → SPEC-107), routed by intent; `available:false` on LLM outage; SPEC-108 |
+| GET    | `/chat/threads`  | session | List the caller's conversation threads (most-recent first) |
+| GET    | `/chat/threads/{id}` | session | Read a thread + its ordered messages (`404` if not owned) |
+| DELETE | `/chat/threads/{id}` | session | Delete a thread (`204`) |
+| DELETE | `/chat/threads`  | session | Clear all conversation history (`204`); threads are bounded + clearable (FR-025) |
 
 > Money crosses the wire as **integer centavos** (`*_centavos`) and rates as integer basis
 > points (`*_bps`) — never a float. `maturity_date` is a `YYYY-MM-DD` string (null for
