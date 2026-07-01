@@ -69,7 +69,7 @@ carries no `api/openapi.yaml` change of its own.
 | Spec ID  | Frontend capability                         | Consumes (backend)        | Status      |
 | -------- | ------------------------------------------- | ------------------------- | ----------- |
 | SPEC-200 | [App Foundation (shell, typed API client, design system, session)](SPEC-200-app-foundation.md) | OpenAPI contract, SPEC-003 | ✅ Done |
-| SPEC-210 | Investor Profile screen                     | SPEC-101                  | 🔲 Backlog  |
+| SPEC-210 | [Investor Profile screen](SPEC-210-investor-profile-screen.md) | SPEC-101                  | 📋 Approved |
 | SPEC-211 | Portfolio management (FII + FI) screens     | SPEC-102                  | 🔲 Backlog  |
 | SPEC-212 | Dashboard                                   | SPEC-103                  | 🔲 Backlog  |
 | SPEC-213 | AI Insights + Rebalancing + Health Score    | SPEC-104 / 105 / 106      | 🔲 Backlog  |
