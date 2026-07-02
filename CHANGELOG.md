@@ -14,6 +14,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-210 — Investor Profile Screen**: the first `SPEC-21x` feature, turning the `/profile`
+  stub into the real **Perfil** screen — the frontend face of SPEC-101. Loads `GET /profile`
+  (a `404` shows a first-run empty state, distinct from a transient error, mirroring
+  `useSession`'s 401→null) and saves via `PUT /profile`, with the request body built to exactly
+  `{ risk_profile, objectives, horizon_years }` — **no `user_id`** (BR-2101; identity is the
+  session). Three new reusable, accessible, token-styled controls
+  (`components/ui/{segmented,chip-toggle,slider}`) — risk profile (single-select), objectives
+  (multi-select chips, **≥1 required**), and a keyboard-accessible native-range **slider** for the
+  1–50 year horizon. Enum↔pt-BR label mapping is centralized and typed off the generated contract
+  (`lib/profile/labels.ts`), so a new backend enum value fails the build rather than silently
+  drifting. No money, no AI output on this screen, so FR-013/014 and the money conventions don't
+  apply (BR-2103) — its job is to *feed* the AI features (SPEC-104/105/106), not render them.
+  6 new Vitest/RTL tests (label coverage, first-run vs. prefill, validation gating, the exact PUT
+  body) plus a Playwright smoke scaffold; live-verified against the running backend
+  (`404 → PUT 200 → GET 200`). Reviewed clean (PASS) by both `frontend-reviewer` and
+  `react-correctness-reviewer`. No `api/openapi.yaml` change.
+
+- **Frontend harness** — the review/verification layer for the `SPEC-2xx` track, mirroring the Go
+  one. Two subagents: **`react-correctness-reviewer`** (hooks/effects + setState-in-effect,
+  client/server boundaries, hydration, listener/stream leaks, async races, unsafe TS) and
+  **`frontend-reviewer`** (conventions + the client guards, contract-from-OpenAPI, money-no-float,
+  identity-from-server, tokens-as-code, a11y). A product-focused **`frontend-lesson-writer`**
+  (teaches the *product*, not React — the backend-contract seam in place of the hexagonal bridge).
+  Two hooks: **`prettier-edited`** (PostToolUse format-on-edit, the mirror of `gofmt-edited`; skips
+  the generated `schema.ts`) and **`on-stop-web`** (Stop reminder — run the `web/` gate, update
+  CHANGELOG, regen types). `/spec-implement` and `/pr-review` are now **track-aware** (backend Go
+  vs frontend `web/`). Recorded in PLAN-200 (Phase 6) and the `.claude/README.md` inventory.
 - **Frontend track kickoff (SDD).** With the backend MVP complete (SPEC-001…108), the
   frontend is opened as a first-class SDD track: **ADR-0006 — Frontend UI Stack & Design
   System** (*Accepted*) decides the layer inside Next.js that [ADR-0004](docs/04-architecture/adr/ADR-0004-frontend-repository-strategy.md)
@@ -42,15 +69,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required `NonAdviceDisclaimer` (FR-014), with Buy/Sell/order affordances deliberately omitted.
   Seeded into the `yieldforge-aurora` Claude Design project (ADR-0006); preview sources under
   `docs/05-design/ds/`.
-- **SPEC-200 (App Foundation) approved + PLAN-200 drafted.** The first frontend spec is flipped to
-  **Approved**; the copilot is reframed as a **global floating widget** (the shell owns an overlay
-  slot; there is **no Chat route** — SPEC-215 implements the widget). **PLAN-200** lays out the build
-  in 8 frontend-adapted phases (scaffold → tokens-as-code → typed API client + `money.ts` + SSE
-  transport → auth/session → shell + copilot slot → quality gates → tests → docs), resolving five
-  decisions: a same-origin **Next.js proxy** for the SPEC-003 cookie, CSR-by-default, Vitest + RTL +
-  Playwright, login/register inside SPEC-200, and building the streaming transport up front. Adds the
-  full **Dashboard page mockup** (`docs/05-design/ds/pages/dashboard.html`) — app shell + summary +
-  allocation + health + insights + the floating copilot — which doubles as the shell spec.
+- **SPEC-200 — Frontend App Foundation** (Done): the Next.js web client under `web/`, the foundation
+  every `SPEC-21x` screen builds on. **Next.js 16 (App Router) + React 19 + TypeScript strict +
+  Tailwind v4**, isolated from the Go module with path-scoped CI (ADR-0004/0006). The **Aurora design
+  system as code** (tokens in `@theme`; Inter + Fraunces + IBM Plex Mono, self-hosted) with the binding
+  guards as **structural components** — an `InsightCard` whose `explanation` prop is required (FR-013)
+  and a required `NonAdviceDisclaimer` (FR-014); **no Buy/Sell/order affordances** anywhere. A **typed
+  API client generated from `api/openapi.yaml`** (`openapi-typescript` + `openapi-fetch` + TanStack
+  Query) — no hand-written DTOs — with a **drift guard** (`check:api`, the client mirror of
+  `openapi_test.go`); `money.ts` formats integer centavos/bps to pt-BR only at the render edge (no float
+  on the wire or in the UI); an SSE **streaming transport** ready for chat (SPEC-215). **Auth & session**
+  against SPEC-003 via a same-origin **Next.js proxy** (the `HttpOnly` cookie works with no CORS);
+  `useSession` resolves identity from `/auth/me` (never client state) and `RequireAuth` distinguishes a
+  confirmed 401 from a transient error. The **app shell** — sidebar / mobile tabs, top bar, and the
+  **global floating copilot launcher** on every screen (SPEC-200 owns the slot; the widget is SPEC-215)
+  — with stubbed feature routes and shared loading/error boundaries. **Vitest + RTL** unit/component
+  tests (money, guards, allocation regression) in CI; a **Playwright** smoke scaffolded. Reviewed by the
+  frontend-reviewer + react-correctness-reviewer agents (they caught a real allocation-bar CSS bug). No
+  `api/openapi.yaml` change (the frontend adds no endpoint). PT-BR lesson
+  `docs/lessons/SPEC-200-aula.html`; the copilot mockup lives at `docs/05-design/ds/pages/dashboard.html`.
 
 - **SPEC-107 — Projections (Income & Net Worth)**: two deterministic, reproducible forward-looking
   views over the current portfolio — a **passive-income projection** (monthly/annual across

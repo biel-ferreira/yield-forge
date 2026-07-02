@@ -85,17 +85,35 @@ The practical trigger for each piece:
   subpackages, `platform/`, and `transport/` are skipped.
 - `gofmt-edited.ps1` — `PostToolUse`: **acts**, runs `gofmt` on the just-edited `.go` file.
 - `on-stop.ps1` — `Stop`: **warns** (non-blocking) with `go vet` + a CHANGELOG reminder when `.go` changed.
+- `prettier-edited.ps1` — `PostToolUse`: **acts** (frontend mirror of `gofmt-edited`), runs
+  Prettier on the just-edited `web/` code/style file. No-ops if Node/Prettier is unavailable;
+  skips the generated `lib/api/schema.ts` (via `.prettierignore`) to keep it in lockstep with
+  `gen:api`.
+- `on-stop-web.ps1` — `Stop`: **warns** (non-blocking, reminder-only — frontend mirror of
+  `on-stop`) to run the `web/` gate + update CHANGELOG when `web/` changed, and to regen the
+  typed client when `api/openapi.yaml` changed but `schema.ts` didn't.
 
 **Agents** (`agents/`) — isolated-context subagents
+
+*Backend (Go):*
 - `hexagonal-reviewer` — architecture/layering, explainability/non-advice guards, conventions.
 - `go-correctness-reviewer` — nil derefs, unchecked errors, concurrency/races, leaks, SQL, edge cases.
-- `lesson-writer` — produces the PT-BR HTML lesson (with Harness + AI Engineering sections).
+- `lesson-writer` — PT-BR HTML lesson via the hexagonal/Go bridge (with Harness + AI Engineering sections).
+
+*Frontend (`web/`, React/Next/TS) — the mirror pair + a product-focused lesson (added when the
+frontend track opened; the Go reviewers don't apply to TypeScript/React):*
+- `frontend-reviewer` — conventions + the client guards (explainability/non-advice, **no order
+  affordances**), contract-from-OpenAPI, money-no-float, identity-from-server, tokens-as-code, a11y.
+- `react-correctness-reviewer` — hooks/effects + setState-in-effect, client/server boundaries,
+  hydration mismatches, listener/stream leaks, async races, unsafe TS.
+- `frontend-lesson-writer` — PT-BR lesson for frontend specs focused on the **product** (not
+  React), with the backend-contract seam in place of the hexagonal bridge.
 
 **Commands** (`commands/`) — the SDD loop
 - `/spec-new` — draft a SPEC from the template, grounded in the PRD.
 - `/plan-new` — draft the PLAN mirroring the SPEC's number.
-- `/spec-implement` — implement phase by phase (`phased`) or straight through (`auto`); close with review + docs + lesson.
-- `/pr-review` — final PR gate: 2 reviewers + SDD closeout (needs `gh`).
+- `/spec-implement` — implement phase by phase (`phased`) or straight through (`auto`); close with review + docs + lesson. **Track-aware:** backend (Go) vs frontend (`web/`) selects the matching gate, reviewers, and lesson-writer.
+- `/pr-review` — final PR gate: 2 reviewers + SDD closeout (needs `gh`). **Track-aware** (Go pair vs frontend pair).
 
 **Skills** (`skills/`) — *not created yet.* The "I-apply-it-myself" / bundled-scripts kind.
 Future candidate: something in Tier 3 (the product), e.g. a grounding/evals helper for the

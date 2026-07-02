@@ -3,3 +3,5 @@ node_modules
 package-lock.json
 public
 next-env.d.ts
+# generated from api/openapi.yaml — must match `npm run gen:api` output (never reformat)
+lib/api/schema.ts

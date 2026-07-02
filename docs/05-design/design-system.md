@@ -310,6 +310,18 @@ components:
     rounded: "{rounded.lg}"
     padding: 12px 16px
     height: 48px
+  copilot-fab:
+    background: "linear-gradient(135deg, {colors.primary}, {colors.primary-active})"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.full}"
+    size: 56px
+    shadow: "0 0 30px -4px rgba(233,169,76,.7)"
+  copilot-panel:
+    backgroundColor: "{gradients.card-sheen} , {colors.surface}"
+    border: "1px solid rgba(233,169,76,.28)"
+    rounded: "{rounded.xl}"
+    width: 380px
+    shadow: "0 40px 90px -28px rgba(0,0,0,.75), 0 0 70px -22px rgba(233,169,76,.4)"
   badge-neutral:
     backgroundColor: "{colors.elevated}"
     textColor: "{colors.body}"
@@ -519,8 +531,11 @@ the light theme the glows are removed and depth falls back to hairlines + surfac
   unrepresentable (FR-013), mirroring the backend gate.
 - **`non-advice-disclaimer`** — a required, quiet footer on every AI surface (FR-014):
   "Isto é conteúdo educacional, não recomendação de investimento."
-- **`chat-bubble-user` / `-assistant`** + **`chat-input`** — the copilot dialogue (user bubble gold,
-  assistant on elevated glass), streaming token-by-token; every turn ends with the disclaimer.
+- **`copilot-fab` / `copilot-panel`** — the copilot is a **global floating widget, not a nav route**:
+  a gold glowing launcher (bottom-right, on every authenticated screen) that expands into a glass
+  panel. Inside, **`chat-bubble-user` / `-assistant`** + **`chat-input`** carry the dialogue (user
+  bubble gold, assistant on elevated glass), streaming token-by-token; every turn ends with the
+  disclaimer. (The widget internals land in SPEC-215; the shell owns the launcher slot.)
 
 ### Forms & Feedback
 - **`text-input`** (sky focus ring), **`objective-chip` / `-selected`** (gold-tinted), **`badge-*`**,
@@ -548,9 +563,9 @@ the light theme the glows are removed and depth falls back to hairlines + surfac
 
 | Name | Width | Key changes |
 |---|---|---|
-| Mobile | < 768px | Sidebar → bottom tabs; cards stack 1-up; holdings reflow to stacked cards; chat full-screen; glow intensity reduced (perf + legibility) |
+| Mobile | < 768px | Sidebar → bottom tabs; cards stack 1-up; holdings reflow to stacked cards; the copilot panel expands full-screen; glow intensity reduced (perf + legibility) |
 | Tablet | 768–1024px | Sidebar as icon rail; dashboard 2-up |
-| Desktop | 1024–1440px | Full 248px sidebar; dashboard 2–3-up; chat as right rail or view |
+| Desktop | 1024–1440px | Full 248px sidebar; dashboard 2–3-up; the copilot as a floating panel |
 | Wide | > 1440px | Content caps ~1200px, more outer breathing room |
 
 Primary controls ≥ 44×44. Numbers never wrap — a large figure shrinks a step rather than breaking.

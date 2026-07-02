@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
+import { backendError } from "@/lib/api/error";
 import type { components } from "@/lib/api/schema";
 
 // Session against SPEC-003. Identity is resolved by the server via /auth/me — never
@@ -8,15 +9,6 @@ export type User = components["schemas"]["User"];
 export type Credentials = components["schemas"]["Credentials"];
 
 const ME_KEY = ["auth", "me"] as const;
-
-/** Pull the `{ error }` message out of a backend error body, if present. */
-function backendError(error: unknown): string | undefined {
-  if (error && typeof error === "object" && "error" in error) {
-    const message = (error as Record<string, unknown>).error;
-    if (typeof message === "string") return message;
-  }
-  return undefined;
-}
 
 /** The authenticated user (or null). The server (/auth/me) is the authority. */
 export function useSession() {
@@ -35,7 +27,11 @@ export function useSession() {
   return {
     user: query.data ?? null,
     isLoading: query.isLoading,
+    // isError = the server couldn't be reached / non-401 failure (distinct from a
+    // confirmed-unauthenticated 401, which resolves to `data: null`).
+    isError: query.isError,
     isAuthenticated: !!query.data,
+    refetch: query.refetch,
   };
 }
 
