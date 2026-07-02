@@ -8,11 +8,29 @@ import { Input } from "@/components/ui/input";
 import { InsightCard } from "@/components/insight-card";
 import { NonAdviceDisclaimer } from "@/components/non-advice-disclaimer";
 import { AllocationBar } from "@/components/allocation-bar";
+import { Segmented } from "@/components/ui/segmented";
+import { ChipToggleGroup } from "@/components/ui/chip-toggle";
+import { Slider } from "@/components/ui/slider";
+import {
+  RISK_PROFILES,
+  RISK_PROFILE_LABELS,
+  OBJECTIVES,
+  OBJECTIVE_LABELS,
+  type RiskProfile,
+  type Objective,
+} from "@/lib/profile/labels";
 
 // Public dev styleguide at /styleguide — a living gallery of the Aurora tokens + components.
 // Not part of the authenticated app; kept for reference.
 export default function StyleguidePage() {
   const [light, setLight] = useState(false);
+  const [risk, setRisk] = useState<RiskProfile | null>("moderate");
+  const [objectives, setObjectives] = useState<Objective[]>(["passive_income"]);
+  const [horizon, setHorizon] = useState(10);
+
+  function toggleObjective(o: Objective) {
+    setObjectives((cur) => (cur.includes(o) ? cur.filter((x) => x !== o) : [...cur, o]));
+  }
 
   function toggleTheme() {
     const next = !light;
@@ -34,12 +52,49 @@ export default function StyleguidePage() {
         </Button>
       </header>
 
+      <Section title="Controles de formulário (SPEC-210)">
+        <Card className="space-y-6 p-6">
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted">Perfil de risco</label>
+            <Segmented
+              ariaLabel="Perfil de risco"
+              value={risk}
+              onChange={setRisk}
+              options={RISK_PROFILES.map((v) => ({ value: v, label: RISK_PROFILE_LABELS[v] }))}
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted">Objetivos</label>
+            <ChipToggleGroup
+              ariaLabel="Objetivos"
+              selected={objectives}
+              onToggle={toggleObjective}
+              options={OBJECTIVES.map((v) => ({ value: v, label: OBJECTIVE_LABELS[v] }))}
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted">Horizonte</label>
+            <Slider
+              ariaLabel="Horizonte de investimento (anos)"
+              min={1}
+              max={50}
+              value={horizon}
+              onChange={setHorizon}
+              formatValue={(v) => `${v} ${v === 1 ? "ano" : "anos"}`}
+              className="max-w-sm"
+            />
+          </div>
+        </Card>
+      </Section>
+
       <Section title="Tipografia & números">
         <Card className="p-6">
-          <p className="font-serif text-3xl font-semibold text-on-dark">Seu patrimônio, iluminado</p>
+          <p className="font-serif text-3xl font-semibold text-on-dark">
+            Seu patrimônio, iluminado
+          </p>
           <p className="mt-3 max-w-prose text-[15px] leading-relaxed text-body">
-            Sua carteira está concentrada em FIIs de logística. Considere avaliar outros
-            segmentos — <span className="text-primary-tint">saiba o porquê</span>.
+            Sua carteira está concentrada em FIIs de logística. Considere avaliar outros segmentos —{" "}
+            <span className="text-primary-tint">saiba o porquê</span>.
           </p>
           <p className="tabular mt-4 font-mono text-4xl font-semibold text-on-dark">
             R$ 297.924,80
