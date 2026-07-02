@@ -77,6 +77,7 @@ func TestProject_ReproducibleEndToEnd_Integration(t *testing.T) {
 
 	pfRepo := portfoliopostgres.New(db)
 	quoteRepo := marketdatapostgres.NewFIIQuoteRepository(db)
+	macroRepo := marketdatapostgres.NewMacroRepository(db)
 
 	qty, err := portfolio.ParseQuantity(100)
 	require.NoError(t, err)
@@ -95,8 +96,8 @@ func TestProject_ReproducibleEndToEnd_Integration(t *testing.T) {
 		Sector: marketdata.SectorLogistics, LastDividendCentavos: 110, Source: "test", ObservedAt: now, FetchedAt: now,
 	}))
 
-	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk), quoteRepo, clk)
-	svc := projection.NewService(dashSvc, portfolio.NewService(pfRepo, clk))
+	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk, macroRepo), quoteRepo, clk)
+	svc := projection.NewService(dashSvc, portfolio.NewService(pfRepo, clk, macroRepo))
 
 	got, err := svc.Project(ctx, u1, 50_000, 10)
 	require.NoError(t, err)

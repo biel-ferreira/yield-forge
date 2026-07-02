@@ -10,20 +10,22 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/platform/clock"
 )
 
-// Service is the portfolio application logic (SPEC-102 FR-1022/FR-1023). It depends only on
-// the Repository port and the Clock, so it is pure and unit-testable with hand-written
+// Service is the portfolio application logic (SPEC-102 FR-1022/FR-1023). It depends on the
+// Repository port, the Clock, and a MacroReader (SPEC-109) to resolve a fixed-income holding's
+// effective rate — all consumer-defined ports, so it stays unit-testable with hand-written
 // fakes. It satisfies Reader, the consumer port the dashboard/facts/projections read through.
 // The userID is always supplied by the caller from the authenticated context (BR-1021).
 type Service struct {
 	repo  Repository
 	clock clock.Clock
+	macro MacroReader
 }
 
 var _ Reader = (*Service)(nil)
 
-// NewService builds a Service over the repository and clock.
-func NewService(repo Repository, clk clock.Clock) *Service {
-	return &Service{repo: repo, clock: clk}
+// NewService builds a Service over the repository, clock, and macro reader (SPEC-109).
+func NewService(repo Repository, clk clock.Clock, macro MacroReader) *Service {
+	return &Service{repo: repo, clock: clk, macro: macro}
 }
 
 // FIIInput is the raw, edge-validated input for creating/updating an FII holding. Money is
@@ -34,12 +36,14 @@ type FIIInput struct {
 	AveragePriceCentavos int64
 }
 
-// FixedIncomeInput is the raw input for creating/updating a fixed-income holding.
+// FixedIncomeInput is the raw input for creating/updating a fixed-income holding. IndexerType
+// is optional; an empty string defaults to Prefixado (SPEC-109 BR-1093).
 type FixedIncomeInput struct {
 	Name                   string
 	Institution            string
 	InvestedAmountCentavos int64
 	AnnualRateBps          int
+	IndexerType            string
 	MaturityDate           *time.Time
 	LiquidityType          string
 }
@@ -104,12 +108,21 @@ func (s *Service) CreateFixedIncomeHolding(ctx context.Context, userID string, i
 	}
 	now := s.clock.Now()
 	h.UserID, h.CreatedAt, h.UpdatedAt = userID, now, now
-	return s.repo.CreateFixedIncomeHolding(ctx, h)
+	created, err := s.repo.CreateFixedIncomeHolding(ctx, h)
+	if err != nil {
+		return FixedIncomeHolding{}, err
+	}
+	return s.withEffectiveRate(ctx, created), nil
 }
 
-// ListFixedIncomeHoldings returns the caller's fixed-income holdings.
+// ListFixedIncomeHoldings returns the caller's fixed-income holdings, each carrying its
+// resolved effective annual rate (SPEC-109 FR-1092).
 func (s *Service) ListFixedIncomeHoldings(ctx context.Context, userID string) ([]FixedIncomeHolding, error) {
-	return s.repo.ListFixedIncomeHoldingsByUserID(ctx, userID)
+	holdings, err := s.repo.ListFixedIncomeHoldingsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.withEffectiveRates(ctx, holdings), nil
 }
 
 // UpdateFixedIncomeHolding validates and replaces the caller's holding id. The past-maturity
@@ -121,12 +134,46 @@ func (s *Service) UpdateFixedIncomeHolding(ctx context.Context, userID, id strin
 		return FixedIncomeHolding{}, err
 	}
 	h.ID, h.UserID, h.UpdatedAt = id, userID, s.clock.Now()
-	return s.repo.UpdateFixedIncomeHolding(ctx, h)
+	updated, err := s.repo.UpdateFixedIncomeHolding(ctx, h)
+	if err != nil {
+		return FixedIncomeHolding{}, err
+	}
+	return s.withEffectiveRate(ctx, updated), nil
 }
 
 // DeleteFixedIncomeHolding removes the caller's holding id (ErrHoldingNotFound if absent/unowned).
 func (s *Service) DeleteFixedIncomeHolding(ctx context.Context, userID, id string) error {
 	return s.repo.DeleteFixedIncomeHolding(ctx, userID, id)
+}
+
+// withEffectiveRate resolves and attaches h's effective annual rate (SPEC-109 FR-1092).
+func (s *Service) withEffectiveRate(ctx context.Context, h FixedIncomeHolding) FixedIncomeHolding {
+	h.EffectiveAnnualRateBps = h.ResolveEffectiveRate(s.latestMacro(ctx))
+	return h
+}
+
+// withEffectiveRates resolves and attaches the effective annual rate for every holding, sharing
+// one macro snapshot across the whole list (a consistent reference point per request/response).
+func (s *Service) withEffectiveRates(ctx context.Context, holdings []FixedIncomeHolding) []FixedIncomeHolding {
+	macro := s.latestMacro(ctx)
+	for i := range holdings {
+		holdings[i].EffectiveAnnualRateBps = holdings[i].ResolveEffectiveRate(macro)
+	}
+	return holdings
+}
+
+// latestMacro best-effort-fetches the CDI/IPCA readings SPEC-109's indexers need. An indicator
+// whose read fails (incl. marketdata.ErrMacroNotFound) is simply omitted — ResolveEffectiveRate's
+// own degradation (BR-1094) takes it from there; this never returns an error, never blocks a
+// request on a market-data hiccup.
+func (s *Service) latestMacro(ctx context.Context) map[marketdata.Indicator]marketdata.MacroIndicator {
+	out := make(map[marketdata.Indicator]marketdata.MacroIndicator, 2)
+	for _, ind := range [...]marketdata.Indicator{marketdata.IndicatorCDI, marketdata.IndicatorIPCA} {
+		if m, err := s.macro.GetLatestMacroIndicator(ctx, ind); err == nil {
+			out[ind] = m
+		}
+	}
+	return out
 }
 
 func (s *Service) buildFixedIncomeHolding(in FixedIncomeInput, isCreate bool) (FixedIncomeHolding, error) {
@@ -145,11 +192,15 @@ func (s *Service) buildFixedIncomeHolding(in FixedIncomeInput, isCreate bool) (F
 	if err != nil {
 		return FixedIncomeHolding{}, err
 	}
+	idx, err := ParseIndexer(in.IndexerType)
+	if err != nil {
+		return FixedIncomeHolding{}, err
+	}
 
 	h := FixedIncomeHolding{
 		Name: name, Institution: institution,
 		InvestedAmountCentavos: in.InvestedAmountCentavos, AnnualRateBps: in.AnnualRateBps,
-		LiquidityType: lt,
+		IndexerType: idx, LiquidityType: lt,
 	}
 
 	if lt.RequiresMaturity() {
@@ -174,7 +225,10 @@ func (s *Service) today() time.Time {
 
 // --- Reader ---
 
-// ListHoldings returns the caller's full set of holdings (SPEC-102 FR-1025).
+// ListHoldings returns the caller's full set of holdings (SPEC-102 FR-1025). Each fixed-income
+// holding carries its resolved EffectiveAnnualRateBps (SPEC-109 FR-1092/1093/1094) — this is the
+// single seam the dashboard, projections, health, and chat all read holdings through, so they
+// consume the resolved rate automatically with no macro dependency of their own.
 func (s *Service) ListHoldings(ctx context.Context, userID string) (Holdings, error) {
 	fii, err := s.repo.ListFIIHoldingsByUserID(ctx, userID)
 	if err != nil {
@@ -184,5 +238,5 @@ func (s *Service) ListHoldings(ctx context.Context, userID string) (Holdings, er
 	if err != nil {
 		return Holdings{}, fmt.Errorf("list holdings: %w", err)
 	}
-	return Holdings{FII: fii, FixedIncome: fixedIncome}, nil
+	return Holdings{FII: fii, FixedIncome: s.withEffectiveRates(ctx, fixedIncome)}, nil
 }

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 )
 
 // fakeRepo captures created holdings and lets a test force the scoped-mutation not-found path.
@@ -55,8 +57,29 @@ type fakeClock struct{ t time.Time }
 
 func (c fakeClock) Now() time.Time { return c.t }
 
+// fakeMacro is a hand-written MacroReader fake (SPEC-109). found=false mirrors
+// marketdata.ErrMacroNotFound, exercising the degradation path (BR-1094).
+type fakeMacro struct {
+	cdi, ipca int64
+	found     bool
+}
+
+func (f fakeMacro) GetLatestMacroIndicator(_ context.Context, ind marketdata.Indicator) (marketdata.MacroIndicator, error) {
+	if !f.found {
+		return marketdata.MacroIndicator{}, marketdata.ErrMacroNotFound
+	}
+	switch ind {
+	case marketdata.IndicatorCDI:
+		return marketdata.MacroIndicator{Indicator: ind, Value: f.cdi, Unit: marketdata.UnitBps}, nil
+	case marketdata.IndicatorIPCA:
+		return marketdata.MacroIndicator{Indicator: ind, Value: f.ipca, Unit: marketdata.UnitBps}, nil
+	default:
+		return marketdata.MacroIndicator{}, marketdata.ErrMacroNotFound
+	}
+}
+
 func newService(repo Repository) *Service {
-	return NewService(repo, fakeClock{t: time.Date(2026, 6, 26, 10, 0, 0, 0, time.UTC)})
+	return NewService(repo, fakeClock{t: time.Date(2026, 6, 26, 10, 0, 0, 0, time.UTC)}, fakeMacro{found: false})
 }
 
 func TestService_CreateFIIHolding(t *testing.T) {

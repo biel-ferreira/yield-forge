@@ -43,7 +43,10 @@ func TestCompute_MixedPortfolio(t *testing.T) {
 			mustFII(t, "XPLG11", 10, 10_000),  // cost 100_000 — no quote (stale)
 		},
 		FixedIncome: []portfolio.FixedIncomeHolding{
-			{InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200, LiquidityType: portfolio.LiquidityAtMaturity, CreatedAt: created},
+			// EffectiveAnnualRateBps (SPEC-109) is what Compute reads for accrual; here it equals
+			// the raw stored AnnualRateBps (a prefixado-shaped fixture — ListHoldings resolves
+			// this field in production, Compute's own tests set it directly).
+			{InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200, EffectiveAnnualRateBps: 1_200, LiquidityType: portfolio.LiquidityAtMaturity, CreatedAt: created},
 		},
 	}
 	quotes := map[marketdata.Ticker]marketdata.FIIQuote{

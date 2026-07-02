@@ -122,8 +122,11 @@ func run() error {
 	// Investor Profile (SPEC-101): the service over its Postgres repository.
 	profileService := profile.NewService(profilepostgres.NewProfileRepository(db), clock.System{})
 
-	// Portfolio (SPEC-102): holdings CRUD over its Postgres repository.
-	portfolioService := portfolio.NewService(portfoliopostgres.New(db), clock.System{})
+	// Portfolio (SPEC-102): holdings CRUD over its Postgres repository. macroRepo (SPEC-006) also
+	// resolves a fixed-income holding's effective rate (SPEC-109) — built early so both
+	// portfolioService and, below, the AI features can share the one instance.
+	macroRepo := marketdatapostgres.NewMacroRepository(db)
+	portfolioService := portfolio.NewService(portfoliopostgres.New(db), clock.System{}, macroRepo)
 
 	// Dashboard (SPEC-103): a read-only compute service over the portfolio holdings reader and
 	// the market-data FII quote repository.
@@ -132,7 +135,6 @@ func run() error {
 
 	// The AI features share one Fact Builder (dashboard + profile + macro seams, SPEC-104) and one
 	// gated Insighter (SPEC-005; provider config-selected, default `fake`).
-	macroRepo := marketdatapostgres.NewMacroRepository(db)
 	factBuilder := insightengine.NewFactBuilder(dashboardService, profileService, macroRepo)
 	insighter := insightfactory.New(cfg, logger, clock.System{})
 

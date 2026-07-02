@@ -98,13 +98,13 @@ func TestChat_GatesHoldEndToEnd_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// The chat engine over the real seams + the gated fake Insighter (the production chain).
-	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk), quoteRepo, clk)
+	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk, macroRepo), quoteRepo, clk)
 	profSvc := profile.NewService(profileRepo, clk)
 	factBuilder := engine.NewFactBuilder(dashSvc, profSvc, macroRepo)
 	insighter := insightfactory.New(config.Config{InsighterProvider: "fake", InsighterCacheSize: 64, InsighterCacheTTL: time.Minute},
 		slog.New(slog.NewTextHandler(os.Stderr, nil)), clk)
 	rebal := rebalancing.NewService(factBuilder, quoteRepo, insighter)
-	proj := projection.NewService(dashSvc, portfolio.NewService(pfRepo, clk))
+	proj := projection.NewService(dashSvc, portfolio.NewService(pfRepo, clk, macroRepo))
 	svc := chat.NewService(chatpostgres.New(db), factBuilder, rebal, proj, insighter, clk)
 
 	// Turn 1 — a general question starts a thread.

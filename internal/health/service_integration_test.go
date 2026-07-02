@@ -103,9 +103,9 @@ func TestScore_ReproducibleEndToEnd_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := health.NewService(
-		dashboard.NewService(portfolio.NewService(pfRepo, clk), quoteRepo, clk),
+		dashboard.NewService(portfolio.NewService(pfRepo, clk, macroRepo), quoteRepo, clk),
 		profile.NewService(profileRepo, clk),
-		portfolio.NewService(pfRepo, clk),
+		portfolio.NewService(pfRepo, clk, macroRepo),
 		macroRepo,
 		insightfactory.New(config.Config{InsighterProvider: "fake", InsighterCacheSize: 64, InsighterCacheTTL: time.Minute},
 			slog.New(slog.NewTextHandler(os.Stderr, nil)), clk),

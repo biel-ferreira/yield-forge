@@ -58,6 +58,7 @@ func TestService_GetDashboard_ReconcilesEndToEnd_Integration(t *testing.T) {
 	now := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
 	pfRepo := portfoliopostgres.New(db)
 	quoteRepo := marketdatapostgres.NewFIIQuoteRepository(db)
+	macroRepo := marketdatapostgres.NewMacroRepository(db)
 
 	mustQty := func(n int) portfolio.Quantity {
 		q, err := portfolio.ParseQuantity(n)
@@ -91,7 +92,7 @@ func TestService_GetDashboard_ReconcilesEndToEnd_Integration(t *testing.T) {
 		ObservedAt: now, FetchedAt: now,
 	}))
 
-	svc := dashboard.NewService(portfolio.NewService(pfRepo, fixedClock{t: now}), quoteRepo, fixedClock{t: now})
+	svc := dashboard.NewService(portfolio.NewService(pfRepo, fixedClock{t: now}, macroRepo), quoteRepo, fixedClock{t: now})
 	d, err := svc.GetDashboard(ctx, uid)
 	require.NoError(t, err)
 
@@ -106,4 +107,47 @@ func TestService_GetDashboard_ReconcilesEndToEnd_Integration(t *testing.T) {
 		classSum += s.ValueCentavos
 	}
 	require.Equal(t, d.Summary.CurrentValueCentavos, classSum, "allocation reconciles to the total")
+}
+
+// TestService_GetDashboard_FixedIncomeIndexer_Integration proves SPEC-109 end-to-end: a
+// cdi_percentual holding's Dashboard current value reflects the RESOLVED effective rate (seeded
+// CDI × the stored percentage), not the raw stored value — the core claim of PLAN-109 Phase 3.
+func TestService_GetDashboard_FixedIncomeIndexer_Integration(t *testing.T) {
+	db := connectDB(t)
+	ctx := context.Background()
+
+	var uid string
+	require.NoError(t, db.QueryRowContext(ctx,
+		`INSERT INTO users (email, password_hash) VALUES ('cdi-dash@example.com','x') RETURNING id::text`).Scan(&uid))
+
+	created := time.Date(2025, 7, 2, 0, 0, 0, 0, time.UTC)
+	now := created.AddDate(1, 0, 0) // exactly 365 days later, for simple round-number accrual
+
+	pfRepo := portfoliopostgres.New(db)
+	quoteRepo := marketdatapostgres.NewFIIQuoteRepository(db)
+	macroRepo := marketdatapostgres.NewMacroRepository(db)
+
+	// Seed CDI = 10.50% a.a. — the effective rate for "120% do CDI" resolves to 12.60% a.a.
+	require.NoError(t, macroRepo.UpsertMacroIndicator(ctx, marketdata.MacroIndicator{
+		Indicator: marketdata.IndicatorCDI, Value: 1_050, Unit: marketdata.UnitBps,
+		ReferenceDate: now, Source: "test", FetchedAt: now,
+	}))
+
+	_, err := pfRepo.CreateFixedIncomeHolding(ctx, portfolio.FixedIncomeHolding{
+		UserID: uid, Name: "CDB 120% CDI", Institution: "Banco X",
+		InvestedAmountCentavos: 1_000_000, AnnualRateBps: 12_000, // the RAW stored value: 120.00%
+		IndexerType: portfolio.IndexerCDIPercentual, LiquidityType: portfolio.LiquidityDaily,
+		CreatedAt: created, UpdatedAt: created,
+	})
+	require.NoError(t, err)
+
+	svc := dashboard.NewService(portfolio.NewService(pfRepo, fixedClock{t: now}, macroRepo), quoteRepo, fixedClock{t: now})
+	d, err := svc.GetDashboard(ctx, uid)
+	require.NoError(t, err)
+
+	// Effective rate = 1_050 * 12_000 / 10_000 = 1_260 bps (12.60% a.a.).
+	// Accrued over 365 days = 1_000_000 * 1_260 * 365 / (10_000 * 365) = 126_000.
+	// If the Dashboard had (incorrectly) used the raw 12_000 bps, current value would be 2_200_000.
+	require.Equal(t, int64(1_000_000), d.Summary.TotalInvestedCentavos)
+	require.Equal(t, int64(1_126_000), d.Summary.CurrentValueCentavos, "accrual uses the RESOLVED effective rate, not the raw stored value")
 }

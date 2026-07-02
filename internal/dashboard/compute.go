@@ -52,7 +52,9 @@ func Compute(holdings portfolio.Holdings, quotes map[marketdata.Ticker]marketdat
 
 	for _, h := range holdings.FixedIncome {
 		totalInvested += h.InvestedAmountCentavos
-		accrued := money.AccrueSimpleInterest(h.InvestedAmountCentavos, h.AnnualRateBps, daysBetween(h.CreatedAt, now))
+		// EffectiveAnnualRateBps (SPEC-109), not the raw stored AnnualRateBps: for a prefixado
+		// holding they're equal; for cdi_percentual/ipca_spread it's the resolved current rate.
+		accrued := money.AccrueSimpleInterest(h.InvestedAmountCentavos, h.EffectiveAnnualRateBps, daysBetween(h.CreatedAt, now))
 		fiCurrent += h.InvestedAmountCentavos + accrued
 	}
 

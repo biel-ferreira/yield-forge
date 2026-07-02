@@ -94,7 +94,7 @@ func TestEngine_Insights_GatesHoldEndToEnd_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// The engine over the real seams + the gated fake Insighter (the production chain).
-	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk), quoteRepo, clk)
+	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk, macroRepo), quoteRepo, clk)
 	profSvc := profile.NewService(profileRepo, clk)
 	insighter := insightfactory.New(config.Config{
 		InsighterProvider: "fake", InsighterCacheSize: 64, InsighterCacheTTL: time.Minute,
