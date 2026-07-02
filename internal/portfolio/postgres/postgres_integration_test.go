@@ -119,6 +119,75 @@ func TestRepository_FixedIncomeRoundTrip_Integration(t *testing.T) {
 	require.True(t, mat.Equal(*list[0].MaturityDate))
 }
 
+// TestRepository_FixedIncomeIndexer_Integration covers SPEC-109: the indexer_type column
+// round-trips through Create/Update, and a pre-existing row written without it (the migration's
+// DEFAULT) reads back as Prefixado — the BR-1093 backward-compatibility proof.
+func TestRepository_FixedIncomeIndexer_Integration(t *testing.T) {
+	repo, db := portfolioDB(t)
+	ctx := context.Background()
+	uid := createUser(t, db, "indexer@example.com")
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+
+	t.Run("CDIPercentual round-trips on create", func(t *testing.T) {
+		h := portfolio.FixedIncomeHolding{
+			UserID: uid, Name: "CDB 120% CDI", Institution: "Banco X",
+			InvestedAmountCentavos: 500_000, AnnualRateBps: 12_000,
+			IndexerType: portfolio.IndexerCDIPercentual, LiquidityType: portfolio.LiquidityDaily,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		created, err := repo.CreateFixedIncomeHolding(ctx, h)
+		require.NoError(t, err)
+		require.Equal(t, portfolio.IndexerCDIPercentual, created.IndexerType)
+
+		list, err := repo.ListFixedIncomeHoldingsByUserID(ctx, uid)
+		require.NoError(t, err)
+		found := false
+		for _, item := range list {
+			if item.ID == created.ID {
+				require.Equal(t, portfolio.IndexerCDIPercentual, item.IndexerType)
+				found = true
+			}
+		}
+		require.True(t, found, "created holding present in the list")
+
+		// Update: switch to IPCASpread.
+		upd := created
+		upd.IndexerType = portfolio.IndexerIPCASpread
+		upd.AnnualRateBps = 580
+		upd.UpdatedAt = now.Add(time.Hour)
+		got, err := repo.UpdateFixedIncomeHolding(ctx, upd)
+		require.NoError(t, err)
+		require.Equal(t, portfolio.IndexerIPCASpread, got.IndexerType)
+		require.Equal(t, 580, got.AnnualRateBps)
+	})
+
+	t.Run("a pre-existing row (no indexer_type set) defaults to Prefixado (BR-1093)", func(t *testing.T) {
+		// Insert directly via SQL, omitting indexer_type entirely — relying on the migration's
+		// column DEFAULT, simulating a row written before SPEC-109.
+		var id string
+		err := db.QueryRowContext(ctx, `
+			INSERT INTO fixed_income_holdings
+				(user_id, name, institution, invested_amount_centavos, annual_rate_bps, liquidity_type, created_at, updated_at)
+			VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)
+			RETURNING id::text`,
+			uid, "Legacy CDB", "Banco Y", 250_000, 900, string(portfolio.LiquidityDaily), now, now,
+		).Scan(&id)
+		require.NoError(t, err)
+
+		list, err := repo.ListFixedIncomeHoldingsByUserID(ctx, uid)
+		require.NoError(t, err)
+		found := false
+		for _, item := range list {
+			if item.ID == id {
+				require.Equal(t, portfolio.IndexerPrefixado, item.IndexerType, "pre-existing row defaults to prefixado")
+				require.Equal(t, 900, item.AnnualRateBps, "annual_rate_bps meaning unchanged for a prefixado holding")
+				found = true
+			}
+		}
+		require.True(t, found, "legacy row present in the list")
+	})
+}
+
 func TestRepository_IsolationAndOwnership_Integration(t *testing.T) {
 	repo, db := portfolioDB(t)
 	ctx := context.Background()

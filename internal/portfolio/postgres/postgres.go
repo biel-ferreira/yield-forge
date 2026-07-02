@@ -121,11 +121,11 @@ func (r Repository) DeleteFIIHolding(ctx context.Context, userID, id string) err
 func (r Repository) CreateFixedIncomeHolding(ctx context.Context, h portfolio.FixedIncomeHolding) (portfolio.FixedIncomeHolding, error) {
 	const q = `
 		INSERT INTO fixed_income_holdings
-			(user_id, name, institution, invested_amount_centavos, annual_rate_bps, maturity_date, liquidity_type, created_at, updated_at)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)
+			(user_id, name, institution, invested_amount_centavos, annual_rate_bps, indexer_type, maturity_date, liquidity_type, created_at, updated_at)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id::text, created_at, updated_at`
 	if err := r.db.QueryRowContext(ctx, q,
-		h.UserID, h.Name, h.Institution, h.InvestedAmountCentavos, h.AnnualRateBps,
+		h.UserID, h.Name, h.Institution, h.InvestedAmountCentavos, h.AnnualRateBps, indexerOrDefault(h.IndexerType),
 		nullableDate(h.MaturityDate), string(h.LiquidityType), h.CreatedAt, h.UpdatedAt).
 		Scan(&h.ID, &h.CreatedAt, &h.UpdatedAt); err != nil {
 		return portfolio.FixedIncomeHolding{}, fmt.Errorf("create fixed income holding: %w", err)
@@ -137,7 +137,7 @@ func (r Repository) CreateFixedIncomeHolding(ctx context.Context, h portfolio.Fi
 func (r Repository) ListFixedIncomeHoldingsByUserID(ctx context.Context, userID string) ([]portfolio.FixedIncomeHolding, error) {
 	const q = `
 		SELECT id::text, user_id::text, name, institution, invested_amount_centavos,
-			annual_rate_bps, maturity_date, liquidity_type, created_at, updated_at
+			annual_rate_bps, indexer_type, maturity_date, liquidity_type, created_at, updated_at
 		FROM fixed_income_holdings WHERE user_id = $1::uuid ORDER BY created_at`
 	rows, err := r.db.QueryContext(ctx, q, userID)
 	if err != nil {
@@ -148,16 +148,16 @@ func (r Repository) ListFixedIncomeHoldingsByUserID(ctx context.Context, userID 
 	var out []portfolio.FixedIncomeHolding
 	for rows.Next() {
 		var (
-			id, uid, name, institution, liquidity string
-			amount                                int64
-			rate                                  int
-			maturity                              sql.NullTime
-			created, updated                      time.Time
+			id, uid, name, institution, indexer, liquidity string
+			amount                                         int64
+			rate                                           int
+			maturity                                       sql.NullTime
+			created, updated                               time.Time
 		)
-		if err := rows.Scan(&id, &uid, &name, &institution, &amount, &rate, &maturity, &liquidity, &created, &updated); err != nil {
+		if err := rows.Scan(&id, &uid, &name, &institution, &amount, &rate, &indexer, &maturity, &liquidity, &created, &updated); err != nil {
 			return nil, fmt.Errorf("list fixed income holdings: %w", err)
 		}
-		h, err := rebuildFixedIncome(id, uid, name, institution, amount, rate, maturity, liquidity, created, updated)
+		h, err := rebuildFixedIncome(id, uid, name, institution, amount, rate, indexer, maturity, liquidity, created, updated)
 		if err != nil {
 			return nil, fmt.Errorf("list fixed income holdings: %w", err)
 		}
@@ -175,11 +175,11 @@ func (r Repository) UpdateFixedIncomeHolding(ctx context.Context, h portfolio.Fi
 	const q = `
 		UPDATE fixed_income_holdings
 		SET name = $3, institution = $4, invested_amount_centavos = $5, annual_rate_bps = $6,
-			maturity_date = $7, liquidity_type = $8, updated_at = $9
+			indexer_type = $7, maturity_date = $8, liquidity_type = $9, updated_at = $10
 		WHERE id = $1::uuid AND user_id = $2::uuid
 		RETURNING created_at, updated_at`
 	err := r.db.QueryRowContext(ctx, q,
-		h.ID, h.UserID, h.Name, h.Institution, h.InvestedAmountCentavos, h.AnnualRateBps,
+		h.ID, h.UserID, h.Name, h.Institution, h.InvestedAmountCentavos, h.AnnualRateBps, indexerOrDefault(h.IndexerType),
 		nullableDate(h.MaturityDate), string(h.LiquidityType), h.UpdatedAt).
 		Scan(&h.CreatedAt, &h.UpdatedAt)
 	if notFound(err) {
@@ -246,14 +246,18 @@ func rebuildFII(id, userID, ticker string, quantity int, avgPrice int64, created
 	}, nil
 }
 
-func rebuildFixedIncome(id, userID, name, institution string, amount int64, rate int, maturity sql.NullTime, liquidity string, created, updated time.Time) (portfolio.FixedIncomeHolding, error) {
+func rebuildFixedIncome(id, userID, name, institution string, amount int64, rate int, indexer string, maturity sql.NullTime, liquidity string, created, updated time.Time) (portfolio.FixedIncomeHolding, error) {
 	lt, err := portfolio.ParseLiquidityType(liquidity)
+	if err != nil {
+		return portfolio.FixedIncomeHolding{}, err
+	}
+	idx, err := portfolio.ParseIndexer(indexer)
 	if err != nil {
 		return portfolio.FixedIncomeHolding{}, err
 	}
 	h := portfolio.FixedIncomeHolding{
 		ID: id, UserID: userID, Name: name, Institution: institution,
-		InvestedAmountCentavos: amount, AnnualRateBps: rate, LiquidityType: lt,
+		InvestedAmountCentavos: amount, AnnualRateBps: rate, IndexerType: idx, LiquidityType: lt,
 		CreatedAt: created, UpdatedAt: updated,
 	}
 	if maturity.Valid {
@@ -268,4 +272,15 @@ func nullableDate(d *time.Time) sql.NullTime {
 		return sql.NullTime{}
 	}
 	return sql.NullTime{Time: *d, Valid: true}
+}
+
+// indexerOrDefault returns idx as a string, or "prefixado" for the Go zero value — matching
+// portfolio.ParseIndexer("")'s own default (SPEC-109 BR-1093) so a caller that constructs a
+// FixedIncomeHolding without setting IndexerType (pre-SPEC-109 code, or a direct repository
+// call) still satisfies the indexer_type CHECK constraint with the historically-correct value.
+func indexerOrDefault(idx portfolio.Indexer) string {
+	if idx == "" {
+		return string(portfolio.IndexerPrefixado)
+	}
+	return string(idx)
 }
