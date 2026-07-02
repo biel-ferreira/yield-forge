@@ -7,7 +7,7 @@
 | Feature Name | Investor Profile Screen                                               |
 | Feature ID   | SPEC-210                                                              |
 | Version      | 1.0.0                                                                 |
-| Status       | Approved                                                              |
+| Status       | Done                                                                  |
 | Author       | Gabigol                                                              |
 | Last Updated | 2026-07-01                                                            |
 | Related PRD  | [Epic 2 / FR-003](../01-product/PRD.md)                               |

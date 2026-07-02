@@ -54,7 +54,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | Plan ID  | Spec     | Title                            | Status      |
 | -------- | -------- | -------------------------------- | ----------- |
 | PLAN-200 | SPEC-200 | [Frontend App Foundation](PLAN-200-app-foundation.md) | ✅ Done |
-| PLAN-210 | SPEC-210 | [Investor Profile Screen](PLAN-210-investor-profile-screen.md) | 📝 Draft |
+| PLAN-210 | SPEC-210 | [Investor Profile Screen](PLAN-210-investor-profile-screen.md) | ✅ Done |
 
 ## Standard Phase Order (per the template)
 

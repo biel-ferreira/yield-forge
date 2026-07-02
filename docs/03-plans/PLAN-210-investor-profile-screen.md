@@ -6,9 +6,9 @@
 | --------------- | --------------------------------------- |
 | Plan Name       | Investor Profile Screen                 |
 | Related Feature | Investor Profile Screen                 |
-| Related Spec    | [SPEC-210](../02-specs/SPEC-210-investor-profile-screen.md) (Approved) |
-| Version         | 0.1.0 (Draft)                           |
-| Status          | Draft                                   |
+| Related Spec    | [SPEC-210](../02-specs/SPEC-210-investor-profile-screen.md) (Done) |
+| Version         | 1.0.0                                    |
+| Status          | Completed                               |
 | Author          | Gabigol                                 |
 | Last Updated    | 2026-07-01                              |
 

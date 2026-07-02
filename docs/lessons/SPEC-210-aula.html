@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 210 — SPEC-210: Tela de Perfil do Investidor (a primeira feature SPEC-21x) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#e9a94c,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 210 · A primeira tela de feature · o track SPEC-21x começa a preencher os slots</span>
+    <h1>SPEC-210 — Tela de Perfil do Investidor</h1>
+    <p>O SPEC-200 entregou a fundação — zero telas, todas as travas. O SPEC-210 é a <strong>primeira feature</strong> a
+    preencher um slot: a tela <strong>Perfil</strong>, onde Rafael e Carla contam ao YieldForge quem são — o perfil de risco,
+    os objetivos e o horizonte de investimento. É uma tela pequena e sem dinheiro, sem IA, sem gráfico. E é exatamente
+    por isso que ela ensina uma lição importante: <strong>nem toda tela precisa das travas de explicabilidade e
+    não-conselho</strong> — só as telas que <em>produzem</em> saída de IA precisam. O Perfil só <strong>captura</strong> dado; ele é o
+    <strong>combustível</strong> que a Fase 1 do backend (SPEC-104/105/106) vai queimar depois. Você <strong>não precisa dominar
+    React</strong> para acompanhar — o que importa aqui é produto, contrato e disciplina de harness.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: a primeira tela a preencher um slot da fundação</a></li>
+    <li><a href="#valor">O que a tela entrega e para quem (Rafael &amp; Carla)</a></li>
+    <li><a href="#jornada">A jornada do usuário: do 404 de primeiro acesso ao perfil salvo</a></li>
+    <li><a href="#decisoes">As decisões de produto e UX — e por que os três controles</a></li>
+    <li><a href="#guardas">LIÇÃO PRINCIPAL — quando as travas do produto NÃO se aplicam (e por quê)</a></li>
+    <li><a href="#recorte">O que ficou de fora e por quê (o recorte da spec)</a></li>
+    <li><a href="#contrato">Conexão com o backend: o contrato como fronteira</a></li>
+    <li><a href="#construido">Como foi construído (visão geral, sem virar tutorial de React)</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu e verificou isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering &amp; Produto</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: a primeira tela a preencher um slot da fundação</h2>
+
+<p>O SPEC-200 prometeu que cada tela SPEC-21x "preenche um slot preparado" e "herda as guardas de graça". O SPEC-210 é a
+prova: ele pega a rota <code>/profile</code>, que até aqui era um <code>EmptyState</code> honesto dizendo "chega depois", e a
+transforma na tela real — a <strong>frente de cliente do SPEC-101</strong>, o backend que já existe e já funciona.</p>
+
+<p>Em código real, o que mudou:</p>
+<ul>
+  <li>A rota <code>web/app/(app)/profile/page.tsx</code> deixou de renderizar um placeholder e passou a buscar
+  <code>GET /profile</code>, mostrar o formulário (preenchido ou vazio) e salvar via <code>PUT /profile</code>.</li>
+  <li>Três controles de formulário novos e reutilizáveis entraram no design system: <code>Segmented</code> (single-select),
+  <code>ChipToggleGroup</code> (multi-select) e <code>Slider</code> (range nativo), todos em <code>web/components/ui/</code>.</li>
+  <li>Um mapeamento centralizado enum↔pt-BR (<code>web/lib/profile/labels.ts</code>) tipado <strong>direto do contrato gerado</strong>.</li>
+  <li>Dois hooks de dados (<code>web/lib/profile/profile.ts</code>): <code>useProfile</code> (trata <code>404</code> como "sem perfil ainda") e
+  <code>useSaveProfile</code> (PUT, invalida o cache no sucesso).</li>
+  <li>6 testes Vitest/RTL novos + um scaffold Playwright, e uma verificação manual contra o backend Go rodando.</li>
+</ul>
+
+<div class="diagram">ANTES (SPEC-200 — a rota stubada)                  DEPOIS (SPEC-210 — a tela Perfil real)
+  /profile → EmptyState("chega depois")            /profile → formulário real, ligado ao SPEC-101
+  nenhum dado do usuário é lido/escrito             GET /profile (prefill ou 404→vazio) + PUT /profile
+  design system tinha só as guardas + primitivas    +3 controles: Segmented, ChipToggleGroup, Slider
+  nenhum hook de domínio existia                    lib/profile/{profile,labels}.ts, tipados do contrato
+  0 telas de produto                                 1a tela de produto -- o "SPEC-001" de feature do front</div>
+
+<div class="box why">
+  <span class="lbl">Por que começar pelo Perfil, e não pelo Dashboard</span>
+  O Perfil é a tela mais simples possível: sem dinheiro, sem gráfico, sem saída de IA. Começar por ela testa a
+  fundação do SPEC-200 (cliente tipado, shell, sessão) contra o caso <strong>mais fácil</strong> antes de arriscar o caso mais
+  difícil (Dashboard, com <code>AllocationBar</code>, <code>InsightCard</code> e dinheiro real). E, no produto, o Perfil é
+  literalmente um <strong>pré-requisito</strong>: sem risco/objetivos/horizonte salvos, as telas de IA (SPEC-104/105/106,
+  consumidas depois via SPEC-213) não têm personalização nenhuma para usar.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="valor">2. O que a tela entrega e para quem (Rafael &amp; Carla)</h2>
+
+<p>O Perfil é a <strong>costura de personalização</strong> de todo o produto. Sem ele, cada insight, cada sugestão de
+rebalanceamento e cada Health Score seriam genéricos — calculados sem saber se o usuário tolera risco ou quer
+preservar patrimônio. É uma tela pequena, mas o valor dela é <strong>alavancado</strong>: tudo que a IA vai dizer depois
+depende do que esta tela captura hoje.</p>
+
+<table>
+  <tr><th>Persona</th><th>A dor</th><th>O que a tela Perfil resolve</th></tr>
+  <tr>
+    <td><strong>Carla</strong>, a planejadora de longo prazo focada em patrimônio</td>
+    <td>Quer confirmar que o app "entende" que seu objetivo é preservação de patrimônio e um horizonte longo — não
+    quer ser tratada como uma trader de curto prazo</td>
+    <td>Um formulário direto onde ela marca <em>Preservação de Patrimônio</em> (e pode somar
+    <em>Crescimento de Longo Prazo</em>) e desliza o horizonte para 20-30 anos — uma confirmação explícita e
+    revisável, não uma suposição do sistema</td>
+  </tr>
+  <tr>
+    <td><strong>Rafael</strong>, o investidor de FIIs que quer orientação sob medida</td>
+    <td>Já usou apps que tratam todo investidor igual, sem levar em conta apetite a risco ao sugerir algo</td>
+    <td>Ao declarar <em>Agressivo</em> + <em>Renda Passiva</em>, ele planta a semente para que, quando a SPEC-213 ligar
+    os insights nesta tela, as sugestões considerem esse perfil — não um "meio-termo" genérico</td>
+  </tr>
+</table>
+
+<p>E há uma dor comum às duas personas que a tela resolve com uma decisão simples: <strong>nada é salvo até um clique
+explícito em "Salvar"</strong>. Ninguém quer que um deslize acidental no slider "grave sozinho" um horizonte errado.</p>
+
+<!-- ============================================================ -->
+<h2 id="jornada">3. A jornada do usuário: do 404 de primeiro acesso ao perfil salvo</h2>
+
+<p>A jornada é curta, mas cada bifurcação é uma decisão de produto:</p>
+
+<div class="diagram">1. Usuario abre /profile  --> GET /profile
+
+   200 (perfil ja existe)                          404 (perfil nunca foi definido)
+   --> formulario PREENCHIDO                        --> formulario VAZIO
+      "Seu perfil"                                     "Defina seu perfil"
+      risco/objetivos/horizonte ja marcados             nenhum campo marcado; horizonte default = 10
+
+2. Usuario ajusta risco (segmented), objetivos (chips), horizonte (slider)
+   --> Salvar fica DESABILITADO ate: risco escolhido E >=1 objetivo E horizonte em [1,50]
+
+3. Clica "Salvar"  -->  PUT /profile { risk_profile, objectives, horizon_years }  (SEM user_id)
+
+   200 -> "Perfil salvo (check)"; cache invalidado   400 -> mensagem do servidor inline;
+   dado permanece na tela                              formulario PRESERVA o que o usuario digitou
+
+   Falha transitoria no meio do caminho (rede/5xx no load):
+   estado de "tentar novamente", nunca uma tela em branco ou quebrada</div>
+
+<p>Repare que <strong>404 não é tratado como erro</strong> — é tratado como "primeiro acesso". A mesma ideia do SPEC-200 para
+sessão (<code>useSession</code> trata <code>401</code> como "deslogado", não como falha), aqui reaparece para dado de domínio:</p>
+
+<pre><code>// web/lib/profile/profile.ts — 404 é "sem perfil ainda", não uma falha (D3, espelha useSession)
+queryFn: async () => {
+  const { data, response } = await api.GET("/profile");
+  if (response.status === 404) return null; // no profile yet — first run
+  if (!data) throw new Error("failed to load profile");
+  return data;
+},</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que "404 vira null" é o mesmo princípio duas vezes</span>
+  O SPEC-200 já tinha ensinado esse padrão para autenticação: um <code>401</code> confirmado em <code>/auth/me</code> vira
+  "usuário deslogado" (<code>null</code>), nunca um erro genérico que dispararia um retry ou uma tela quebrada. O SPEC-210
+  aplica a <strong>mesma disciplina</strong> a um dado de domínio: um <code>404</code> confirmado em <code>GET /profile</code> vira "usuário sem
+  perfil ainda" (<code>null</code>), que a tela interpreta como estado de <strong>primeiro acesso</strong>, não como falha. É o mesmo
+  raciocínio replicado — status code específico e esperado ≠ erro genérico — e é por isso que o campo <code>isError</code>
+  só é verdade para falha de rede/5xx <em>de verdade</em>, nunca para o <code>404</code> esperado.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">4. As decisões de produto e UX — e por que os três controles</h2>
+
+<p>Cada um dos três controles do formulário corresponde a uma decisão de modelagem deliberada, não a um capricho
+visual:</p>
+
+<table>
+  <tr><th>Campo</th><th>Controle escolhido</th><th>Por quê</th></tr>
+  <tr>
+    <td>Perfil de risco</td>
+    <td><strong>Segmented</strong> (single-select, <code>role="radiogroup"</code>)</td>
+    <td>É mutuamente exclusivo por definição — ninguém é "Conservador e Agressivo" ao mesmo tempo. Um segmented
+    torna essa exclusividade <strong>visível</strong>, e o valor selecionado é sempre óbvio de relance.</td>
+  </tr>
+  <tr>
+    <td>Objetivos</td>
+    <td><strong>ChipToggleGroup</strong> (multi-select, cada chip é um <code>role="checkbox"</code>)</td>
+    <td>Objetivos <strong>não são exclusivos</strong> — Carla pode querer Preservação de Patrimônio <em>e</em> Renda Passiva ao
+    mesmo tempo. O contrato exige <code>minItems: 1</code>; a UI espelha isso bloqueando o Salvar com zero chips marcados.</td>
+  </tr>
+  <tr>
+    <td>Horizonte</td>
+    <td><strong>Slider</strong> nativo (<code>&lt;input type="range"&gt;</code>, 1–50)</td>
+    <td>Horizonte é um número contínuo dentro de um intervalo fechado — um slider comunica isso melhor que um campo
+    de texto livre, e um <code>range</code> nativo é <strong>impossível de sair do intervalo</strong> por construção (min/max do
+    próprio elemento), sem precisar de validação extra de "número fora do range".</td>
+  </tr>
+</table>
+
+<p>E uma quarta decisão, transversal: <strong>salvar é um botão explícito</strong>, nunca autosave.</p>
+
+<pre><code>// web/app/(app)/profile/page.tsx — Salvar é explícito; nada grava sozinho
+const valid = risk !== null && objectives.length >= 1 && horizon >= 1 && horizon <= 50;
+// ...
+&lt;Button type="submit" disabled={!valid || save.isPending}&gt;
+  {save.isPending ? "Salvando…" : "Salvar"}
+&lt;/Button&gt;</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que não autosave (a Decisão Resolvida #2 do SPEC-210)</span>
+  Um autosave a cada clique no slider geraria uma sequência de <code>PUT</code>s parciais e ruidosos — e, pior, salvaria um
+  horizonte "de passagem" enquanto o usuário ainda está arrastando o controle em busca do número certo. Um botão
+  "Salvar" explícito, desabilitado até o formulário ser válido e enquanto uma gravação está em voo, garante que
+  <strong>o que está no banco é sempre uma escolha deliberada do usuário</strong> — nunca um estado intermediário acidental.
+  É uma escolha de UX pequena com uma consequência grande: <strong>nenhum dado é gravado sem intenção explícita</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="guardas">5. LIÇÃO PRINCIPAL — quando as travas do produto NÃO se aplicam (e por quê)</h2>
+
+<p>A aula do SPEC-200 mostrou o <code>InsightCard</code> com <code>explanation</code> obrigatório e o <code>NonAdviceDisclaimer</code> presente em
+toda superfície de IA. Se você abrir a tela Perfil esperando ver essas travas, <strong>não vai encontrar nenhuma</strong> — e
+isso é <em>correto</em>, não um esquecimento. Esta é a lição central desta aula.</p>
+
+<p>O raciocínio, formalizado como <strong>BR-2103</strong> na spec: <em>"Profile has no monetary values and produces no AI
+text, so the explainability (FR-013), non-advice (FR-014), and money-format conventions do not apply here"</em>. É o
+espelho exato, no cliente, da mesma regra que o backend SPEC-101 já declara (BR-1016): <em>"esta spec não emite
+nenhuma saída de IA, então FR-013/FR-014 não se aplicam diretamente"</em>.</p>
+
+<div class="diagram">   O que uma tela de SAIDA DE IA precisa (ex.: Dashboard/Insights, SPEC-212/213)   O que o Perfil precisa (SPEC-210)
+
+   &lt;InsightCard explanation={...}&gt;  <-- obrigatorio (FR-013)                     nenhum insight e renderizado aqui
+   &lt;NonAdviceDisclaimer /&gt;           <-- presenca e contrato da tela (FR-014)       nenhum texto de IA e gerado aqui
+   dinheiro em centavos, formatado so via money.ts                              nenhum valor monetario existe aqui
+   ganho/perda = cor de numero, nunca acao                                      nao ha numero de ganho/perda aqui
+
+   -----------------------------------------------------------------------------------------------
+   A LICAO: FR-013/FR-014 gateiam SAIDA DE IA e DINHEIRO. Uma tela que so CAPTURA
+   preferencia do usuario (risco/objetivos/horizonte) nao tem nada para essas travas gatearem.
+   Aplica-las aqui seria burocracia sem funcao -- o oposto de "trava por construcao".</div>
+
+<div class="box why">
+  <span class="lbl">Por que essa ausência é uma decisão correta, não um buraco</span>
+  Uma trava-por-construção só faz sentido quando existe algo concreto para travar. O <code>explanation</code> obrigatório do
+  <code>InsightCard</code> existe porque existe a <em>possibilidade real</em> de um insight sem "por quê" — e é essa possibilidade
+  que o TypeScript precisa tornar irrepresentável. Na tela Perfil, não há insight, não há saída de IA, não há
+  dinheiro: aplicar as mesmas travas seria como exigir um cinto de segurança num carrinho de compras. O
+  <code>frontend-reviewer</code> sabe disso — o item 3 do seu checklist ("Binding product guards") é escopado
+  explicitamente para <em>"when the change touches AI / insight / suggestion output"</em>. O Perfil não toca; o
+  revisor não cobra as guardas aqui, e isso é o comportamento certo, não uma omissão.
+</div>
+
+<p>Guarde essa contraposição — ela volta na seção 10. A <strong>SPEC-213</strong> (quando o Dashboard e os Insights começarem a
+ler o que o Perfil salvou) é onde as travas de FR-013/FR-014 <strong>reaparecem com força total</strong>, porque aí sim haverá
+saída de IA sendo renderizada a partir do que esta tela capturou.</p>
+
+<!-- ============================================================ -->
+<h2 id="recorte">6. O que ficou de fora e por quê (o recorte da spec)</h2>
+
+<table>
+  <tr><th>Ficou de fora</th><th>Por quê</th></tr>
+  <tr><td>Qualquer <strong>mudança no backend</strong> ou no <code>api/openapi.yaml</code></td><td>SPEC-101 já está Done e rodando. O SPEC-210 <strong>consome</strong>, não altera, o contrato — a Definition of Done afirma explicitamente "no <code>api/openapi.yaml</code> change".</td></tr>
+  <tr><td>Um fluxo de <strong>onboarding</strong> dedicado (guiar o usuário novo pelo app)</td><td>Decisão Resolvida #3: para o MVP, a própria tela Perfil <em>é</em> o onboarding — um fluxo guiado mais elaborado é um follow-up.</td></tr>
+  <tr><td><strong>Consumir</strong> o perfil nas features de IA (Insights, Rebalanceamento, Health Score)</td><td>É a <strong>SPEC-213</strong>. O SPEC-210 só <em>captura</em> o dado — ler e reagir a ele é responsabilidade de outra spec.</td></tr>
+  <tr><td>Presets de horizonte (5/10/20 anos) no slider</td><td>Anotado como dívida técnica no PLAN-210; o slider contínuo já resolve o MVP — pontos de snap são um refinamento futuro.</td></tr>
+  <tr><td>Instrumentação de observabilidade nova no cliente</td><td>O backend já traceia <code>GET</code>/<code>PUT /profile</code> (SPEC-004); o erro no cliente é só UI, seguindo o padrão compartilhado do SPEC-200.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="contrato">7. Conexão com o backend: o contrato como fronteira</h2>
+
+<p>Esta seção ensina a costura frontend↔backend — o que substitui, no lado do cliente, a "ponte hexagonal" que a
+aula de backend ensinaria. O SPEC-210 <strong>não abre nenhum endpoint novo</strong>: ele consome dois que já existiam.</p>
+
+<table>
+  <tr><th>Endpoint (api/openapi.yaml)</th><th>Usado por</th><th>Resposta que a tela trata</th></tr>
+  <tr><td><code>GET /profile</code></td><td><code>useProfile()</code></td><td><code>200 ProfileResponse</code> → prefill · <code>404</code> → primeiro acesso · <code>401</code> → SPEC-200 redireciona</td></tr>
+  <tr><td><code>PUT /profile</code></td><td><code>useSaveProfile()</code></td><td><code>200 ProfileResponse</code> → salvo, cache atualizado · <code>400</code> → envelope <code>{"error":"..."}</code> inline</td></tr>
+</table>
+
+<h3>7.1 — Tipos gerados, nunca escritos à mão</h3>
+<p>Assim como no SPEC-200, nenhum tipo de <code>ProfileRequest</code>/<code>ProfileResponse</code> foi escrito à mão. Eles vêm do
+schema gerado a partir de <code>api/openapi.yaml</code>:</p>
+
+<pre><code>// web/lib/profile/profile.ts — os tipos vêm do contrato GERADO, nunca escritos à mão
+export type Profile = components["schemas"]["ProfileResponse"];
+export type ProfileInput = components["schemas"]["ProfileRequest"];</code></pre>
+
+<h3>7.2 — Os enums também vêm do contrato — e uma nova enum quebraria o build, não silenciosamente</h3>
+<p>Esta é a parte mais didática da costura nesta spec. O contrato declara <code>risk_profile</code> como um enum de três
+valores e <code>objectives</code> como um array de quatro valores possíveis:</p>
+
+<pre><code>// api/openapi.yaml — a fonte única dos enums
+risk_profile:
+  type: string
+  enum: [conservative, moderate, aggressive]
+objectives:
+  type: array
+  minItems: 1
+  items:
+    type: string
+    enum: [retirement, passive_income, wealth_preservation, long_term_growth]</code></pre>
+
+<p>O mapeamento pt-BR não reimplementa esses valores — ele os <strong>deriva</strong> do tipo gerado, e usa um <code>Record</code>
+tipado como estrutura de garantia:</p>
+
+<pre><code>// web/lib/profile/labels.ts — o Record é tipado do enum GERADO; toda chave é obrigatória
+type ProfileReq = components["schemas"]["ProfileRequest"];
+export type Objective = NonNullable<ProfileReq["objectives"]>[number];
+
+export const OBJECTIVE_LABELS: Record<Objective, string> = {
+  retirement: "Aposentadoria",
+  passive_income: "Renda passiva",
+  wealth_preservation: "Preservação de patrimônio",
+  long_term_growth: "Crescimento de longo prazo",
+};</code></pre>
+
+<div class="box why">
+  <span class="lbl">O experimento mental: o que aconteceria se o backend adicionasse "esg_focused"?</span>
+  Imagine que amanhã o time de backend adiciona um quinto objetivo ao SPEC-101 — <code>esg_focused</code> — e roda
+  <code>gen:api</code> no frontend para regenerar o <code>schema.ts</code>. O tipo <code>Objective</code> em <code>labels.ts</code> passaria a incluir
+  automaticamente <code>"esg_focused"</code> na sua união (ele é <code>NonNullable&lt;ProfileReq["objectives"]&gt;[number]</code>, derivado
+  do schema). Mas <code>OBJECTIVE_LABELS</code> é declarado como <code>Record&lt;Objective, string&gt;</code> — um <code>Record</code> tipado
+  exige <strong>todas</strong> as chaves da união. Sem a entrada <code>esg_focused: "..."</code>, o TypeScript recusaria compilar:
+  <em>"Property 'esg_focused' is missing in type"</em>. Não é um teste que passaria silenciosamente e falharia em
+  produção — é <strong>o compilador travando o build imediatamente</strong>. Essa é a diferença entre um DTO escrito à mão
+  (que aceitaria qualquer string e deixaria a lacuna passar despercebida até o usuário ver um rótulo vazio em
+  produção) e um tipo derivado do contrato: a deriva vira <strong>erro de compilação local</strong>, não bug de runtime.
+</div>
+
+<h3>7.3 — O frontend continua sendo apenas um cliente</h3>
+<p>O SPEC-210 não muda essa propriedade central do SPEC-200 — só a exercita de novo. O navegador chega ao Postgres
+do SPEC-101 pela mesma fronteira:</p>
+
+<div class="diagram">   Navegador (ProfilePage)                Next.js (mesma origem)              API Go
+   -----------------------                 -----------------------            -------------------
+   Segmented / ChipToggleGroup / Slider     /api/profile -- rewrite -->        GET/PUT /profile
+   useProfile() / useSaveProfile()          proxy same-origin (D1 SPEC-200)    (SPEC-101, Postgres)
+   tipos: lib/api/schema.ts (GERADO)        cookie HttpOnly Lax, sem CORS      identidade = sessao (ctx)
+
+   hoje: so o cliente web fala esse contrato -- amanha: app nativo / MCP / agente falam o MESMO /profile</div>
+
+<h3>7.4 — O guardião de deriva continua vigiando</h3>
+<p>Como o SPEC-210 não mudou o contrato, o <code>npm run check:api</code> do SPEC-200 rodou verde durante todo o
+desenvolvimento — a Definition of Done da spec inclui explicitamente "drift check green" como critério de
+aceite. É o mesmo guardião, agora exercitado por uma feature de verdade, não só pela fundação.</p>
+
+<!-- ============================================================ -->
+<h2 id="construido">8. Como foi construído (visão geral, sem virar tutorial de React)</h2>
+
+<p>Você não precisa dominar React para acompanhar. O suficiente para entender a estrutura:</p>
+
+<ul>
+  <li><strong>A rota.</strong> <code>web/app/(app)/profile/page.tsx</code> — dentro do shell autenticado do SPEC-200 (sidebar +
+  <code>RequireAuth</code>), então herda a sessão e a navegação de graça.</li>
+  <li><strong>Os dados.</strong> <code>web/lib/profile/profile.ts</code> — dois hooks TanStack Query sobre o cliente tipado do
+  SPEC-200 (<code>useProfile</code>, <code>useSaveProfile</code>), no mesmo padrão de <code>web/lib/auth/session.ts</code>.</li>
+  <li><strong>Os rótulos.</strong> <code>web/lib/profile/labels.ts</code> — o mapeamento enum↔pt-BR centralizado, tipado do
+  schema gerado (seção 7.2).</li>
+  <li><strong>Os controles.</strong> <code>web/components/ui/segmented.tsx</code>, <code>chip-toggle.tsx</code>, <code>slider.tsx</code> — três
+  componentes genéricos, novos no design system Aurora, estilizados só com tokens (nada de hex solto).</li>
+</ul>
+
+<p>Se você quiser se aprofundar, os arquivos reais estão apontados acima. A mensagem da aula continua sendo o
+<strong>porquê</strong> do produto e do contrato — não a mecânica de hooks ou de renderização do React.</p>
+
+<!-- ============================================================ -->
+<h2 id="harness">9. Harness Engineering: como a máquina construiu e verificou isto</h2>
+
+<p>O SPEC-210 é a primeira vez que o harness de frontend, montado no SPEC-200, é <strong>exercitado por uma feature
+real</strong> — não só pela fundação. Vale a pena ver como ele se comportou.</p>
+
+<h3>O fluxo <code>/spec-implement 210</code> em fases</h3>
+<p>O PLAN-210 fatiou o trabalho em 5 fases pequenas, cada uma deixando o <code>web/</code> compilando/lintando/type-checando
+verde: (1) dados e mapeamento de rótulos, (2) os três controles de formulário, (3) a tela Perfil compondo os
+controles, (4) testes, (5) documentação e fechamento. A ordem é <strong>bottom-up deliberado</strong>: primeiro o que é
+testável isolado (hooks tipados, mapeamento), depois os componentes reutilizáveis, só então a tela que os
+compõe — o mesmo princípio de de-riscar as costuras mais arriscadas primeiro que o SPEC-200 usou para o contrato
+tipado e a auth.</p>
+
+<table>
+  <tr><th>Fase</th><th>O que entregou</th></tr>
+  <tr><td>1 — Dados &amp; rótulos</td><td><code>lib/profile/labels.ts</code> (enum↔pt-BR, tipado do contrato) + <code>lib/profile/profile.ts</code> (<code>useProfile</code> 404→null, <code>useSaveProfile</code>).</td></tr>
+  <tr><td>2 — Controles de formulário</td><td><code>Segmented</code>, <code>ChipToggleGroup</code>, <code>Slider</code> — token-styled, com papéis ARIA (<code>radiogroup</code>/<code>checkbox</code>).</td></tr>
+  <tr><td>3 — A tela Perfil</td><td><code>app/(app)/profile/page.tsx</code> compondo os três controles; validação de borda; Salvar explícito; feedback de sucesso/erro.</td></tr>
+  <tr><td>4 — Testes</td><td>6 Vitest/RTL (rótulos, primeiro acesso vs. prefill, validação, o corpo exato do PUT) + Playwright gated + verificação manual contra o backend.</td></tr>
+  <tr><td>5 — Docs &amp; fechamento</td><td>CHANGELOG, SPEC-210/PLAN-210 → Done, revisão pelos dois subagentes, esta aula.</td></tr>
+</table>
+
+<h3>Os dois subagentes de revisão — e os verdictos reais</h3>
+<p>Como no SPEC-200, a mudança passou pelos dois revisores de frontend, com divisão de trabalho clara. Ambos
+retornaram <strong>PASS</strong> — mas "PASS" não significa "nada a dizer": os dois levantaram observações
+<strong>não-bloqueantes</strong>, e vale a pena ler o que eles notaram, porque é um exemplo real de como um revisor
+cuidadoso pensa mesmo quando não está travando a entrega.</p>
+
+<div class="box tip">
+  <span class="lbl">frontend-reviewer — PASS</span>
+  Verificou, em ordem de severidade: contrato-do-OpenAPI (os tipos de <code>Profile</code>/<code>ProfileInput</code> vêm do schema
+  gerado, nenhum DTO à mão), dinheiro-sem-float (não se aplica — <strong>não há nenhum valor monetário nesta tela</strong>,
+  confirmando a seção 5), as guardas binding (também não se aplicam — nenhuma saída de IA aqui, BR-2103),
+  identidade-do-servidor (o PUT não carrega <code>user_id</code>), tokens-como-código (os três controles novos usam só
+  classes Aurora — <code>bg-primary</code>, <code>border-hairline</code>, <code>text-loss</code>/<code>text-gain</code>, nada de hex solto) e
+  acessibilidade (o <code>Segmented</code> usa <code>role="radiogroup"</code>/<code>role="radio"</code>, o <code>ChipToggleGroup</code> usa
+  <code>role="checkbox"</code>, o <code>Slider</code> é um <code>input type="range"</code> nativo com <code>aria-label</code>). Verdict: <strong>PASS</strong>.
+</div>
+
+<div class="box tip">
+  <span class="lbl">react-correctness-reviewer — PASS (com duas notas não-bloqueantes)</span>
+  Rodou <code>typecheck</code>/<code>lint</code>/<code>build</code> e leu o código de perto. Duas observações que não bloqueiam, mas
+  valem a pena entender:
+  <ul style="margin-top:8px">
+    <li><strong>A string de fallback "morta" em <code>useSaveProfile</code>.</strong> Em
+    <code>throw new Error(backendError(error) ?? "save failed (" + response.status + ")")</code>, o segundo ramo do
+    <code>??</code> só dispararia se <code>error</code> existisse mas não tivesse o formato <code>{"error":"..."}</code> esperado — uma
+    situação que, na prática, o <code>openapi-fetch</code> não produz no caminho de falha coberto pelos testes atuais.
+    É um fallback defensivo razoável (não custa nada tê-lo), mas é código que hoje não tem um caminho de teste
+    que o exercite — o tipo de nota que fica registrada para quando a superfície de erro crescer.</li>
+    <li><strong>A suposição de "form-resync" em <code>ProfileForm</code>.</strong> O formulário inicializa seu estado a partir
+    de <code>initial</code> via <code>useState(initial?.risk_profile ?? null)</code> — isso é seguro <em>hoje</em> porque
+    <code>ProfilePage</code> só monta <code>ProfileForm</code> depois que <code>isLoading</code> resolve (o comentário no código é
+    explícito sobre isso: <em>"the form initializes from it on mount... it mounts only after the load
+    resolves"</em>). Mas é uma suposição implícita: se <code>initial</code> mudasse <em>depois</em> da montagem (por exemplo,
+    um refetch de fundo trazendo um valor mais novo do servidor), o formulário <strong>não</strong> se re-sincronizaria
+    sozinho — <code>useState</code> só lê o valor inicial uma vez. Não é um bug hoje, porque nada dispara esse refetch
+    enquanto o formulário está montado; é uma fragilidade a vigiar se a tela ganhar polling ou refetch em
+    background no futuro.</li>
+  </ul>
+  Verdict: <strong>PASS</strong>.
+</div>
+
+<div class="box why">
+  <span class="lbl">Por que vale a pena ler notas não-bloqueantes de um PASS</span>
+  É tentador achar que "PASS" quer dizer "nada a aprender aqui". O oposto é verdade: as duas notas acima mostram um
+  revisor que não só roda <code>typecheck</code>/<code>lint</code>/<code>build</code> mecanicamente, mas <strong>lê a intenção do código</strong> —
+  reconhece um fallback defensivo mas sem cobertura de teste, e reconhece uma suposição correta-mas-implícita
+  sobre o ciclo de vida do componente. Nenhuma das duas é um bug <em>agora</em>. Mas são exatamente o tipo de nota
+  que, se ignorada repetidamente por várias specs, vira dívida técnica silenciosa. Isso é harness engineering na
+  prática: o revisor automatizado captura uma classe de risco que nem o <code>typecheck</code> nem o <code>build</code> jamais
+  pegariam, porque ambos são sintaticamente válidos.
+</div>
+
+<h3>Os gates e hooks que já existiam, agora exercitados por uma feature</h3>
+<table>
+  <tr><th>Gate / disciplina</th><th>Como apareceu no SPEC-210</th><th>Por que baixa erro</th></tr>
+  <tr><td><code>prettier-edited</code> (hook PostToolUse)</td><td>Formatou automaticamente cada novo arquivo em <code>web/lib/profile/</code> e <code>web/components/ui/</code> ao ser editado</td><td>Zero ruído de estilo no diff da primeira feature de verdade do track.</td></tr>
+  <tr><td><code>check:api</code> (drift guard)</td><td>Rodou verde durante toda a spec — nenhuma mudança em <code>api/openapi.yaml</code></td><td>Confirma, de forma mecânica, que a spec realmente não tocou o contrato — o mesmo guardião do SPEC-200, agora provado contra uma feature.</td></tr>
+  <tr><td>Gate <code>typecheck</code>/<code>lint</code>/<code>build</code></td><td>Os três controles novos e os hooks de dados passaram limpos antes da revisão semântica começar</td><td>Bugs sintáticos/de tipo são eliminados antes de gastar o tempo (caro) dos subagentes com eles.</td></tr>
+  <tr><td>Testes (Vitest + RTL)</td><td>6 testes cobrindo rótulos, 404→vazio, prefill, validação e o corpo exato do PUT</td><td>A regra "sem <code>user_id</code> no PUT" (BR-2101) fica travada por teste, não por memória do revisor.</td></tr>
+  <tr><td>Verificação manual contra o backend real</td><td>404 → PUT 200 → GET 200 rodado à mão contra a API Go de verdade</td><td>Cobre a lacuna que mocks não cobrem: o comportamento real do SPEC-101 rodando, não uma suposição sobre ele.</td></tr>
+  <tr><td>Zero-dep para o slider (ADR-0003)</td><td><code>&lt;input type="range"&gt;</code> nativo em vez de uma lib de slider de terceiros</td><td>Nenhuma nova dependência de runtime para um controle que o HTML já resolve — a postura zero-custo aplicada ao frontend.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">10. Conexão com AI Engineering &amp; Produto</h2>
+
+<p>Uma tela sem IA e sem dinheiro pode parecer distante do "AI Engineering" do projeto. Mas o Perfil é, na verdade,
+o <strong>primeiro dado real</strong> que qualquer feature de IA futura vai ler — e é onde a lição da seção 5 fecha o
+círculo.</p>
+
+<h3>10.1 — O primeiro dado real para a Fase 1 da IA</h3>
+<p>SPEC-104 (motor de insights), SPEC-105 (assistente de rebalanceamento) e SPEC-106 (Health Score) já existem no
+backend e já sabem <em>como</em> ler um perfil de investidor — mas até o SPEC-210, nenhum usuário via um formulário
+para <em>escrever</em> esse perfil pela web. Agora existe: cada risco/objetivo/horizonte salvo por esta tela é
+literalmente o <strong>fato de entrada</strong> que o Fact Builder do backend vai considerar antes de qualquer Insighter
+gerar uma explicação. "Facts are computed, not generated" (a regra binding #3 do CLAUDE.md) começa, para cada
+usuário, com o que ele digita aqui.</p>
+
+<h3>10.2 — Por que a ausência das travas aqui prepara a SPEC-213</h3>
+<p>A seção 5 mostrou que FR-013/FR-014 não se aplicam ao Perfil porque ele não produz saída de IA. Mas essa
+ausência tem uma função pedagógica e de produto: ela <strong>isola</strong> exatamente onde as guardas precisam reaparecer.
+Quando a SPEC-213 ligar Insights/Dashboard para <em>ler</em> este perfil e gerar recomendações personalizadas, essas
+telas vão precisar do <code>InsightCard</code> com <code>explanation</code> obrigatório e do <code>NonAdviceDisclaimer</code> de novo — porque
+aí sim haverá algo (uma sugestão de IA calibrada pelo perfil de risco de Rafael) para essas travas gatearem. O
+SPEC-210 e a futura SPEC-213 formam um par didático: <strong>captura sem guarda</strong> → <strong>saída com guarda</strong>.</p>
+
+<h3>10.3 — A costura para a visão multi-agente / MCP</h3>
+<p>Como no SPEC-200, o Perfil reforça a mesma propriedade: o frontend não tem lógica de domínio própria sobre o
+que significa "conservador" ou "agressivo" — ele só renderiza o enum e delega tudo ao contrato. Isso significa
+que, quando o produto evoluir para um CIO multi-agente ou um servidor MCP, esses agentes vão poder ler o
+<em>mesmo</em> <code>GET /profile</code> que esta tela lê — sem nenhuma reescrita de frontend. O perfil de um usuário não é
+"propriedade da tela React"; é propriedade da API, e a tela é só mais um cliente dela.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  A engenharia de IA responsável não é só "gatear a saída da IA" — é também saber <strong>quando não gatear</strong>. O
+  SPEC-210 ensina essa segunda metade: uma tela de captura de preferência não precisa das travas de uma tela de
+  saída de IA, e forçar essas travas onde não cabem seria burocracia, não segurança. A disciplina real está em
+  saber identificar, spec a spec, onde a trava é estrutural e onde ela é irrelevante — e documentar essa decisão
+  (BR-2103) para que o próximo desenvolvedor (ou a próxima IA) não a reintroduza por engano.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">11. O que vem a seguir</h2>
+
+<p>Com o Perfil no ar, o track SPEC-21x tem sua primeira feature completa e o padrão bottom-up (dados → controles
+→ tela → testes → docs) validado numa spec real, não só na fundação.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tela</th><th>Como se apoia no SPEC-210</th></tr>
+  <tr><td>SPEC-211/212</td><td>Carteira &amp; Dashboard</td><td>Consomem seus twins de backend (SPEC-102/103) pelo mesmo padrão de hooks tipados + <code>check:api</code>; aqui sim as guardas FR-013/FR-014 e <code>money.ts</code> entram em jogo.</td></tr>
+  <tr><td><strong>SPEC-213</strong></td><td><strong>Insights personalizados</strong></td><td>É onde o perfil capturado aqui <strong>volta</strong> como entrada — e onde <code>InsightCard</code>/<code>NonAdviceDisclaimer</code> reaparecem, porque agora há saída de IA de verdade para gatear.</td></tr>
+  <tr><td>SPEC-214</td><td>Projeções</td><td>Também vai ler o horizonte de investimento desta tela como um parâmetro de cálculo — outro consumidor do mesmo dado.</td></tr>
+  <tr><td>SPEC-215</td><td>Copiloto conversacional</td><td>Quando o usuário perguntar "sou muito agressivo pra minha idade?", o copiloto vai ler exatamente o perfil que esta tela deixou salvo.</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-210 o YieldForge ganhou sua <strong>primeira tela de feature</strong> — o Perfil, onde Rafael e Carla declaram
+  risco, objetivos e horizonte via três controles novos (<code>Segmented</code>, <code>ChipToggleGroup</code>, <code>Slider</code>) ligados
+  ao SPEC-101 por tipos <strong>gerados</strong> do contrato (nenhum enum escrito à mão, uma nova enum quebraria o build);
+  a tela deliberadamente <strong>não carrega</strong> as travas FR-013/FR-014 porque não há saída de IA nem dinheiro para
+  gatear (BR-2103) — a lição central da aula —; e a mudança foi revisada limpa (PASS) pelos dois subagentes de
+  frontend, que ainda assim registraram duas notas finas e não-bloqueantes (o fallback de erro sem cobertura, a
+  suposição de resync do formulário) como exemplo de revisão semântica que vai além do <code>typecheck</code>.
+</div>
+
+<footer>
+  YieldForge · Aula 210 (SPEC-210) · gerada como material de estudo. Veja também a
+  <a href="SPEC-200-aula.html">Aula 200</a> (a fundação do frontend — o "SPEC-001" do cliente web, de onde vêm o
+  cliente tipado, o shell e as travas que aqui não se aplicam), a
+  <a href="SPEC-101-aula.html">Aula 101</a> (o twin de backend — o perfil do investidor, com o mesmo BR-1016 de
+  "guardas não se aplicam"), a
+  <a href="SPEC-104-aula.html">Aula 104</a> (o motor de insights que vai ler este perfil, com FR-013/FR-014 em
+  força total), o
+  <a href="../02-specs/SPEC-210-investor-profile-screen.md">SPEC-210</a>,
+  o <a href="../03-plans/PLAN-210-investor-profile-screen.md">PLAN-210</a>
+  e o contrato <a href="../../api/openapi.yaml">api/openapi.yaml</a>.
+</footer>
+
+</div>
+</body>
+</html>

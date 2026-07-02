@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-210 — Investor Profile Screen**: the first `SPEC-21x` feature, turning the `/profile`
+  stub into the real **Perfil** screen — the frontend face of SPEC-101. Loads `GET /profile`
+  (a `404` shows a first-run empty state, distinct from a transient error, mirroring
+  `useSession`'s 401→null) and saves via `PUT /profile`, with the request body built to exactly
+  `{ risk_profile, objectives, horizon_years }` — **no `user_id`** (BR-2101; identity is the
+  session). Three new reusable, accessible, token-styled controls
+  (`components/ui/{segmented,chip-toggle,slider}`) — risk profile (single-select), objectives
+  (multi-select chips, **≥1 required**), and a keyboard-accessible native-range **slider** for the
+  1–50 year horizon. Enum↔pt-BR label mapping is centralized and typed off the generated contract
+  (`lib/profile/labels.ts`), so a new backend enum value fails the build rather than silently
+  drifting. No money, no AI output on this screen, so FR-013/014 and the money conventions don't
+  apply (BR-2103) — its job is to *feed* the AI features (SPEC-104/105/106), not render them.
+  6 new Vitest/RTL tests (label coverage, first-run vs. prefill, validation gating, the exact PUT
+  body) plus a Playwright smoke scaffold; live-verified against the running backend
+  (`404 → PUT 200 → GET 200`). Reviewed clean (PASS) by both `frontend-reviewer` and
+  `react-correctness-reviewer`. No `api/openapi.yaml` change.
+
 - **Frontend harness** — the review/verification layer for the `SPEC-2xx` track, mirroring the Go
   one. Two subagents: **`react-correctness-reviewer`** (hooks/effects + setState-in-effect,
   client/server boundaries, hydration, listener/stream leaks, async races, unsafe TS) and
