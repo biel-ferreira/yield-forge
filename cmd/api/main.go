@@ -163,6 +163,7 @@ func run() error {
 		HealthScore:  healthService,
 		Projections:  projectionService,
 		Chat:         chatService,
+		Markets:      macroRepo,
 		CookieName:   cfg.AuthCookieName,
 		CookieSecure: cfg.CookieSecure(),
 		SessionTTL:   cfg.SessionTTL,

@@ -26,6 +26,7 @@ type Deps struct {
 	HealthScore  HealthScorer      // portfolio health score (SPEC-106)
 	Projections  ProjectionEngine  // income + net-worth projections (SPEC-107)
 	Chat         ChatService       // conversational copilot (SPEC-108)
+	Markets      MarketDataReader  // latest SELIC/CDI/IPCA reference (SPEC-109)
 	CookieName   string            // session cookie name
 	CookieSecure bool              // set the cookie's Secure flag (off in dev)
 	SessionTTL   time.Duration
@@ -58,12 +59,13 @@ func NewRouter(d Deps) http.Handler {
 	healthH := healthHandler{service: d.HealthScore, logger: d.Logger}
 	projectionsH := projectionsHandler{service: d.Projections, logger: d.Logger}
 	chatH := chatHandler{service: d.Chat, logger: d.Logger}
+	marketH := marketHandler{reader: d.Markets, logger: d.Logger}
 
 	mux := http.NewServeMux()
 	// The application API surface comes from one declared table (routes.go) so the
 	// OpenAPI spec can be drift-tested against it (openapi_test.go). Public vs protected
 	// is decided by isPublicRoute, not by registration order.
-	for _, rt := range routeTable(api, authH, profileH, holdingsH, dashboardH, insightsH, rebalancingH, healthH, projectionsH, chatH) {
+	for _, rt := range routeTable(api, authH, profileH, holdingsH, dashboardH, insightsH, rebalancingH, healthH, projectionsH, chatH, marketH) {
 		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler)
 	}
 	// API documentation meta-routes (public): the embedded OpenAPI spec + Swagger UI.
