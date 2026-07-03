@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-109 — Fixed-Income Rate Indexers (% do CDI / IPCA+)**: a fixed-income holding now
+  carries an `indexer_type` (`prefixado` | `cdi_percentual` | `ipca_spread`, closed enum,
+  `internal/portfolio/indexer.go`) alongside its stored `annual_rate_bps`. The **effective
+  current annual rate** is resolved at read-time (`FixedIncomeHolding.ResolveEffectiveRate`) —
+  `cdi_percentual` × the latest CDI, `ipca_spread` + the latest IPCA (both half-up integer bps,
+  no float) — and is a **computed, never-persisted** field (BR-1092), refreshed automatically
+  as SPEC-006's already-ingested SELIC/CDI/IPCA moves, with no user action. `portfolio.Service`
+  is the single seam that resolves it (via a consumer-defined `MacroReader` port) on every
+  read/write path; the Dashboard (SPEC-103) and Projections (SPEC-107) consume the already-
+  resolved rate through their existing `HoldingsReader`/`Reader` ports — no duplicate macro I/O,
+  no new port on either package. Every holding written before this spec defaults to `prefixado`
+  and produces **byte-for-byte identical** Dashboard/Projections output (BR-1093, regression-
+  tested). Graceful degradation: a missing macro reading (or a fetch failure) falls back to the
+  raw stored rate rather than erroring the read (BR-1094) — `GET /market/indicators` (new,
+  read-only, auth-gated, reusing the existing `MacroRepository`) distinguishes "not yet
+  ingested" from a real infra failure and logs the latter, so an outage stays observable
+  without failing the response. New migration `0007_fixed_income_indexer` (additive,
+  `DEFAULT 'prefixado'` + a `CHECK` constraint); extended `FixedIncomeRequest`/`Response`
+  DTOs (`indexer_type` on write, `+ effective_annual_rate_bps` on read, never accepted on
+  write); documented in `api/openapi.yaml`. Reviewed by `hexagonal-reviewer` (clean) and
+  `go-correctness-reviewer` (caught and fixed a real bug: a macro-reader infra error was
+  indistinguishable from "not ingested yet"). PT-BR lesson `docs/lessons/SPEC-109-aula.html`.
+  **Unblocks SPEC-211** (the fixed-income form's indexer picker + live reference display).
+
 - **SPEC-210 — Investor Profile Screen**: the first `SPEC-21x` feature, turning the `/profile`
   stub into the real **Perfil** screen — the frontend face of SPEC-101. Loads `GET /profile`
   (a `404` shows a first-run empty state, distinct from a transient error, mirroring

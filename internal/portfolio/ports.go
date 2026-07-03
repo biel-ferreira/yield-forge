@@ -1,6 +1,10 @@
 package portfolio
 
-import "context"
+import (
+	"context"
+
+	"github.com/biel-ferreira/yield-forge/internal/marketdata"
+)
 
 // Repository persists holdings, per-user scoped and ownership-checked (SPEC-102 FR-1026,
 // BR-1021). Creates return the stored row (with DB-assigned id/timestamps); reads are scoped
@@ -24,4 +28,11 @@ type Repository interface {
 // through, without coupling to HTTP or SQL. The Service satisfies it.
 type Reader interface {
 	ListHoldings(ctx context.Context, userID string) (Holdings, error)
+}
+
+// MacroReader supplies the latest macro indicator (SPEC-006), used to resolve a fixed-income
+// holding's effective annual rate (SPEC-109 FR-1092). A missing indicator degrades gracefully
+// (BR-1094) — the Service treats GetLatestMacroIndicator's error as "unavailable", never fatal.
+type MacroReader interface {
+	GetLatestMacroIndicator(ctx context.Context, ind marketdata.Indicator) (marketdata.MacroIndicator, error)
 }

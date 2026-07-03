@@ -68,16 +68,21 @@ type fixedIncomeRequest struct {
 	Institution            string  `json:"institution"`
 	InvestedAmountCentavos int64   `json:"invested_amount_centavos"`
 	AnnualRateBps          int     `json:"annual_rate_bps"`
+	IndexerType            string  `json:"indexer_type"`  // "" defaults to prefixado (SPEC-109 BR-1093)
 	MaturityDate           *string `json:"maturity_date"` // "YYYY-MM-DD" or null
 	LiquidityType          string  `json:"liquidity_type"`
 }
 
 type fixedIncomeResponse struct {
-	ID                     string    `json:"id"`
-	Name                   string    `json:"name"`
-	Institution            string    `json:"institution"`
-	InvestedAmountCentavos int64     `json:"invested_amount_centavos"`
-	AnnualRateBps          int       `json:"annual_rate_bps"`
+	ID                     string `json:"id"`
+	Name                   string `json:"name"`
+	Institution            string `json:"institution"`
+	InvestedAmountCentavos int64  `json:"invested_amount_centavos"`
+	AnnualRateBps          int    `json:"annual_rate_bps"`
+	IndexerType            string `json:"indexer_type"`
+	// EffectiveAnnualRateBps is computed, never persisted (SPEC-109 FR-1092): the resolved
+	// current rate for cdi_percentual/ipca_spread holdings; equal to AnnualRateBps for prefixado.
+	EffectiveAnnualRateBps int       `json:"effective_annual_rate_bps"`
 	MaturityDate           *string   `json:"maturity_date"`
 	LiquidityType          string    `json:"liquidity_type"`
 	CreatedAt              time.Time `json:"created_at"`
@@ -234,7 +239,7 @@ func fixedIncomeInput(req fixedIncomeRequest) (portfolio.FixedIncomeInput, error
 	return portfolio.FixedIncomeInput{
 		Name: req.Name, Institution: req.Institution,
 		InvestedAmountCentavos: req.InvestedAmountCentavos, AnnualRateBps: req.AnnualRateBps,
-		MaturityDate: maturity, LiquidityType: req.LiquidityType,
+		IndexerType: req.IndexerType, MaturityDate: maturity, LiquidityType: req.LiquidityType,
 	}, nil
 }
 
@@ -249,6 +254,7 @@ func toFixedIncomeResponse(h portfolio.FixedIncomeHolding) fixedIncomeResponse {
 	return fixedIncomeResponse{
 		ID: h.ID, Name: h.Name, Institution: h.Institution,
 		InvestedAmountCentavos: h.InvestedAmountCentavos, AnnualRateBps: h.AnnualRateBps,
+		IndexerType: string(h.IndexerType), EffectiveAnnualRateBps: h.EffectiveAnnualRateBps,
 		MaturityDate: formatDate(h.MaturityDate), LiquidityType: string(h.LiquidityType),
 		CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt,
 	}
@@ -295,6 +301,8 @@ func (h holdingsHandler) writeHoldingError(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "annual_rate_bps must not be negative")
 	case errors.Is(err, portfolio.ErrInvalidLiquidityType):
 		writeError(w, http.StatusBadRequest, "liquidity_type must be daily or at_maturity")
+	case errors.Is(err, portfolio.ErrInvalidIndexer):
+		writeError(w, http.StatusBadRequest, "indexer_type must be prefixado, cdi_percentual, or ipca_spread")
 	case errors.Is(err, portfolio.ErrMaturityRequired):
 		writeError(w, http.StatusBadRequest, "maturity_date is required for an at_maturity holding")
 	case errors.Is(err, portfolio.ErrPastMaturity):

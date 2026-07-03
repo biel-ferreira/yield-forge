@@ -99,7 +99,7 @@ func TestRebalance_GatesHoldEndToEnd_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// The rebalancing engine over the real seams + the gated fake Insighter (the production chain).
-	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk), quoteRepo, clk)
+	dashSvc := dashboard.NewService(portfolio.NewService(pfRepo, clk, macroRepo), quoteRepo, clk)
 	profSvc := profile.NewService(profileRepo, clk)
 	factBuilder := engine.NewFactBuilder(dashSvc, profSvc, macroRepo)
 	insighter := insightfactory.New(config.Config{

@@ -34,7 +34,9 @@ func TestService_Project_ComposesInputs(t *testing.T) {
 	held := portfolio.Holdings{
 		FII: []portfolio.FIIHolding{{Ticker: marketdata.MustParseTicker("HGLG11")}},
 		FixedIncome: []portfolio.FixedIncomeHolding{
-			{InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200}, // 12% of 1M = 120_000/yr
+			// EffectiveAnnualRateBps (SPEC-109) is what fixedIncomeAnnual reads; ListHoldings
+			// resolves it in production — set directly here for this pure-function test.
+			{InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200, EffectiveAnnualRateBps: 1_200}, // 12% of 1M = 120_000/yr
 		},
 	}
 	svc := NewService(fakeDashboard{d: d}, fakeHoldings{h: held})
@@ -66,6 +68,6 @@ func TestService_Project_Deterministic(t *testing.T) {
 func TestFixedIncomeAnnual(t *testing.T) {
 	require.Equal(t, int64(0), fixedIncomeAnnual(nil))
 	require.Equal(t, int64(120_000), fixedIncomeAnnual([]portfolio.FixedIncomeHolding{
-		{InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200},
+		{InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200, EffectiveAnnualRateBps: 1_200},
 	}))
 }

@@ -44,6 +44,8 @@ tags:
     description: The investor profile (risk, objectives, horizon).
   - name: holdings
     description: Portfolio holdings — FIIs and fixed income (per-user, ownership-scoped).
+  - name: market
+    description: Global market reference data (SELIC/CDI/IPCA) — no user_id.
 paths:
   /healthz:
     get:
@@ -626,6 +628,26 @@ paths:
           description: The thread was deleted (or did not exist — no existence oracle).
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /market/indicators:
+    get:
+      tags: [market]
+      summary: The latest SELIC/CDI/IPCA reference rates
+      description: |-
+        Global reference data (no user_id) reused to resolve a fixed-income holding's
+        effective annual rate (SPEC-109). An indicator with no ingested value yet is
+        omitted from the response rather than failing the request.
+      operationId: listMarketIndicators
+      responses:
+        "200":
+          description: The latest observation per indicator (possibly a subset, or empty).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketIndicatorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     cookieAuth:
@@ -1118,7 +1140,15 @@ components:
         annual_rate_bps:
           type: integer
           minimum: 0
-          description: Annual rate in basis points (1 bp = 0.01%).
+          description: |-
+            Meaning depends on indexer_type (SPEC-109): the flat annual rate for
+            prefixado; the percentage of CDI in bps-of-percent for cdi_percentual
+            (12000 = 120%); the spread over IPCA in bps for ipca_spread (580 = +5.80%).
+        indexer_type:
+          type: string
+          enum: [prefixado, cdi_percentual, ipca_spread]
+          default: prefixado
+          description: "\"\" / omitted defaults to prefixado (SPEC-109 BR-1093)."
         maturity_date:
           type: [string, "null"]
           format: date
@@ -1142,6 +1172,16 @@ components:
           format: int64
         annual_rate_bps:
           type: integer
+          description: The raw stored value — see FixedIncomeRequest.annual_rate_bps.
+        indexer_type:
+          type: string
+          enum: [prefixado, cdi_percentual, ipca_spread]
+        effective_annual_rate_bps:
+          type: integer
+          description: |-
+            Computed, never persisted (SPEC-109): the resolved current annual rate —
+            equal to annual_rate_bps for prefixado; resolved against the latest
+            SELIC/CDI/IPCA (GET /market/indicators) for cdi_percentual/ipca_spread.
         maturity_date:
           type: [string, "null"]
           format: date
@@ -1155,5 +1195,20 @@ components:
           type: string
           format: date-time
       required: [id, name, institution, invested_amount_centavos, annual_rate_bps, liquidity_type, created_at, updated_at]
+    MarketIndicatorResponse:
+      type: object
+      description: One latest observation of a SPEC-006 macro indicator (SPEC-109 FR-1095).
+      properties:
+        indicator:
+          type: string
+          enum: [selic, cdi, ipca]
+        value_bps:
+          type: integer
+          format: int64
+          description: The rate in basis points (1 bp = 0.01%) — never a float.
+        reference_date:
+          type: string
+          format: date
+      required: [indicator, value_bps, reference_date]
 security:
   - cookieAuth: []

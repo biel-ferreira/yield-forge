@@ -51,11 +51,14 @@ func (s *Service) Project(ctx context.Context, userID string, monthlyContributio
 	}), nil
 }
 
-// fixedIncomeAnnual sums the annual income of the fixed-income holdings: Σ invested × annual rate.
+// fixedIncomeAnnual sums the annual income of the fixed-income holdings: Σ invested × annual
+// rate, using each holding's resolved EffectiveAnnualRateBps (SPEC-109) rather than the raw
+// stored rate — for a prefixado holding they're equal; cdi_percentual/ipca_spread use the
+// current resolved rate.
 func fixedIncomeAnnual(fi []portfolio.FixedIncomeHolding) int64 {
 	var total int64
 	for _, h := range fi {
-		total += money.ApplyBps(h.InvestedAmountCentavos, h.AnnualRateBps)
+		total += money.ApplyBps(h.InvestedAmountCentavos, h.EffectiveAnnualRateBps)
 	}
 	return total
 }

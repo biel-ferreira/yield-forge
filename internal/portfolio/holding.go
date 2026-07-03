@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
+	"github.com/biel-ferreira/yield-forge/internal/platform/money"
 )
 
 // Domain sentinels — check with errors.Is.
@@ -42,7 +43,11 @@ type FIIHolding struct {
 
 // FixedIncomeHolding is a registered fixed-income position (SPEC-102 FR-002). InvestedAmount
 // is the cost basis in centavos; AnnualRate is in basis points; MaturityDate is nil for a
-// daily-liquidity holding and set for an at-maturity one.
+// daily-liquidity holding and set for an at-maturity one. IndexerType determines how
+// AnnualRateBps is interpreted (SPEC-109) — see ResolveEffectiveRate. EffectiveAnnualRateBps is
+// a computed, NEVER-PERSISTED field: it starts zero-value and is populated by the Service (via
+// ResolveEffectiveRate) on every read/write path before the holding reaches its caller — the
+// repository never selects or writes it (FR-1092/BR-1092).
 type FixedIncomeHolding struct {
 	ID                     string
 	UserID                 string
@@ -50,10 +55,33 @@ type FixedIncomeHolding struct {
 	Institution            string
 	InvestedAmountCentavos int64
 	AnnualRateBps          int
+	IndexerType            Indexer
+	EffectiveAnnualRateBps int // computed, never persisted — see doc comment above
 	MaturityDate           *time.Time
 	LiquidityType          LiquidityType
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+}
+
+// ResolveEffectiveRate resolves the holding's current effective annual rate from its stored
+// AnnualRateBps + IndexerType and the latest macro readings (SPEC-109 FR-1092). Pure — no I/O;
+// the caller fetches macro (keyed by Indicator) via its own MacroReader port before calling
+// this. Never errors: an Indexer other than Prefixado whose reference indicator is absent from
+// macro degrades to the raw stored value, unresolved (BR-1094/PLAN-109 D3) — a transient,
+// self-healing gap (e.g. before the first ingestion run), never a crash or a silent zero.
+func (h FixedIncomeHolding) ResolveEffectiveRate(macro map[marketdata.Indicator]marketdata.MacroIndicator) int {
+	switch h.IndexerType {
+	case IndexerCDIPercentual:
+		if cdi, ok := macro[marketdata.IndicatorCDI]; ok {
+			return int(money.ApplyBps(cdi.Value, h.AnnualRateBps))
+		}
+	case IndexerIPCASpread:
+		if ipca, ok := macro[marketdata.IndicatorIPCA]; ok {
+			return h.AnnualRateBps + int(ipca.Value)
+		}
+	}
+	// Prefixado, an unrecognized/zero-value indexer, or a missing macro reading: pass through.
+	return h.AnnualRateBps
 }
 
 // Holdings is the aggregate the Reader returns — the caller's full set of holdings, for the
