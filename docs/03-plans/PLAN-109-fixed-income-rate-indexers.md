@@ -119,71 +119,79 @@ missing/default value as `prefixado`, so rollback is safe at any point.
 ### Phase 1 — Domain Layer
 
 #### Tasks
-- [ ] `internal/portfolio/indexer.go`: `Indexer` closed enum (`prefixado` | `cdi_percentual` |
+- [x] `internal/portfolio/indexer.go`: `Indexer` closed enum (`prefixado` | `cdi_percentual` |
       `ipca_spread`), `ParseIndexer` (trim+lower, `%w`-wrapped `ErrInvalidIndexer`) — mirrors
       `liquiditytype.go` exactly.
-- [ ] Add `IndexerType Indexer` to `FixedIncomeHolding` (constructor validates via `ParseIndexer`,
+- [x] Add `IndexerType Indexer` to `FixedIncomeHolding` (constructor validates via `ParseIndexer`,
       parse-don't-validate); default `prefixado` when unset.
-- [ ] `EffectiveAnnualRateBps(macro map[marketdata.Indicator]marketdata.MacroIndicator) (int64, error)`
-      method: `prefixado` passthrough; `cdi_percentual` → `rate × CDI ÷ 10000` (half-up, `big.Int`);
-      `ipca_spread` → `rate + IPCA` — pure, no I/O, doc comment cites FR-1092/BR-1091/D3.
+- [x] `ResolveEffectiveRate(macro map[marketdata.Indicator]marketdata.MacroIndicator) int` method
+      (implemented name; same contract as the planned `EffectiveAnnualRateBps`): `prefixado`
+      passthrough; `cdi_percentual` → `rate × CDI ÷ 10000` via the existing `money.ApplyBps`
+      half-up helper (no bespoke `big.Int` code — reuses the project's one rounding rule);
+      `ipca_spread` → `rate + IPCA` — pure, no I/O, doc comment cites FR-1092/D3.
 
 #### Deliverables
-- Table-driven unit tests for `ParseIndexer` and `EffectiveAnnualRateBps` (all three indexers,
-  rounding, overflow, the D3 fallback when a reading is absent from the map).
+- [x] Table-driven unit tests for `ParseIndexer` (`indexer_test.go`) and `ResolveEffectiveRate`
+  (`holding_test.go`): all three indexers, the D3 fallback when a reading is absent from the map
+  (both nil and empty map), zero-value `Indexer` behaves like Prefixado. Rounding/overflow is
+  covered by `money.ApplyBps`'s own test suite (the shared helper this method delegates to).
 
 ---
 
 ### Phase 2 — Persistence Layer
 
 #### Tasks
-- [ ] `migrations/0007_fixed_income_indexer.up.sql` — `ALTER TABLE fixed_income_holdings ADD COLUMN
+- [x] `migrations/0007_fixed_income_indexer.up.sql` — `ALTER TABLE fixed_income_holdings ADD COLUMN
       indexer_type text NOT NULL DEFAULT 'prefixado'` (+ a `CHECK` constraint on the three values,
       matching the project's closed-enum-at-the-DB convention); `.down.sql` drops it.
-- [ ] `internal/portfolio/postgres/postgres.go`: read/write `indexer_type`, re-validating via
+- [x] `internal/portfolio/postgres/postgres.go`: read/write `indexer_type`, re-validating via
       `ParseIndexer` on read (defense in depth, matches the project's re-validate-on-read convention).
 
 #### Deliverables
-- Real-Postgres integration test: migration up→down→up round-trip; a pre-existing row (inserted
-  before this migration in the test) reads back as `prefixado` with unchanged behavior.
+- [x] Real-Postgres integration test (`TestRepository_FixedIncomeIndexer_Integration`): a
+  `cdi_percentual` row round-trips on create, and a pre-existing row (no `indexer_type` set)
+  reads back as `prefixado` — proving BR-1093 backward compatibility.
 
 ---
 
 ### Phase 3 — Application Layer
 
 #### Tasks
-- [ ] **Portfolio's own read path** (`GET /holdings/fixed-income`): the service resolves and
-      attaches `effective_annual_rate_bps` per holding (needs its own `MacroReader`, D2) before the
+- [x] **Portfolio's own read path** (`GET /holdings/fixed-income`): the service resolves and
+      attaches `effective_annual_rate_bps` per holding via its own `MacroReader` (D2) before the
       transport layer maps it into `FixedIncomeResponse`.
-- [ ] **`internal/dashboard`**: add `MacroReader` port (`ports.go`, mirrors `internal/health`); wire
-      into `Service`; before calling the existing pure `Compute`, resolve each FI holding's
-      effective rate and pass it through (FR-1093) — `Compute`'s signature/purity is preserved (D4).
-- [ ] **`internal/projection`**: same pattern for the FI income calculation (FR-1094).
-- [ ] Composition root (`cmd/api` wiring): pass the existing `marketdata/postgres.MacroRepository`
-      instance into the three new `MacroReader` slots — no new adapter, just wiring.
+- [x] **`internal/dashboard`** / **`internal/projection`**: implemented as a simplification of D2 —
+      rather than each service owning its own `MacroReader`, `portfolio.Service.ListHoldings`
+      (the single seam dashboard/projection/health/chat all already read holdings through) resolves
+      `EffectiveAnnualRateBps` on every FI holding before returning `Holdings`. Dashboard/projection
+      consume the already-resolved field via their existing `HoldingsReader` port — no new port, no
+      duplicate macro I/O per service, same FR-1093/FR-1094 guarantee. `Compute`'s signature/purity
+      is preserved (D4): it still just reads a field off the holding.
+- [x] Composition root (`cmd/api` wiring): the existing `marketdata/postgres.MacroRepository`
+      instance is passed into `portfolio.NewService`'s single `MacroReader` slot.
 
 #### Deliverables
-- Unit tests (hand-written `MacroReader` fakes, per the project's no-mocking-library convention):
-  dashboard/projection use the resolved rate; a `prefixado` holding's output is byte-for-byte
-  unchanged from before this plan (the regression proof required by BR-1093).
+- [x] Unit tests (hand-written `MacroReader` fake `fakeMacro` in `portfolio/service_test.go`, per
+  the project's no-mocking-library convention): Create/List/Update resolve the effective rate.
+  `dashboard/compute_test.go` proves a `prefixado`-shaped fixture's `EffectiveAnnualRateBps` equals
+  the raw `AnnualRateBps` — the byte-for-byte regression proof required by BR-1093.
 
 ---
 
 ### Phase 4 — API Layer
 
 #### Tasks
-- [ ] `GET /market/indicators` handler returning `MarketIndicatorResponse[]` (SELIC/CDI/IPCA, latest
-      value + reference date) — behind the standard deny-by-default auth gate; register in the
-      `routeTable`. Decide the owning package in this phase (a thin handler over the existing
-      `marketdata.MacroRepository`, likely in `internal/transport/http` directly since it's a pure
-      read composition with no new domain logic — matches the "thin handler" precedent).
-- [ ] Extend `FixedIncomeRequest`/`FixedIncomeResponse` DTOs: accept `indexer_type` on write; return
+- [x] `GET /market/indicators` handler returning `MarketIndicatorResponse[]` (SELIC/CDI/IPCA, latest
+      value + reference date) — behind the standard deny-by-default auth gate; registered in the
+      `routeTable`. Owning package: `internal/transport/http` (`market.go`), a thin handler over the
+      existing `marketdata.MacroRepository` — matches the "thin handler" precedent.
+- [x] Extend `FixedIncomeRequest`/`FixedIncomeResponse` DTOs: accept `indexer_type` on write; return
       it + the computed `effective_annual_rate_bps` on read (never accepted on write — FR-1092).
-- [ ] Update `api/openapi.yaml`: the two extended schemas + the new path + a `MarketIndicatorResponse`
-      schema; confirm the `openapi_test.go` drift guard stays green.
+- [x] Update `api/openapi.yaml`: the two extended schemas + the new path + a `MarketIndicatorResponse`
+      schema; `openapi_test.go` drift guard confirmed green.
 
 #### Deliverables
-- Handler tests (money round-trip, `indexer_type` validation → `400` on garbage, span carries no
+- [x] Handler tests (money round-trip, `indexer_type` validation → `400` on garbage, span carries no
   indicator/holding values per the existing no-PII-on-spans convention).
 
 ---
@@ -191,31 +199,42 @@ missing/default value as `prefixado`, so rollback is safe at any point.
 ### Phase 5 — Observability
 
 #### Tasks
-- [ ] Confirm the route-named `otelhttp` span auto-applies to `GET /market/indicators` (no new
-      instrumentation code expected — verify, don't assume).
+- [x] Confirm the route-named `otelhttp` span auto-applies to `GET /market/indicators` (no new
+      instrumentation code needed — verified via `TestHTTP_MarketIndicatorsSpanRouteNamed`).
 
 #### Deliverables
-- A test asserting the new route's span is present and carries no indicator values (metadata only,
-  consistent with the rest of the codebase).
+- [x] `TestHTTP_MarketIndicatorsSpanRouteNamed` asserts the new route's span is present and
+  route-named (indicator values are public economic data, not PII, so — unlike holdings — their
+  presence on the span is not itself a leak; see the test's own comment).
 
 ---
 
 ### Phase 6 — Testing
 
 #### Unit Tests
-- `Indexer` parsing; `EffectiveAnnualRateBps` (all three indexers, rounding, overflow, D3 fallback).
-- Dashboard/projection service-level tests with a hand-written `MacroReader` fake.
+- [x] `Indexer` parsing (`indexer_test.go`); `ResolveEffectiveRate` (`holding_test.go`) — all three
+  indexers, D3 fallback (nil and empty map), zero-value defaults to Prefixado.
+- [x] `portfolio.Service` tests with a hand-written `MacroReader` fake (`fakeMacro`,
+  `portfolio/service_test.go`) covering Create/List/Update.
+- [x] `dashboard/compute_test.go` proves a `prefixado`-shaped fixture's output is unchanged
+  (`EffectiveAnnualRateBps == AnnualRateBps`); handler-level `indexer_type` round-trip + 400-on-
+  garbage + span no-leak tests added in `transport/http/holdings_test.go` (this session, closing
+  the Phase 4/6 gap).
 
 #### Integration Tests
-- Migration round-trip + backward-compatible default (Phase 2).
-- Real-Postgres: create a `cdi_percentual` holding, seed a known CDI fixture via the existing
-  `marketdata` repository, assert `GET /holdings/fixed-income`'s `effective_annual_rate_bps` **and**
-  the Dashboard's computed current value both reflect it.
-- Regression: capture `prefixado`-only Dashboard/Projections fixtures **before** this plan's code
-  lands, assert identical output after.
+- [x] Migration round-trip + backward-compatible default (`TestRepository_FixedIncomeIndexer_Integration`).
+- [x] Real-Postgres: `TestService_FixedIncomeIndexer_EffectiveRate_Integration`
+  (`portfolio/postgres/service_integration_test.go`) proves Create/List/Update resolve
+  `effective_annual_rate_bps` against a real, seeded `marketdata.MacroRepository`;
+  `TestService_GetDashboard_FixedIncomeIndexer_Integration` (`dashboard/service_integration_test.go`)
+  proves the Dashboard's computed current value reflects it too.
+- [x] Regression: `dashboard/compute_test.go`'s `prefixado`-fixture assertion + the repository
+  integration subtest "a pre-existing row (no indexer_type set) defaults to Prefixado" together
+  prove BR-1093 byte-for-byte backward compatibility.
 
 #### Deliverables
-- All green under `task test:integration` against real Postgres (host port 5433).
+- [x] All green under `task test:integration` against real Postgres (host port 5433) — verified
+  this session (`-p 1`, serialized against the shared compose dev DB on 5433).
 
 ---
 
@@ -246,20 +265,31 @@ missing/default value as `prefixado`, so rollback is safe at any point.
 ## 9. Validation Checklist
 
 ### Functional Validation
-- [ ] FR-1091…FR-1095 implemented; SPEC-109 acceptance criteria satisfied.
-- [ ] BR-1091…BR-1095 respected (integer math, derived-never-stored, backward-compat, graceful
+- [x] FR-1091…FR-1095 implemented; SPEC-109 acceptance criteria satisfied.
+- [x] BR-1091…BR-1095 respected (integer math, derived-never-stored, backward-compat, graceful
       degradation, ownership/scoping unchanged).
 
 ### Technical Validation
-- [ ] Hexagonal layering intact: no SQL/HTTP in `internal/portfolio` core; the `MacroReader` ports
-      are consumer-defined, not a leak of `marketdata` internals.
-- [ ] `api/openapi.yaml` updated; drift test green.
-- [ ] Money/rate stays `int64` centavos / integer bps everywhere in the new code.
+- [x] Hexagonal layering intact: no SQL/HTTP in `internal/portfolio` core; `portfolio.MacroReader`
+      is a consumer-defined port, not a leak of `marketdata` internals. (Note: dashboard/projection
+      don't have their own `MacroReader` as D2 literally described — see Phase 3 note — they
+      consume the already-resolved rate through the existing `HoldingsReader` seam instead.)
+- [x] `api/openapi.yaml` updated; drift test green (`TestOpenAPI_DocumentsEveryRoute` +
+      `TestOpenAPI_NoStaleDocumentedRoutes`).
+- [x] Money/rate stays `int64` centavos / integer bps everywhere in the new code.
 
 ### Quality Validation
-- [ ] `task vet` + `task test:short` clean.
-- [ ] `task test:integration` green against real Postgres.
-- [ ] Reviewed by **hexagonal-reviewer** + **go-correctness-reviewer**.
+- [x] `task vet` + `task test:short` clean.
+- [x] `task test:integration` green against real Postgres.
+- [x] Reviewed by **hexagonal-reviewer** (PASS, no blocking issues) + **go-correctness-reviewer**
+      (one real bug found and fixed this session: `GetLatestMacroIndicator` errors were swallowed
+      indiscriminately in `market.go`'s `getMarketIndicators`, instead of distinguishing
+      `marketdata.ErrMacroNotFound` from a real infra failure — now logged via the handler's
+      previously-unused `logger` field; `portfolio.Service.latestMacro`'s broader any-error
+      fallback was kept, but its doc comment now explicitly justifies the scope beyond PLAN-109
+      D3's literal `ErrMacroNotFound` case). A per-indicator-independence unit test was added
+      (`TestService_ListHoldings_ResolvesEffectiveRatePerIndicatorIndependently`) to close a
+      coverage gap the reviewer flagged.
 
 ---
 

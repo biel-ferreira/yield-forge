@@ -57,29 +57,24 @@ type fakeClock struct{ t time.Time }
 
 func (c fakeClock) Now() time.Time { return c.t }
 
-// fakeMacro is a hand-written MacroReader fake (SPEC-109). found=false mirrors
-// marketdata.ErrMacroNotFound, exercising the degradation path (BR-1094).
+// fakeMacro is a hand-written MacroReader fake (SPEC-109). Each indicator resolves
+// independently: an indicator absent from values mirrors marketdata.ErrMacroNotFound for that
+// indicator alone, exercising the per-indicator degradation path (BR-1094) — a zero-value
+// fakeMacro{} (nil map) means every indicator is absent.
 type fakeMacro struct {
-	cdi, ipca int64
-	found     bool
+	values map[marketdata.Indicator]int64
 }
 
 func (f fakeMacro) GetLatestMacroIndicator(_ context.Context, ind marketdata.Indicator) (marketdata.MacroIndicator, error) {
-	if !f.found {
+	v, ok := f.values[ind]
+	if !ok {
 		return marketdata.MacroIndicator{}, marketdata.ErrMacroNotFound
 	}
-	switch ind {
-	case marketdata.IndicatorCDI:
-		return marketdata.MacroIndicator{Indicator: ind, Value: f.cdi, Unit: marketdata.UnitBps}, nil
-	case marketdata.IndicatorIPCA:
-		return marketdata.MacroIndicator{Indicator: ind, Value: f.ipca, Unit: marketdata.UnitBps}, nil
-	default:
-		return marketdata.MacroIndicator{}, marketdata.ErrMacroNotFound
-	}
+	return marketdata.MacroIndicator{Indicator: ind, Value: v, Unit: marketdata.UnitBps}, nil
 }
 
 func newService(repo Repository) *Service {
-	return NewService(repo, fakeClock{t: time.Date(2026, 6, 26, 10, 0, 0, 0, time.UTC)}, fakeMacro{found: false})
+	return NewService(repo, fakeClock{t: time.Date(2026, 6, 26, 10, 0, 0, 0, time.UTC)}, fakeMacro{})
 }
 
 func TestService_CreateFIIHolding(t *testing.T) {
@@ -185,4 +180,24 @@ func TestService_ListHoldings_Aggregates(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got.FII, 1)
 	require.Len(t, got.FixedIncome, 2)
+}
+
+// TestService_ListHoldings_ResolvesEffectiveRatePerIndicatorIndependently proves the macro fetch
+// degrades per indicator (SPEC-109 BR-1094), not all-or-nothing: CDI present + IPCA absent must
+// resolve the cdi_percentual holding while the ipca_spread holding falls back to its raw rate.
+func TestService_ListHoldings_ResolvesEffectiveRatePerIndicatorIndependently(t *testing.T) {
+	repo := &fakeRepo{fiList: []FixedIncomeHolding{
+		{ID: "cdi", IndexerType: IndexerCDIPercentual, AnnualRateBps: 12_000}, // 120% do CDI
+		{ID: "ipca", IndexerType: IndexerIPCASpread, AnnualRateBps: 580},      // IPCA + 5.80%
+	}}
+	svc := NewService(repo, fakeClock{t: time.Date(2026, 6, 26, 10, 0, 0, 0, time.UTC)},
+		fakeMacro{values: map[marketdata.Indicator]int64{marketdata.IndicatorCDI: 1_050}}) // no IPCA
+
+	got, err := svc.ListHoldings(context.Background(), "u1")
+	require.NoError(t, err)
+	require.Len(t, got.FixedIncome, 2)
+
+	byID := map[string]FixedIncomeHolding{got.FixedIncome[0].ID: got.FixedIncome[0], got.FixedIncome[1].ID: got.FixedIncome[1]}
+	require.Equal(t, 1_260, byID["cdi"].EffectiveAnnualRateBps, "CDI present resolves 120% of 10.50%")
+	require.Equal(t, 580, byID["ipca"].EffectiveAnnualRateBps, "IPCA absent falls back to the raw stored rate")
 }

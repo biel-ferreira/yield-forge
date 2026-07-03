@@ -128,9 +128,12 @@ func TestService_GetDashboard_FixedIncomeIndexer_Integration(t *testing.T) {
 	macroRepo := marketdatapostgres.NewMacroRepository(db)
 
 	// Seed CDI = 10.50% a.a. — the effective rate for "120% do CDI" resolves to 12.60% a.a.
+	// A far-future reference_date ensures this test's seed always wins "newest reference_date"
+	// against the live yield-forge-api container's own ingestion into this shared dev DB, which
+	// runs on real wall-clock dates and would otherwise shadow a same-day seed over time.
 	require.NoError(t, macroRepo.UpsertMacroIndicator(ctx, marketdata.MacroIndicator{
 		Indicator: marketdata.IndicatorCDI, Value: 1_050, Unit: marketdata.UnitBps,
-		ReferenceDate: now, Source: "test", FetchedAt: now,
+		ReferenceDate: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC), Source: "test", FetchedAt: now,
 	}))
 
 	_, err := pfRepo.CreateFixedIncomeHolding(ctx, portfolio.FixedIncomeHolding{

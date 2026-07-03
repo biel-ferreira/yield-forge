@@ -163,9 +163,17 @@ func (s *Service) withEffectiveRates(ctx context.Context, holdings []FixedIncome
 }
 
 // latestMacro best-effort-fetches the CDI/IPCA readings SPEC-109's indexers need. An indicator
-// whose read fails (incl. marketdata.ErrMacroNotFound) is simply omitted — ResolveEffectiveRate's
-// own degradation (BR-1094) takes it from there; this never returns an error, never blocks a
-// request on a market-data hiccup.
+// whose read fails is simply omitted — ResolveEffectiveRate's own degradation (BR-1094) takes it
+// from there; this never returns an error, never blocks a holdings read on a market-data hiccup.
+//
+// Deliberately not limited to marketdata.ErrMacroNotFound (PLAN-109 D3's literal scope): any
+// GetLatestMacroIndicator failure, including an infra error (e.g. the macro subsystem's DB is
+// briefly unreachable), degrades the same way. The holdings/dashboard/projections read path must
+// not become coupled to macro-subsystem availability — unlike GET /market/indicators (whose sole
+// purpose is serving macro data, and which does distinguish + log real errors), this method
+// cannot log from the domain core (no I/O in core, per CLAUDE.md) and has no per-call way to
+// surface an infra failure without also risking failing the read entirely, which would be a
+// worse outcome for a page whose primary content is the holdings, not the macro reference rate.
 func (s *Service) latestMacro(ctx context.Context) map[marketdata.Indicator]marketdata.MacroIndicator {
 	out := make(map[marketdata.Indicator]marketdata.MacroIndicator, 2)
 	for _, ind := range [...]marketdata.Indicator{marketdata.IndicatorCDI, marketdata.IndicatorIPCA} {

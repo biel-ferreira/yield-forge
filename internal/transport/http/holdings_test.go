@@ -169,6 +169,74 @@ func TestCreateFixedIncome_MaturityDateParsing(t *testing.T) {
 	})
 }
 
+// sampleFixedIncome mirrors sampleFII's role for the fixed-income CRUD/span tests below.
+func sampleFixedIncome(userID string) portfolio.FixedIncomeHolding {
+	now := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
+	return portfolio.FixedIncomeHolding{
+		ID: "fi-1", UserID: userID, Name: "CDB Banco X", Institution: "Banco X",
+		InvestedAmountCentavos: 1_000_000, AnnualRateBps: 12_000,
+		IndexerType: portfolio.IndexerCDIPercentual, EffectiveAnnualRateBps: 1_260,
+		LiquidityType: portfolio.LiquidityDaily, CreatedAt: now, UpdatedAt: now,
+	}
+}
+
+// TestCreateFixedIncome_IndexerRoundTrip proves indexer_type crosses the wire on write and both
+// it and the resolved (never-accepted-on-write, SPEC-109 FR-1092) effective_annual_rate_bps come
+// back on read — the fixed-income analogue of TestCreateFIIHolding_ContextIdentityAndMoney's
+// money-round-trip assertion.
+func TestCreateFixedIncome_IndexerRoundTrip(t *testing.T) {
+	svc := &fakePortfolioService{fiResult: sampleFixedIncome("u1")}
+	h := newHoldingsHandler(svc)
+
+	body := `{"name":"CDB Banco X","institution":"Banco X","invested_amount_centavos":1000000,` +
+		`"annual_rate_bps":12000,"indexer_type":"cdi_percentual","liquidity_type":"daily"}`
+	rec := httptest.NewRecorder()
+	h.createFixedIncomeHolding(rec, authed(http.MethodPost, "/holdings/fixed-income", body, "u1"))
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var resp fixedIncomeResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, "cdi_percentual", resp.IndexerType)
+	require.Equal(t, 1_260, resp.EffectiveAnnualRateBps, "the resolved rate is server-computed, never client-supplied")
+	require.Equal(t, int64(1_000_000), resp.InvestedAmountCentavos, "money crosses the wire as integer centavos")
+}
+
+// TestCreateFixedIncome_InvalidIndexer_ValidationError proves garbage indexer_type surfaces as a
+// 400 (the service's ErrInvalidIndexer sentinel is mapped in writeHoldingError), the fixed-income
+// analogue of TestCreateFIIHolding_ValidationError.
+func TestCreateFixedIncome_InvalidIndexer_ValidationError(t *testing.T) {
+	svc := &fakePortfolioService{err: portfolio.ErrInvalidIndexer}
+	h := newHoldingsHandler(svc)
+	body := `{"name":"CDB","institution":"Banco","invested_amount_centavos":100000,` +
+		`"annual_rate_bps":1200,"indexer_type":"garbage","liquidity_type":"daily"}`
+	rec := httptest.NewRecorder()
+	h.createFixedIncomeHolding(rec, authed(http.MethodPost, "/holdings/fixed-income", body, "u1"))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// TestHTTP_FixedIncomeSpanRouteNamed is TestHTTP_HoldingsSpanRouteNamed's fixed-income analogue:
+// the span is route-named and leaks no money/indexer/holding values (SPEC-109 Phase 5, mirroring
+// SPEC-102 FR-1028's existing no-PII-on-spans convention).
+func TestHTTP_FixedIncomeSpanRouteNamed(t *testing.T) {
+	exp := spanRecorder(t)
+	router := holdingsRouter(&fakePortfolioService{fiResult: sampleFixedIncome("u1")})
+
+	body := `{"name":"CDB Banco X","institution":"Banco X","invested_amount_centavos":1000000,` +
+		`"annual_rate_bps":12000,"indexer_type":"cdi_percentual","liquidity_type":"daily"}`
+	rr := doReq(router, http.MethodPost, "/holdings/fixed-income", body, &http.Cookie{Name: "yf_session", Value: "tok"})
+	require.Equal(t, http.StatusCreated, rr.Code)
+
+	spans := exp.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "POST /holdings/fixed-income", spans[0].Name)
+	for _, kv := range spans[0].Attributes {
+		v := kv.Value.Emit()
+		require.NotContains(t, v, "1000000", "money must not leak onto the span")
+		require.NotContains(t, v, "Banco X", "institution must not leak onto the span")
+		require.NotContains(t, v, "cdi_percentual", "indexer type must not leak onto the span")
+	}
+}
+
 func TestListFIIHoldings_OK(t *testing.T) {
 	svc := &fakePortfolioService{fiiList: []portfolio.FIIHolding{sampleFII("u1")}}
 	h := newHoldingsHandler(svc)

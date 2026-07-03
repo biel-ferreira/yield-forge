@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -34,7 +35,10 @@ var publishedIndicators = []marketdata.Indicator{
 
 // getMarketIndicators returns the latest SELIC/CDI/IPCA (SPEC-109 FR-1095) — global reference
 // data, no user_id (BR-1095). An indicator with no ingested value yet is silently omitted
-// (degrades gracefully, mirroring BR-1094) rather than failing the whole response.
+// (degrades gracefully, mirroring BR-1094) rather than failing the whole response. An
+// unexpected error (e.g. a DB outage) is distinguished from "not yet ingested" and logged —
+// still omitted from the response rather than failing it, but now observable, instead of being
+// indistinguishable from a freshly-provisioned environment.
 func (h marketHandler) getMarketIndicators(w http.ResponseWriter, r *http.Request) {
 	if _, ok := callerID(w, r); !ok {
 		return
@@ -42,8 +46,13 @@ func (h marketHandler) getMarketIndicators(w http.ResponseWriter, r *http.Reques
 	out := make([]marketIndicatorResponse, 0, len(publishedIndicators))
 	for _, ind := range publishedIndicators {
 		m, err := h.reader.GetLatestMacroIndicator(r.Context(), ind)
-		if err != nil {
+		switch {
+		case errors.Is(err, marketdata.ErrMacroNotFound):
 			continue // not yet ingested — omit, don't fail the request (BR-1094)
+		case err != nil:
+			h.logger.ErrorContext(r.Context(), "get latest macro indicator failed",
+				slog.String("indicator", string(ind)), slog.String("error", err.Error()))
+			continue
 		}
 		out = append(out, marketIndicatorResponse{
 			Indicator: string(ind), ValueBps: m.Value, ReferenceDate: m.ReferenceDate.Format(dateLayout),
