@@ -12,7 +12,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/biel-ferreira/yield-forge/internal/auth"
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
+	"github.com/biel-ferreira/yield-forge/internal/platform/buildinfo"
 )
 
 // fakeMarketDataReader returns a configured value per indicator, or an error for any indicator
@@ -30,6 +32,20 @@ func (f fakeMarketDataReader) GetLatestMacroIndicator(_ context.Context, ind mar
 
 func newMarketHandler(r MarketDataReader) marketHandler {
 	return marketHandler{reader: r, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+}
+
+// marketRouter builds a full router (auth middleware + otelhttp) for the span/route tests.
+func marketRouter(r MarketDataReader) http.Handler {
+	user := auth.User{ID: "u1", Email: "me@example.com"}
+	return NewRouter(Deps{
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Build:      buildinfo.Info{},
+		Ready:      fakePinger{},
+		Auth:       fakeAuth{authUser: user},
+		Markets:    r,
+		CookieName: "yf_session",
+		SessionTTL: time.Hour,
+	})
 }
 
 func TestGetMarketIndicators_ReturnsAllThreeWhenPresent(t *testing.T) {
@@ -87,4 +103,23 @@ func TestGetMarketIndicators_Unauthenticated(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.getMarketIndicators(rec, httptest.NewRequest(http.MethodGet, "/market/indicators", nil))
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestHTTP_MarketIndicatorsSpanRouteNamed verifies the new endpoint's span is auto-applied and
+// route-named by the existing otelhttp + routeNamer middleware (SPEC-004 FR-403) — "verify,
+// don't assume" (SPEC-109 Phase 5). Indicator values are NOT secret (public economic data,
+// SPEC-109 §10), so — unlike the holdings span test — this does not assert their absence.
+func TestHTTP_MarketIndicatorsSpanRouteNamed(t *testing.T) {
+	exp := spanRecorder(t)
+	refDate := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	router := marketRouter(fakeMarketDataReader{vals: map[marketdata.Indicator]marketdata.MacroIndicator{
+		marketdata.IndicatorCDI: {Indicator: marketdata.IndicatorCDI, Value: 1_050, ReferenceDate: refDate},
+	}})
+
+	rr := doReq(router, http.MethodGet, "/market/indicators", "", &http.Cookie{Name: "yf_session", Value: "tok"})
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	spans := exp.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "GET /market/indicators", spans[0].Name, "route-named, not the raw path — low cardinality")
 }
