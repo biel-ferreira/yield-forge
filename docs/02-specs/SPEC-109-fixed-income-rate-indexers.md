@@ -7,7 +7,7 @@
 | Feature Name | Fixed-Income Rate Indexers                                |
 | Feature ID   | SPEC-109                                                  |
 | Version      | 0.1.0                                                     |
-| Status       | Approved                                                  |
+| Status       | Done                                                     |
 | Author       | Gabigol                                                  |
 | Last Updated | 2026-07-02                                                |
 | Related PRD  | [Epic 1 / FR-002](../01-product/PRD.md) — refines the fixed-income holding fields to match how Brazilian retail investors actually quote a rate |

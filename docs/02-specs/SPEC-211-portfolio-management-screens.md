@@ -12,7 +12,7 @@
 | Last Updated | 2026-07-02                                                            |
 | Related PRD  | [Epic 1 / FR-001, FR-002](../01-product/PRD.md)                       |
 | Consumes     | [SPEC-102](SPEC-102-portfolio-management.md) + [SPEC-109](SPEC-109-fixed-income-rate-indexers.md) (backend) over the [OpenAPI contract](../../api/openapi.yaml); built on [SPEC-200](SPEC-200-app-foundation.md); stack [ADR-0006](../04-architecture/adr/ADR-0006-frontend-ui-stack-and-design-system.md) |
-| Blocked on   | [SPEC-109](SPEC-109-fixed-income-rate-indexers.md) — the fixed-income rate indexer (% do CDI / IPCA+) and `GET /market/indicators` must land first; FR-2116/FR-2120 below assume its contract |
+| Blocked on   | ~~[SPEC-109](SPEC-109-fixed-income-rate-indexers.md)~~ — **unblocked** (SPEC-109 shipped Done 2026-07-02): the fixed-income rate indexer (% do CDI / IPCA+) and `GET /market/indicators` have landed; FR-2116/FR-2120 below can now be implemented against the real contract |
 
 ---
 

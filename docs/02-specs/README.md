@@ -54,7 +54,7 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-106 | [Portfolio Health Score](SPEC-106-portfolio-health-score.md) | FR-012 (+ FR-013/014 via SPEC-005) | ✅ Done |
 | SPEC-107 | [Projections (Income & Net Worth)](SPEC-107-projections.md) | FR-016, FR-017 | ✅ Done |
 | SPEC-108 | [Conversational Copilot (Chat)](SPEC-108-conversational-copilot.md) | FR-023–FR-025 (+ FR-013/014 via SPEC-005) | ✅ Done |
-| SPEC-109 | [Fixed-Income Rate Indexers (% do CDI / IPCA+)](SPEC-109-fixed-income-rate-indexers.md) | refines FR-002 (extends SPEC-102 + SPEC-006) | 📋 Approved |
+| SPEC-109 | [Fixed-Income Rate Indexers (% do CDI / IPCA+)](SPEC-109-fixed-income-rate-indexers.md) | refines FR-002 (extends SPEC-102 + SPEC-006) | ✅ Done |
 
 Every PRD functional requirement (FR-001…FR-025) maps to exactly one owning spec
 above; SPEC-109 is a refinement of SPEC-102's FR-002 rather than a new FR (see its
@@ -72,7 +72,7 @@ carries no `api/openapi.yaml` change of its own.
 | -------- | ------------------------------------------- | ------------------------- | ----------- |
 | SPEC-200 | [App Foundation (shell, typed API client, design system, session)](SPEC-200-app-foundation.md) | OpenAPI contract, SPEC-003 | ✅ Done |
 | SPEC-210 | [Investor Profile screen](SPEC-210-investor-profile-screen.md) | SPEC-101                  | ✅ Done     |
-| SPEC-211 | [Portfolio management (FII + FI) screens](SPEC-211-portfolio-management-screens.md) | SPEC-102, SPEC-109 | 📝 Draft — blocked on SPEC-109 |
+| SPEC-211 | [Portfolio management (FII + FI) screens](SPEC-211-portfolio-management-screens.md) | SPEC-102, SPEC-109 | 📝 Draft — unblocked (SPEC-109 Done) |
 | SPEC-212 | Dashboard                                   | SPEC-103                  | 🔲 Backlog  |
 | SPEC-213 | AI Insights + Rebalancing + Health Score    | SPEC-104 / 105 / 106      | 🔲 Backlog  |
 | SPEC-214 | Projections (income & net worth)            | SPEC-107                  | 🔲 Backlog  |

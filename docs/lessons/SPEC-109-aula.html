@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 109 — SPEC-109: Indexadores de Renda Fixa (% do CDI / IPCA+) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 109 · Indexadores de Renda Fixa · "120% do CDI" vira um número que se move sozinho</span>
+    <h1>SPEC-109 — Indexadores de Renda Fixa (% do CDI / IPCA+)</h1>
+    <p>Esta é uma spec <strong>pequena e cirúrgica</strong>, mas ensina uma lição arquitetural grande. Até aqui, um
+    <em>holding</em> de renda fixa guardava uma <strong>taxa anual fixa</strong> — mas quase nenhuma renda fixa brasileira de
+    varejo funciona assim: um CDB comum é quase sempre <em>"120% do CDI"</em>, um Tesouro IPCA+ é <em>"IPCA +
+    5,80%"</em>. O SPEC-109 deixa o investidor digitar a taxa <strong>do jeito que o extrato do banco mostra</strong>, e
+    resolve a <strong>taxa efetiva atual</strong> automaticamente, usando o SELIC/CDI/IPCA que o SPEC-006 já ingere — sem
+    cadastro manual toda vez que o Copom se reúne. A lição central: essa taxa efetiva é um <strong>fato computado,
+    nunca persistido</strong> — a mesma disciplina "fatos são computados, não gerados" que rege as features de IA do
+    projeto, aplicada aqui a uma aritmética simples, sem LLM nenhum.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">O problema real: "120% do CDI" não é uma taxa fixa</a></li>
+    <li><a href="#computed">LIÇÃO PRINCIPAL — a taxa efetiva é COMPUTADA, nunca persistida (BR-1092)</a></li>
+    <li><a href="#resolve">A resolução pura: <code>ResolveEffectiveRate</code>, os três indexadores</a></li>
+    <li><a href="#compat">Retrocompatibilidade como não-negociável (BR-1093)</a></li>
+    <li><a href="#degrade">Degradação graciosa — duas posturas diferentes num só feature (BR-1094)</a></li>
+    <li><a href="#seam">O seam único: por que só o <code>portfolio.Service</code> tem um <code>MacroReader</code></a></li>
+    <li><a href="#endpoint">O endpoint <code>GET /market/indicators</code> e as DTOs estendidas</a></li>
+    <li><a href="#decisoes">As 5 decisões (D1–D5) e por quê</a></li>
+    <li><a href="#fases">As 7 fases, uma a uma</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. O problema real: "120% do CDI" não é uma taxa fixa</h2>
+
+<p>O SPEC-102 (Gestão de Carteira) modelou <code>FixedIncomeHolding</code> com um campo único,
+<code>AnnualRateBps</code> — uma taxa anual fixa, em basis points. Isso funciona perfeitamente para renda fixa
+<strong>prefixada</strong> ("10% a.a., ponto final"). Mas ao desenhar o SPEC-211 (as telas de gestão de carteira do
+frontend), ficou claro um problema: a maioria da renda fixa de varejo brasileira <strong>não</strong> é prefixada. Um CDB
+comum é <strong>pós-fixado</strong> ("120% do CDI") — a taxa <em>real</em> muda toda vez que o CDI muda. Um Tesouro IPCA+ é
+<strong>híbrido</strong> ("IPCA + 5,80%") — a parte de inflação também se move.</p>
+
+<p>Perguntar ao usuário "qual é a taxa anual?" quando ele só sabe "120% do CDI" é uma pergunta errada. E
+converter isso <strong>uma vez, no cadastro</strong>, para um número fixo seria pior: o número ficaria <strong>errado
+silenciosamente</strong> a cada decisão do Copom, sem que ninguém percebesse — quebrando exatamente a promessa de
+reprodutibilidade que o Dashboard (SPEC-103) e o Health Score (SPEC-106) já seguem. A solução do SPEC-109: deixar
+o usuário cadastrar a taxa <strong>do jeito que ela é cotada</strong> (indexador + valor) e <strong>resolver a taxa efetiva a
+cada leitura</strong>, contra o SELIC/CDI/IPCA mais recente que o SPEC-006 já ingere.</p>
+
+<div class="diagram">ANTES (SPEC-102)                                DEPOIS (SPEC-109)
+  FixedIncomeHolding{                             FixedIncomeHolding{
+    AnnualRateBps: 1000   // "10% a.a."             AnnualRateBps: 12000    // "120%" (do CDI)
+  }                                                  IndexerType: cdi_percentual
+  → sempre 10%, para sempre                          EffectiveAnnualRateBps: 1260  // COMPUTADO, nunca salvo
+                                                     }
+  Só serve para prefixado                           → hoje CDI=10,50% ⇒ efetiva 12,60%; muda sozinho amanhã
+
+  Dashboard/Projections leem AnnualRateBps direto   Dashboard/Projections leem EffectiveAnnualRateBps
+                                                     (para prefixado os dois são idênticos — regressão OK)</div>
+
+<p>O que a spec entrega é deliberadamente pequeno:</p>
+<ul>
+  <li>Um <strong>enum fechado</strong> novo, <code>portfolio.Indexer</code> (<code>prefixado</code> | <code>cdi_percentual</code> |
+  <code>ipca_spread</code>), e uma coluna nova <code>indexer_type</code> na tabela existente — <strong>nenhuma tabela nova</strong>.</li>
+  <li>Um <strong>método puro</strong> em cima do tipo de domínio já existente, <code>FixedIncomeHolding.ResolveEffectiveRate</code>
+  — sem I/O, sem SQL, sem HTTP.</li>
+  <li>Um campo novo <strong>computado, nunca persistido</strong>: <code>EffectiveAnnualRateBps</code>, populado pelo
+  <code>portfolio.Service</code> em todo caminho de leitura/escrita.</li>
+  <li>Um endpoint novo, só-leitura: <code>GET /market/indicators</code> — reaproveita o repositório de macro do
+  SPEC-006, sem nenhuma ingestão nova.</li>
+</ul>
+
+<div class="box why">
+  <span class="lbl">Por que isto não é "adicionar um campo" — é reafirmar um princípio do PRD</span>
+  A tentação óbvia seria converter "120% do CDI" em um número fixo no momento do cadastro e seguir em frente. O
+  SPEC-109 resiste a essa tentação exatamente pela mesma razão que o Health Score (SPEC-106) resiste a deixar o
+  LLM "sugerir" a nota: um número que <strong>deveria</strong> mudar com a realidade, mas está congelado, é pior do que
+  nenhum número — ele passa segurança falsa. A regra binding nº 3 do PRD ("fatos são computados, não gerados") não
+  fala só de LLM; fala de <strong>qualquer</strong> número que o sistema apresenta como verdade atual. Uma taxa "120% do
+  CDI" só é verdadeira <em>hoje</em> se for recalculada <em>hoje</em>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="computed">2. LIÇÃO PRINCIPAL — a taxa efetiva é COMPUTADA, nunca persistida (BR-1092)</h2>
+
+<p>Este é o coração da aula, e é uma variação — sem LLM nenhum — do padrão que as specs de IA do projeto já
+ensinam repetidas vezes: <strong>o dado bruto é armazenado; o fato derivado é recalculado a cada leitura</strong>. Veja o
+comentário de domínio no próprio tipo, em <code>internal/portfolio/holding.go</code>:</p>
+
+<pre><code>// internal/portfolio/holding.go
+// FixedIncomeHolding is a registered fixed-income position (SPEC-102 FR-002). ... IndexerType
+// determines how AnnualRateBps is interpreted (SPEC-109) — see ResolveEffectiveRate.
+// EffectiveAnnualRateBps is a computed, NEVER-PERSISTED field: it starts zero-value and is
+// populated by the Service (via ResolveEffectiveRate) on every read/write path before the
+// holding reaches its caller — the repository never selects or writes it (FR-1092/BR-1092).
+type FixedIncomeHolding struct {
+    ID                     string
+    UserID                 string
+    Name                   string
+    Institution            string
+    InvestedAmountCentavos int64
+    AnnualRateBps          int
+    IndexerType            Indexer
+    EffectiveAnnualRateBps int // computed, never persisted — see doc comment above
+    MaturityDate           *time.Time
+    LiquidityType          LiquidityType
+    CreatedAt              time.Time
+    UpdatedAt              time.Time
+}</code></pre>
+
+<p>Repare no que <strong>não</strong> existe: não há coluna <code>effective_annual_rate_bps</code> na migration, não há
+<code>INSERT</code> nem <code>SELECT</code> tocando esse campo em <code>internal/portfolio/postgres/postgres.go</code>. O campo <strong>vive
+só na struct Go</strong>, sai do <code>zero-value</code> (<code>0</code>) toda vez que uma linha é lida do banco, e é preenchido pelo
+<code>Service</code> — nunca pelo repositório. Isso torna o "nunca persistir" uma propriedade <strong>estrutural</strong>: um dev
+futuro teria que escrever código novo, explícito, para persistir esse campo por engano; não é algo que acontece
+"por acidente" de um <code>SELECT *</code>.</p>
+
+<div class="box tip">
+  <span class="lbl">A mesma disciplina das specs de IA, aplicada a aritmética pura</span>
+  Compare com o Health Score (SPEC-106): a nota 0–100 é computada pela função pura <code>Compute</code> a cada
+  <code>GET /health-score</code>, nunca guardada numa tabela de histórico — porque uma nota "congelada" mentiria assim
+  que a carteira ou o mercado mudassem. O SPEC-109 aplica exatamente essa regra a um número muito mais simples: a
+  taxa efetiva de um CDB pós-fixado. Não há IA aqui, mas há o <strong>mesmo motivo</strong> — "fatos são computados, não
+  gerados" não é uma regra sobre LLMs; é uma regra sobre <strong>o que conta como verdade atual</strong> num sistema
+  financeiro. Isso é um ótimo lembrete de que o princípio central do projeto é mais amplo que "IA": ele é sobre
+  nunca deixar um número <strong>parecer</strong> atual quando na verdade é uma foto antiga.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="resolve">3. A resolução pura: <code>ResolveEffectiveRate</code>, os três indexadores</h2>
+
+<p>O enum fechado <code>Indexer</code> segue exatamente o padrão parse-don't-validate que o <code>LiquidityType</code> (SPEC-102)
+já estabeleceu — <code>type X string</code> + um <code>ParseX</code> que normaliza (trim + lower) e devolve um sentinela via
+<code>%w</code> para um valor desconhecido:</p>
+
+<pre><code>// internal/portfolio/indexer.go
+type Indexer string
+
+const (
+    IndexerPrefixado     Indexer = "prefixado"      // flat annual rate
+    IndexerCDIPercentual Indexer = "cdi_percentual" // % of CDI (pós-fixado)
+    IndexerIPCASpread    Indexer = "ipca_spread"    // IPCA + spread (híbrido)
+)
+
+// ParseIndexer normalizes (trim + lower) and validates s. An empty string defaults to
+// Prefixado (SPEC-109 BR-1093 backward compatibility — existing holdings/callers that never
+// supply an indexer keep today's flat-rate behavior).
+func ParseIndexer(s string) (Indexer, error) {
+    trimmed := strings.ToLower(strings.TrimSpace(s))
+    if trimmed == "" {
+        return IndexerPrefixado, nil   // ← o detalhe que garante retrocompatibilidade "de graça"
+    }
+    idx := Indexer(trimmed)
+    if !validIndexers[idx] {
+        return "", fmt.Errorf("parse indexer %q: %w", s, ErrInvalidIndexer)
+    }
+    return idx, nil
+}</code></pre>
+
+<p>O verdadeiro trabalho acontece num método <strong>puro</strong>, colocado ao lado do tipo que ele resolve
+(<code>internal/portfolio/holding.go</code>). Ele recebe um <em>mapa</em> de leituras de mercado já buscadas — nunca faz a
+busca ele mesmo — e devolve a taxa efetiva, um <code>int</code> em basis points, <strong>sem nunca errar</strong>:</p>
+
+<pre><code>// internal/portfolio/holding.go
+// ResolveEffectiveRate resolves the holding's current effective annual rate from its stored
+// AnnualRateBps + IndexerType and the latest macro readings (SPEC-109 FR-1092). Pure — no I/O;
+// the caller fetches macro (keyed by Indicator) via its own MacroReader port before calling
+// this. Never errors: an Indexer other than Prefixado whose reference indicator is absent from
+// macro degrades to the raw stored value, unresolved (BR-1094/PLAN-109 D3) — a transient,
+// self-healing gap (e.g. before the first ingestion run), never a crash or a silent zero.
+func (h FixedIncomeHolding) ResolveEffectiveRate(macro map[marketdata.Indicator]marketdata.MacroIndicator) int {
+    switch h.IndexerType {
+    case IndexerCDIPercentual:
+        if cdi, ok := macro[marketdata.IndicatorCDI]; ok {
+            return int(money.ApplyBps(cdi.Value, h.AnnualRateBps))   // rate × CDI / 10000, half-up
+        }
+    case IndexerIPCASpread:
+        if ipca, ok := macro[marketdata.IndicatorIPCA]; ok {
+            return h.AnnualRateBps + int(ipca.Value)                  // spread + IPCA
+        }
+    }
+    // Prefixado, an unrecognized/zero-value indexer, or a missing macro reading: pass through.
+    return h.AnnualRateBps
+}</code></pre>
+
+<p>Três decisões pequenas, todas coerentes com o resto do projeto:</p>
+<ul>
+  <li><strong>Nenhum <code>float</code>.</strong> O cálculo de <code>cdi_percentual</code> reaproveita <code>money.ApplyBps</code> — a mesma
+  primitiva half-up com <code>big.Int</code> por dentro que já serve o Dashboard e a Projeção — em vez de escrever uma
+  divisão nova. Zero código novo de arredondamento nesta spec.</li>
+  <li><strong>Método, não função solta.</strong> <code>ResolveEffectiveRate</code> é um método em <code>FixedIncomeHolding</code>, colocado
+  no mesmo arquivo do tipo que ele resolve — a assinatura fica <code>h.ResolveEffectiveRate(macro)</code>, legível no
+  ponto de chamada, e a lógica mora perto do dado que ela interpreta.</li>
+  <li><strong>Nunca erra.</strong> Um indexador desconhecido/zero-value ou uma leitura ausente do mapa caem no mesmo
+  <code>return h.AnnualRateBps</code> — não existe um caminho de erro que o chamador precise tratar. É a mesma filosofia
+  de "casos de borda são estados, não exceções" das outras specs computacionais (SPEC-106, SPEC-107).</li>
+</ul>
+
+<p>Os testes table-driven (<code>internal/portfolio/holding_test.go</code>) provam a aritmética com os números do
+exemplo canônico da spec — 120% do CDI a 10,50% a.a. vira 12,60% a.a.:</p>
+
+<pre><code>// internal/portfolio/holding_test.go
+t.Run("CDIPercentual resolves rate x CDI / 10000, half-up", func(t *testing.T) {
+    // 120% do CDI, CDI = 10.50% a.a. -> 1050 * 12000 / 10000 = 1260 (12.60% a.a.)
+    h := FixedIncomeHolding{IndexerType: IndexerCDIPercentual, AnnualRateBps: 12000}
+    require.Equal(t, 1260, h.ResolveEffectiveRate(macroWithCDIAndIPCA))
+})</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="compat">4. Retrocompatibilidade como não-negociável (BR-1093)</h2>
+
+<p>Toda holding de renda fixa cadastrada <strong>antes</strong> desta spec precisa continuar se comportando <strong>exatamente
+igual</strong> — não "quase igual", <strong>byte a byte</strong>. A migration garante isso do lado do banco, e um teste garante
+isso do lado do código.</p>
+
+<pre><code>-- migrations/0007_fixed_income_indexer.up.sql
+ALTER TABLE fixed_income_holdings
+    ADD COLUMN indexer_type text NOT NULL DEFAULT 'prefixado'
+        CHECK (indexer_type IN ('prefixado', 'cdi_percentual', 'ipca_spread'));</code></pre>
+
+<p>Uma <code>ALTER TABLE ... ADD COLUMN ... DEFAULT</code> é <strong>aditiva</strong>: toda linha existente ganha
+<code>indexer_type = 'prefixado'</code> sem precisar de backfill, e o <code>CHECK</code> espelha o mesmo enum fechado do lado
+Go — a validação vive nos dois lugares, como convenção do projeto para enums fechados persistidos. Com
+<code>IndexerPrefixado</code>, <code>ResolveEffectiveRate</code> sempre devolve <code>AnnualRateBps</code> intacto — então uma holding
+antiga passa pelo caminho novo de resolução e sai <strong>idêntica</strong> ao que era antes desta spec.</p>
+
+<p>Do lado dos consumidores, o teste que fecha o argumento é uma fixture no <code>dashboard/compute_test.go</code>:</p>
+
+<pre><code>// internal/dashboard/compute_test.go
+// EffectiveAnnualRateBps (SPEC-109) is what Compute reads for accrual; here it equals
+// the raw stored AnnualRateBps (a prefixado-shaped fixture — ListHoldings resolves ...
+{InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200, EffectiveAnnualRateBps: 1_200,
+    LiquidityType: portfolio.LiquidityAtMaturity, CreatedAt: created}</code></pre>
+
+<p>A fixture crava <code>AnnualRateBps</code> e <code>EffectiveAnnualRateBps</code> com o <strong>mesmo</strong> valor (1200) e verifica que
+o resultado do <code>Compute</code> do dashboard não mudou nada — é a prova de regressão exigida pela BR-1093. O mesmo
+padrão se repete na integração: o teste de repositório (<code>TestRepository_FixedIncomeIndexer_Integration</code>) prova
+que "uma linha pré-existente (sem <code>indexer_type</code> setado) lê de volta como <code>prefixado</code>".</p>
+
+<div class="box why">
+  <span class="lbl">Por que retrocompatibilidade "quase igual" não bastaria</span>
+  Neste projeto, o Dashboard e as Projeções carregam a promessa de reprodutibilidade ("mesmos inputs → mesmo
+  resultado", a métrica-mãe do PRD nas specs 106/107). Se a nova coluna mudasse o cálculo de <em>qualquer</em>
+  holding pré-existente — mesmo um centavo — isso quebraria a confiança do investidor no número que ele já via
+  ontem. É por isso que a spec exige explicitamente "byte-for-byte identical" e não apenas "sem regressão
+  visível": a prova precisa ser um teste que compara valores exatos, não uma inspeção manual.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="degrade">5. Degradação graciosa — duas posturas diferentes num só feature (BR-1094)</h2>
+
+<p>Esta é a parte mais sutil e mais interessante da spec: o SPEC-109 tem <strong>dois</strong> lugares que leem dados
+macro, e eles degradam <strong>de formas propositalmente diferentes</strong> — porque o papel de cada um no sistema é
+diferente. Entender essa diferença é entender quando "engolir o erro" é a decisão certa e quando não é.</p>
+
+<h3>5.1 — O caminho de leitura de holdings (dashboard/projeções/chat): engole QUALQUER falha de macro</h3>
+<p>A função <code>latestMacro</code>, em <code>internal/portfolio/service.go</code>, busca CDI e IPCA e monta o mapa que
+<code>ResolveEffectiveRate</code> consome. Repare no comentário — ele não se limita a tratar "ainda não ingerido"
+(<code>marketdata.ErrMacroNotFound</code>); ele trata <strong>qualquer</strong> erro da mesma forma:</p>
+
+<pre><code>// internal/portfolio/service.go
+// latestMacro best-effort-fetches the CDI/IPCA readings SPEC-109's indexers need. An indicator
+// whose read fails is simply omitted — ResolveEffectiveRate's own degradation (BR-1094) takes it
+// from there; this never returns an error, never blocks a holdings read on a market-data hiccup.
+//
+// Deliberately not limited to marketdata.ErrMacroNotFound (PLAN-109 D3's literal scope): any
+// GetLatestMacroIndicator failure, including an infra error (e.g. the macro subsystem's DB is
+// briefly unreachable), degrades the same way. The holdings/dashboard/projections read path must
+// not become coupled to macro-subsystem availability — unlike GET /market/indicators (whose sole
+// purpose is serving macro data, and which does distinguish + log real errors), this method
+// cannot log from the domain core (no I/O in core, per CLAUDE.md) and has no per-call way to
+// surface an infra failure without also risking failing the read entirely, which would be a
+// worse outcome for a page whose primary content is the holdings, not the macro reference rate.
+func (s *Service) latestMacro(ctx context.Context) map[marketdata.Indicator]marketdata.MacroIndicator {
+    out := make(map[marketdata.Indicator]marketdata.MacroIndicator, 2)
+    for _, ind := range [...]marketdata.Indicator{marketdata.IndicatorCDI, marketdata.IndicatorIPCA} {
+        if m, err := s.macro.GetLatestMacroIndicator(ctx, ind); err == nil {
+            out[ind] = m
+        }
+    }
+    return out
+}</code></pre>
+
+<p>Note também o teste que prova a degradação é <strong>por indicador</strong>, não tudo-ou-nada — se o CDI estiver
+disponível mas o IPCA não, a holding <code>cdi_percentual</code> ainda resolve corretamente enquanto a
+<code>ipca_spread</code> cai no valor bruto:</p>
+
+<pre><code>// internal/portfolio/service_test.go
+// TestService_ListHoldings_ResolvesEffectiveRatePerIndicatorIndependently proves the macro fetch
+// degrades per indicator (SPEC-109 BR-1094), not all-or-nothing: CDI present + IPCA absent must
+// resolve the cdi_percentual holding while the ipca_spread holding falls back to its raw rate.</code></pre>
+
+<h3>5.2 — <code>GET /market/indicators</code>: distingue "ainda não ingerido" de uma falha real, e LOGA a última</h3>
+<p>O handler novo em <code>internal/transport/http/market.go</code> tem o trabalho <strong>oposto</strong>: seu único propósito é
+servir dados macro, então engolir uma falha real de infraestrutura em silêncio seria esconder exatamente o
+problema que esse endpoint existe para revelar. Por isso ele <strong>distingue</strong> os dois casos:</p>
+
+<pre><code>// internal/transport/http/market.go
+func (h marketHandler) getMarketIndicators(w http.ResponseWriter, r *http.Request) {
+    if _, ok := callerID(w, r); !ok {
+        return
+    }
+    out := make([]marketIndicatorResponse, 0, len(publishedIndicators))
+    for _, ind := range publishedIndicators {
+        m, err := h.reader.GetLatestMacroIndicator(r.Context(), ind)
+        switch {
+        case errors.Is(err, marketdata.ErrMacroNotFound):
+            continue // not yet ingested — omit, don't fail the request (BR-1094)
+        case err != nil:
+            h.logger.ErrorContext(r.Context(), "get latest macro indicator failed",
+                slog.String("indicator", string(ind)), slog.String("error", err.Error()))
+            continue   // ← ainda omite (não derruba a resposta), mas agora fica OBSERVÁVEL
+        }
+        out = append(out, marketIndicatorResponse{
+            Indicator: string(ind), ValueBps: m.Value, ReferenceDate: m.ReferenceDate.Format(dateLayout),
+        })
+    }
+    writeJSON(w, http.StatusOK, out)
+}</code></pre>
+
+<p>Em ambos os casos o request continua devolvendo <code>200</code> (a resposta nunca falha por causa de um indicador
+faltando) — mas só o segundo caso vai para o log estruturado via <code>slog</code>. Um outage silencioso de banco de
+dados agora deixa rastro; um ambiente novo sem ingestão ainda ainda não gera ruído nenhum no log.</p>
+
+<div class="box bug">
+  <span class="lbl">O bug real que o <code>go-correctness-reviewer</code> encontrou nesta sessão</span>
+  A primeira versão de <code>getMarketIndicators</code> engolia <strong>qualquer</strong> erro do mesmo jeito — inclusive uma
+  falha real de infraestrutura — sem diferenciar de "ainda não ingerido" e sem logar nada. O
+  <code>go-correctness-reviewer</code> pegou isso na revisão (PLAN-109 §9, Quality Validation): um endpoint cujo <strong>único
+  propósito</strong> é servir dados de mercado não pode deixar uma falha real indistinguível de "ambiente novo". A
+  correção acrescentou o <code>switch</code> acima e passou a usar o campo <code>logger</code> do handler, que <strong>já existia mas
+  estava sem uso</strong>. É um ótimo exemplo de "o mesmo padrão de tratamento de erro não serve para dois contextos
+  diferentes" — e de como um revisor especializado em correção (não em arquitetura) pega esse tipo de detalhe.
+</div>
+
+<table>
+  <tr><th>Caminho de leitura</th><th>Papel no sistema</th><th>Postura de degradação</th><th>Por quê</th></tr>
+  <tr>
+    <td><code>portfolio.Service.latestMacro</code></td>
+    <td>Resolve a taxa efetiva <em>a serviço de</em> outra página (holdings/dashboard/projeções/chat)</td>
+    <td>Engole <strong>qualquer</strong> erro; sem log (core não faz I/O)</td>
+    <td>Um soluço no macro não pode derrubar a página cujo conteúdo principal <strong>não é</strong> o macro</td>
+  </tr>
+  <tr>
+    <td><code>marketHandler.getMarketIndicators</code></td>
+    <td>Servir <em>diretamente</em> os dados macro — é o produto do endpoint</td>
+    <td>Distingue "não ingerido" de erro real; <strong>loga</strong> o real, ainda devolve <code>200</code></td>
+    <td>Se o endpoint existe para mostrar macro, uma falha de macro precisa ser observável, não invisível</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="seam">6. O seam único: por que só o <code>portfolio.Service</code> tem um <code>MacroReader</code></h2>
+
+<p>Aqui está o momento mais instrutivo desta spec sobre <strong>como usar um plano</strong>. O PLAN-109 (decisão D2, na
+seção 4) sugeriu que <strong>cada</strong> serviço que precisasse da taxa resolvida — <code>portfolio</code>, <code>dashboard</code> e
+<code>projection</code> — ganhasse seu <strong>próprio</strong> port <code>MacroReader</code>, espelhando o padrão já usado em
+<code>internal/health</code> e <code>internal/insight/engine</code>. Isso teria significado <strong>três</strong> ports novos, <strong>três</strong>
+fiações novas no <code>cmd/api</code>, e três lugares fazendo I/O de macro para o mesmo request.</p>
+
+<p>Durante a Fase 3, essa suposição foi <strong>revisitada contra o seam que já existia</strong> — e a resposta mudou.
+O <code>dashboard.Service</code> e o <code>projection.Service</code> já leem os holdings do usuário através do port
+<code>portfolio.Reader.ListHoldings</code>. Se o <code>portfolio.Service</code> resolver a taxa efetiva <strong>uma vez</strong>, dentro do
+próprio <code>ListHoldings</code>, antes de devolver os dados, então o dashboard e a projeção recebem a taxa <strong>já
+resolvida</strong> — de graça, sem precisar saber que macro existe:</p>
+
+<pre><code>// internal/portfolio/service.go
+// ListHoldings returns the caller's full set of holdings (SPEC-102 FR-1025). Each fixed-income
+// holding carries its resolved EffectiveAnnualRateBps (SPEC-109 FR-1092/1093/1094) — this is the
+// single seam the dashboard, projections, health, and chat all read holdings through, so they
+// consume the resolved rate automatically with no macro dependency of their own.
+func (s *Service) ListHoldings(ctx context.Context, userID string) (Holdings, error) {
+    fii, err := s.repo.ListFIIHoldingsByUserID(ctx, userID)
+    if err != nil {
+        return Holdings{}, fmt.Errorf("list holdings: %w", err)
+    }
+    fixedIncome, err := s.repo.ListFixedIncomeHoldingsByUserID(ctx, userID)
+    if err != nil {
+        return Holdings{}, fmt.Errorf("list holdings: %w", err)
+    }
+    return Holdings{FII: fii, FixedIncome: s.withEffectiveRates(ctx, fixedIncome)}, nil
+}</code></pre>
+
+<p>O resultado: <strong>um único</strong> port <code>MacroReader</code>, dono só do <code>portfolio.Service</code>; nenhum port novo em
+<code>dashboard</code> ou <code>projection</code>; e o <code>Compute</code> de ambos continua exatamente tão puro quanto antes — eles
+apenas leem <code>h.EffectiveAnnualRateBps</code> de um campo que já chega preenchido, em vez de <code>h.AnnualRateBps</code>. A
+mudança no dashboard, por exemplo, foi uma linha:</p>
+
+<pre><code>// internal/dashboard/compute.go
+// EffectiveAnnualRateBps (SPEC-109), not the raw stored AnnualRateBps: for a prefixado
+// holding they're equal; for cdi_percentual/ipca_spread it's the resolved current rate.
+accrued := money.AccrueSimpleInterest(h.InvestedAmountCentavos, h.EffectiveAnnualRateBps, daysBetween(h.CreatedAt, now))</code></pre>
+
+<p>O próprio PLAN-109 registra essa mudança de rota honestamente — não como um erro corrigido às pressas, mas
+como uma decisão <strong>documentada</strong> na Fase 3 e na checklist de validação técnica:</p>
+
+<pre><code>// PLAN-109.md, Phase 3
+- [x] internal/dashboard / internal/projection: implemented as a simplification of D2 —
+      rather than each service owning its own MacroReader, portfolio.Service.ListHoldings
+      (the single seam dashboard/projection/health/chat all already read holdings through)
+      resolves EffectiveAnnualRateBps on every FI holding before returning Holdings.
+
+// PLAN-109.md, §9 Technical Validation
+- [x] Hexagonal layering intact ... (Note: dashboard/projection don't have their own
+      MacroReader as D2 literally described — see Phase 3 note — they consume the
+      already-resolved rate through the existing HoldingsReader seam instead.)</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que isto é a lição mais valiosa da spec, e não um detalhe de rodapé</span>
+  Um PLAN é uma <strong>hipótese</strong> sobre como implementar uma SPEC, escrita <strong>antes</strong> de a IA olhar de perto para
+  os seams que já existem no código. É perfeitamente correto — e é exatamente o comportamento que se espera do
+  harness — que a Fase 3 verifique essa hipótese contra a realidade e ajuste o design quando encontra um caminho
+  mais simples. "Copiar o padrão do <code>health</code>/<code>insight/engine</code> três vezes" era a suposição inicial porque esse
+  padrão já tinha funcionado duas vezes; mas o <code>health</code> e o <code>insight/engine</code> precisam do macro para <strong>sua
+  própria</strong> lógica de negócio (o tilt de mercado, os fatos do LLM), enquanto o dashboard/projeção só querem <strong>o
+  número já pronto</strong> — o mesmo número que o <code>portfolio.Service</code> já calcula para responder
+  <code>GET /holdings/fixed-income</code>. Multiplicar um padrão sem checar se o problema é realmente o mesmo é como
+  copiar-e-colar sem entender a diferença — e o resultado bom aqui é fruto de <strong>não</strong> ter feito isso.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="endpoint">7. O endpoint <code>GET /market/indicators</code> e as DTOs estendidas</h2>
+
+<p>O handler novo é deliberadamente magro — só transporta o que o <code>marketdata.MacroRepository</code> já sabe fazer,
+sem lógica de negócio nova:</p>
+
+<pre><code>// internal/transport/http/market.go
+// MarketDataReader is the slice of the market-data reader the transport needs (consumer-
+// defined); *marketdata/postgres.MacroRepository satisfies it directly — the same port
+// portfolio/health/insight-engine already depend on (SPEC-109 FR-1095).
+type MarketDataReader interface {
+    GetLatestMacroIndicator(ctx context.Context, ind marketdata.Indicator) (marketdata.MacroIndicator, error)
+}
+
+var publishedIndicators = []marketdata.Indicator{
+    marketdata.IndicatorSELIC, marketdata.IndicatorCDI, marketdata.IndicatorIPCA,
+}</code></pre>
+
+<p>Como toda spec que toca um endpoint, o contrato vive em <strong>lockstep</strong> na <code>routeTable</code>
+(<code>internal/transport/http/routes.go</code>) e em <code>api/openapi.yaml</code>, guardado pelo teste de drift
+(<code>openapi_test.go</code>) — sem <code>user_id</code>, porque SELIC/CDI/IPCA são <strong>dados de referência globais</strong> (BR-1095,
+espelha a BR-603 do SPEC-006), mas ainda assim atrás do gate de auth deny-by-default padrão do projeto:</p>
+
+<pre><code>GET /market/indicators
+   → 200 [ {indicator, value_bps, reference_date}, ... ]  (possivelmente parcial, ou vazio)
+   | 401 (sem sessão)</code></pre>
+
+<p>As DTOs de renda fixa (<code>internal/transport/http/holdings.go</code>) ganharam o mesmo par assimétrico que
+qualquer campo computado do projeto tem — aceito só na leitura, nunca na escrita:</p>
+
+<pre><code>// internal/transport/http/holdings.go
+type fixedIncomeRequest struct {
+    Name                   string  `json:"name"`
+    Institution            string  `json:"institution"`
+    InvestedAmountCentavos int64   `json:"invested_amount_centavos"`
+    AnnualRateBps          int     `json:"annual_rate_bps"`
+    IndexerType            string  `json:"indexer_type"`  // "" defaults to prefixado (SPEC-109 BR-1093)
+    MaturityDate           *string `json:"maturity_date"`
+    LiquidityType          string  `json:"liquidity_type"`
+}
+
+type fixedIncomeResponse struct {
+    // ...
+    AnnualRateBps int    `json:"annual_rate_bps"`
+    IndexerType   string `json:"indexer_type"`
+    // EffectiveAnnualRateBps is computed, never persisted (SPEC-109 FR-1092): the resolved
+    // current rate for cdi_percentual/ipca_spread holdings; equal to AnnualRateBps for prefixado.
+    EffectiveAnnualRateBps int `json:"effective_annual_rate_bps"`
+    // ...
+}</code></pre>
+
+<p><code>fixedIncomeRequest</code> não tem <code>effective_annual_rate_bps</code> — um cliente que tentasse mandar esse campo no
+<code>POST</code>/<code>PUT</code> simplesmente teria o valor ignorado, porque <code>fixedIncomeInput</code> (a função que mapeia o
+request para <code>portfolio.FixedIncomeInput</code>) nunca lê esse campo. É o mesmo padrão "torne o estado ruim
+irrepresentável" das DTOs de outras specs computacionais: o valor computado só existe do lado da resposta.</p>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">8. As 5 decisões (D1–D5) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Onde mora a resolução?</td>
+    <td><strong><code>internal/portfolio</code></strong> — método em <code>FixedIncomeHolding</code>, puro (sem I/O)</td>
+    <td>Colocado com o tipo de domínio que resolve; <code>portfolio</code> já legitimamente importa <code>marketdata</code> para o <code>Ticker</code> (SPEC-102 D1) — não é uma exceção de camadas nova.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Quem busca as leituras de macro (o I/O)?</td>
+    <td><strong>Simplificado em relação ao plano</strong>: só o <code>portfolio.Service</code> tem um <code>MacroReader</code>; dashboard/projeção consomem a taxa já resolvida pelo <code>HoldingsReader</code>/<code>Reader</code> existente</td>
+    <td>Um único seam de leitura já servia os três; multiplicar o padrão de <code>health</code>/<code>insight/engine</code> sem necessidade adicionaria I/O duplicado e fiação nova (ver §6).</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Degradação quando o indicador falta?</td>
+    <td><strong>Cai no valor bruto armazenado</strong> — nunca <code>null</code>, nunca crash, nunca zero silencioso</td>
+    <td>Um ambiente recém-provisionado, antes da primeira ingestão, é transitório e se auto-corrige assim que a ingestão rodar uma vez; um erro duro derrubaria a leitura inteira de holdings por causa de um dado secundário.</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>O <code>Compute</code> do dashboard/projeção continua puro?</td>
+    <td><strong>Sim</strong> — a resolução (I/O via <code>MacroReader</code>) acontece <strong>antes</strong>, na borda; o <code>Compute</code> só lê um campo já resolvido</td>
+    <td>Preserva a garantia de pureza/determinismo do SPEC-103/107 sem nenhuma mudança de assinatura.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Número da migration nova?</td>
+    <td><strong><code>0007_fixed_income_indexer</code></strong> (próxima livre após <code>0006_chat</code>)</td>
+    <td>Aditiva, com <code>DEFAULT</code> e <code>CHECK</code>; o <code>down</code> derruba a coluna com segurança a qualquer momento.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="fases">9. As 7 fases, uma a uma</h2>
+
+<p>Bottom-up, como as specs anteriores — domínio primeiro, borda depois, cada fase compilando e revisável
+sozinha.</p>
+
+<h3>Fase 1 — Domínio</h3>
+<p><code>internal/portfolio/indexer.go</code>: o enum fechado <code>Indexer</code> + <code>ParseIndexer</code> (mirror exato do
+<code>LiquidityType</code>); o campo <code>IndexerType</code> em <code>FixedIncomeHolding</code>, validado no construtor
+(parse-don't-validate); o método puro <code>ResolveEffectiveRate</code>, reaproveitando <code>money.ApplyBps</code>. Testes
+table-driven cobrindo os três indexadores, o fallback D3 (mapa <code>nil</code> e vazio) e o zero-value se comportando
+como <code>Prefixado</code>.</p>
+
+<h3>Fase 2 — Persistência</h3>
+<p>Migration <code>0007</code> (<code>up</code>/<code>down</code>); leitura/escrita de <code>indexer_type</code> em
+<code>internal/portfolio/postgres/postgres.go</code>, re-validando via <code>ParseIndexer</code> na leitura (defesa em
+profundidade, a mesma convenção de revalidar no read do resto do projeto). Teste de integração real-Postgres
+provando que uma linha nova com <code>cdi_percentual</code> dá round-trip e uma linha pré-existente (sem
+<code>indexer_type</code>) lê como <code>prefixado</code> (BR-1093).</p>
+
+<h3>Fase 3 — Aplicação</h3>
+<p>O próprio caminho de leitura do <code>portfolio</code> (<code>GET /holdings/fixed-income</code>) resolve e anexa
+<code>effective_annual_rate_bps</code> via seu <code>MacroReader</code>. Dashboard e Projeção: <strong>a simplificação de D2</strong> — sem
+port próprio, consomem a taxa já resolvida através do <code>Reader</code>/<code>HoldingsReader</code> existente (§6). Fiação do
+<code>cmd/api</code>: a mesma instância de <code>marketdata/postgres.MacroRepository</code> alimenta o único slot
+<code>MacroReader</code> do <code>portfolio.NewService</code>.</p>
+
+<h3>Fase 4 — API</h3>
+<p><code>GET /market/indicators</code> (novo handler <code>internal/transport/http/market.go</code>), atrás do gate padrão de
+auth; DTOs de renda fixa estendidas (<code>indexer_type</code> na escrita, <code>+ effective_annual_rate_bps</code> só na
+leitura); <code>api/openapi.yaml</code> atualizado (dois schemas estendidos + o novo path + o schema
+<code>MarketIndicatorResponse</code>), drift test verde.</p>
+
+<h3>Fase 5 — Observabilidade</h3>
+<p>O span nomeado por rota do <code>otelhttp</code> se aplica automaticamente à rota nova — nenhuma instrumentação
+extra necessária, confirmado por <code>TestHTTP_MarketIndicatorsSpanRouteNamed</code>. Diferente de holdings (dados de
+usuário), os valores de indicador macro são dados econômicos públicos, então sua presença no span não é, em si,
+um vazamento de PII.</p>
+
+<h3>Fase 6 — Testes</h3>
+<p>Unitários <strong>sem banco</strong>: <code>Indexer</code> parsing; <code>ResolveEffectiveRate</code> (os três indexadores, fallback D3,
+zero-value); <code>portfolio.Service</code> com um <code>MacroReader</code> fake escrito à mão (<code>fakeMacro</code>), cobrindo
+Create/List/Update, incluindo o teste de degradação <strong>por indicador</strong>
+(<code>TestService_ListHoldings_ResolvesEffectiveRatePerIndicatorIndependently</code>); a fixture prefixado do
+<code>dashboard/compute_test.go</code>; validação <code>400</code> em <code>indexer_type</code> inválido no handler; sem-PII no span.
+Integração <strong>gated</strong> (Postgres real, <code>TEST_DATABASE_URL</code>, <code>-p 1</code>): round-trip da migration; resolução real
+contra um <code>MacroRepository</code> semeado, tanto em <code>portfolio/postgres/service_integration_test.go</code> quanto em
+<code>dashboard/service_integration_test.go</code> (provando que o valor computado do dashboard reflete o indexador).</p>
+
+<h3>Fase 7 — Documentação &amp; aula</h3>
+<p><code>CHANGELOG.md</code>, SPEC-109 + PLAN-109 marcados <strong>Done</strong>, os dois índices atualizados, o
+<code>Blocked on</code> do SPEC-211 removido (agora desbloqueado), e esta aula.</p>
+
+<!-- ============================================================ -->
+<h2 id="ponte">10. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>, com o service
+importando o repositório <em>concreto</em>. O SPEC-109 é um bom exemplo de como uma feature <strong>pequena</strong> ainda
+segue a tradução ponto a ponto — e de como o "grande giro" (inversão de dependência) aparece mesmo num port de
+uma linha. (Para a teoria completa, veja a
+<a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>; aqui aplicamos ela ao
+SPEC-109.)</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-109</th><th>Onde vive</th></tr>
+  <tr><td>Controller</td><td><code>marketHandler</code> (<strong>driving adapter</strong> novo — traduz HTTP ↔ o repositório de macro) e a extensão de <code>holdingsHandler</code> existente</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>DTO</td><td><code>fixedIncomeRequest</code>/<code>fixedIncomeResponse</code> estendidos (<code>indexer_type</code> na escrita, <code>+ effective_annual_rate_bps</code> só na leitura) e <code>marketIndicatorResponse</code> — continuam DTOs, na borda</td><td>Borda (<code>transport/http</code>)</td></tr>
+  <tr><td>Enum / value object de domínio</td><td><code>portfolio.Indexer</code> (enum fechado + <code>ParseIndexer</code>) — mirror exato do <code>LiquidityType</code> do SPEC-102</td><td>Domínio (<code>portfolio</code>)</td></tr>
+  <tr><td>Service / caso de uso</td><td><code>portfolio.Service</code> — já existia (SPEC-102); ganhou uma <strong>dependência nova</strong> (<code>MacroReader</code>) e resolve a taxa efetiva em todo caminho de leitura/escrita, sem sair do core da feature</td><td>Core da feature (<code>portfolio</code>)</td></tr>
+  <tr><td>Lógica de negócio pura</td><td><code>FixedIncomeHolding.ResolveEffectiveRate</code> + <code>money.ApplyBps</code> — função pura (sem SQL/HTTP/LLM/time), totalmente testável</td><td>Domínio (<code>portfolio</code> / <code>platform/money</code>)</td></tr>
+  <tr><td>Repository concreto</td><td>Vira o port <strong><code>MacroReader</code></strong> (definido em <code>portfolio</code>) — satisfeito por <code>marketdata/postgres.MacroRepository</code> (SPEC-006), <strong>sem código de adapter novo</strong></td><td>Interface no <code>portfolio</code>; implementação já existente na borda</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, o service <strong>importa</strong> o cliente concreto que fala com o banco de macro — a seta aponta <strong>para
+fora</strong>, rumo à infra. No SPEC-109 o <code>portfolio</code> <strong>define a interface mínima de que precisa</strong>
+(<code>ports.go</code>) e o adapter que <em>já existia</em> para outra feature (SPEC-006) a satisfaz, sem saber que o
+<code>portfolio</code> existe:</p>
+
+<pre><code>// internal/portfolio/ports.go — o service DEFINE o port de que precisa (consumer-defined):
+type MacroReader interface {
+    GetLatestMacroIndicator(ctx context.Context, ind marketdata.Indicator) (marketdata.MacroIndicator, error)
+}
+
+// A peça que já existia o satisfaz — sem saber que o portfolio precisa dela:
+//   marketdata/postgres.MacroRepository (SPEC-006)   já tem GetLatestMacroIndicator
+//       → satisfaz portfolio.MacroReader, health.MacroReader e o MacroReader do internal/transport/http
+//         (a MESMA instância concreta, passada em TRÊS slots de interface distintos no cmd/api)
+// Todas as setas de dependência apontam PARA DENTRO.</code></pre>
+
+<p>Repare que o <code>MacroReader</code> desta spec é o <strong>quarto</strong> lugar do projeto a definir essa mesma interface
+mínima (<code>health</code>, <code>insight/engine</code>, e agora <code>portfolio</code> e <code>transport/http</code>/<code>market.go</code>) — todos
+consumer-defined, todos satisfeitos pela <strong>mesma</strong> instância concreta de <code>MacroRepository</code>. É a prova viva
+de "interfaces pequenas, definidas pelo consumidor": em vez de um port de macro "genérico" e grande compartilhado
+por todo o código, cada consumidor pede exatamente o método que usa.</p>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving ports</strong> (quem <em>aciona</em> a aplicação): <code>marketHandler</code> (novo) e a extensão de
+  <code>holdingsHandler</code> — ambos na borda, chamando os services por interfaces consumer-defined do próprio
+  transporte.</li>
+  <li><strong>Driven port</strong> novo (o que a aplicação <em>aciona</em>): <code>portfolio.MacroReader</code>. Fica à
+  <strong>direita</strong> do hexágono — <strong>nenhum adapter novo</strong> foi escrito para satisfazê-lo, só uma nova fiação no
+  <code>cmd/api</code> reaproveitando o <code>MacroRepository</code> do SPEC-006.</li>
+  <li><strong>Domínio / core puro</strong>: <code>Indexer</code>, <code>ResolveEffectiveRate</code>, <code>money.ApplyBps</code> — sem SQL/HTTP/LLM/time.
+  <strong>Aplicação</strong>: <code>portfolio.Service</code> (busca macro, resolve, anexa). <strong>Borda</strong>: os handlers HTTP, as DTOs, o
+  repositório Postgres de <code>portfolio</code> (que <strong>não</strong> toca <code>EffectiveAnnualRateBps</code>).</li>
+</ul>
+
+<div class="diagram">           ┌──────── internal/portfolio (core da feature) ────────────────┐
+ HTTP ─▶ ListHoldings /            │  Service.ListHoldings / withEffectiveRate(s)            │
+ CreateFixedIncomeHolding /  ─────▶│      │                                                  │
+ UpdateFixedIncomeHolding          │      ├─▶ Repository (Postgres)  — NUNCA lê/escreve       │
+ (driving)                         │      │   EffectiveAnnualRateBps (computado, não salvo)   │
+                                   │      ├─▶ MacroReader.GetLatestMacroIndicator ◀── marketdata (006)│
+                                   │      └─▶ h.ResolveEffectiveRate(macro)  [PURO, sem I/O]   │
+                                   └─────────────────────────────────────────────────────────┘
+                                                        │
+                    dashboard.Service / projection.Service  ◀── leem via portfolio.Reader/HoldingsReader
+                    (SEM MacroReader próprio — consomem EffectiveAnnualRateBps já resolvido)
+
+   Acíclico: portfolio → {marketdata, money}. dashboard/projection → portfolio (sem novo port).</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">11. Harness Engineering: como a máquina construiu isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à IA trilhos
+que <strong>baixam a taxa de erro</strong>. Esta spec é um bom estudo de caso justamente por ser pequena: dá para ver o
+processo inteiro sem ruído.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase — o domínio antes da fiação</h3>
+<p>O PLAN-109 fatiou o trabalho em 7 fases bottom-up (§9), e a Fase 1 lançou o enum <code>Indexer</code> +
+<code>ResolveEffectiveRate</code> <strong>puros e testados</strong> antes de qualquer migration, service ou handler existir. Isso
+significa que quando a Fase 3 revisitou a decisão D2 (§6 desta aula), a matemática já estava provada — a
+mudança de plano foi só sobre <strong>onde</strong> chamar uma função já correta, nunca sobre reescrever o que ela
+calcula.</p>
+
+<h3>O hook determinístico <code>block-layering</code></h3>
+<p>O hook <code>block-layering</code> (PostToolUse, <code>exit 2</code>) barra <strong>mecanicamente</strong> qualquer import de
+<code>database/sql</code>, <code>net/http</code> ou SDK de vendor dentro de um core de feature. É esse hook que garante, em
+tempo de escrita, que <code>internal/portfolio</code>'s <code>ResolveEffectiveRate</code> ficou puro — nenhum import de
+<code>database/sql</code> aparece no arquivo — enquanto o import de <code>internal/marketdata</code> (o tipo <code>Indicator</code>,
+puro) segue <strong>permitido</strong>, porque <code>portfolio</code> já legitimamente depende de tipos de domínio do
+<code>marketdata</code> desde o SPEC-102 (D1, para o <code>Ticker</code>).</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>Segundo o PLAN-109 §9, o <code>hexagonal-reviewer</code> revisou a spec e devolveu <strong>PASS, sem bloqueios</strong> — mas o
+detalhe mais interessante está no comentário que ele deixou passar registrado na checklist: a nota explícita de
+que "dashboard/projection não têm seu próprio <code>MacroReader</code> como D2 literalmente descrevia" — o revisor
+<strong>validou</strong> a simplificação de D2 em vez de exigir que o código seguisse o plano ao pé da letra, porque a
+regra de camadas (nenhum port de infra vazando do core, direção de dependência acíclica) continuava intacta com
+o seam único.</p>
+
+<h3>O <code>go-correctness-reviewer</code> e o bug real que ele encontrou</h3>
+<p>É o achado mais concreto desta sessão: o <code>go-correctness-reviewer</code> pegou <code>getMarketIndicators</code> engolindo
+<strong>qualquer</strong> erro de <code>GetLatestMacroIndicator</code> indiscriminadamente — inclusive uma falha real de
+infraestrutura — sem log e sem distinguir de "ainda não ingerido" (§5.2 desta aula). A correção foi pequena
+(um <code>switch</code> com dois casos + usar o campo <code>logger</code> que já existia no handler, mas estava sem uso), mas o
+achado é exatamente o tipo de bug que passa despercebido numa revisão manual apressada — os dois caminhos de
+erro <em>parecem</em> iguais até você perguntar "o que esse endpoint existe para fazer?".</p>
+
+<div class="box tip">
+  <span class="lbl">Um segundo achado do revisor: a lacuna de cobertura por indicador</span>
+  O mesmo ciclo de revisão também sinalizou uma lacuna de teste: nada provava que a degradação de macro
+  acontecia <strong>por indicador</strong> (CDI presente + IPCA ausente) em vez de tudo-ou-nada. A resposta foi o teste
+  <code>TestService_ListHoldings_ResolvesEffectiveRatePerIndicatorIndependently</code> (§5.1) — fechando exatamente o
+  buraco que o revisor apontou, antes do fechamento da spec.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — zero ruído de estilo nos diffs.</li>
+  <li><strong>block-layering</strong>: o bloqueio duro que provou que <code>ResolveEffectiveRate</code> ficou livre de SQL/HTTP, ao
+  mesmo tempo que <em>permitiu</em> o import legítimo de <code>internal/marketdata</code> (tipos puros).</li>
+  <li><strong>O teste de drift do OpenAPI</strong>: ao adicionar <code>GET /market/indicators</code> na <code>routeTable</code>, o
+  <code>openapi_test.go</code> <em>exigiu</em> a entrada correspondente em <code>api/openapi.yaml</code> — senão o build falharia
+  (<a href="#endpoint">seção 7</a>).</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-109 estende o SPEC-102 (a migration <code>0007</code> é aditiva, uma
+  <code>ALTER TABLE</code> nova) e reaproveita o SPEC-006 <strong>sem editar</strong> nenhuma migration ou ADR já aceitos — se a
+  IA tivesse tentado "editar" a migration original de renda fixa em vez de somar uma nova, o hook barraria.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige <code>build</code>/<code>vet</code>/<code>test</code>/<code>gofmt</code> limpos — os testes
+  unitários passam <strong>sem rede e sem DB</strong> (a resolução é pura, os fakes de macro são escritos à mão). A
+  integração (migration round-trip, resolução contra um <code>MacroRepository</code> real) fica atrás do gate de
+  <code>TEST_DATABASE_URL</code> + <code>-p 1</code>, pulando limpo.</li>
+</ul>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-109</th><th>Por que baixa erro</th></tr>
+  <tr><td>Fatos são computados, não gerados</td><td><code>EffectiveAnnualRateBps</code> nasce zero-value, é preenchido só pelo <code>Service</code>; o repositório nunca o toca</td><td>Impossível persistir por engano um fato que deve estar sempre atual.</td></tr>
+  <tr><td>Dinheiro/taxas nunca são <code>float64</code></td><td>Taxa e resolução em <code>int</code> bps; reaproveita <code>money.ApplyBps</code> (half-up, <code>big.Int</code>) em vez de escrever divisão nova</td><td>Zero deriva de arredondamento; a mesma primitiva já auditada em Dashboard/Health/Projeção.</td></tr>
+  <tr><td>Enums fechados parse-don't-validate</td><td><code>Indexer</code> é <code>type X string</code> + <code>ParseIndexer</code> (trim+lower, vazio→<code>prefixado</code>, sentinela <code>%w</code>)</td><td>Um indexador inválido é irrepresentável; a string vazia herda o comportamento antigo automaticamente.</td></tr>
+  <tr><td>Domínio é puro</td><td><code>ResolveEffectiveRate</code> não toca SQL/HTTP/LLM/time; o I/O de macro fica no <code>Service</code> (borda)</td><td>Testável sem infra; o hook <code>block-layering</code> garante mecanicamente.</td></tr>
+  <tr><td>Interfaces pequenas, definidas pelo consumidor</td><td><code>portfolio.MacroReader</code> — um método só, o mínimo que o consumidor precisa</td><td>Fakes triviais nos testes (<code>fakeMacro</code>); a mesma instância concreta satisfaz 3+ ports diferentes.</td></tr>
+  <tr><td>Repositório nomeado por operação</td><td><code>GetLatestMacroIndicator</code> — leitura que pode faltar, sentinela <code>ErrMacroNotFound</code></td><td>Consistente com o resto do projeto; previsível para qualquer consumidor novo.</td></tr>
+  <tr><td>OpenAPI em lockstep</td><td><code>GET /market/indicators</code> na <code>routeTable</code> + em <code>api/openapi.yaml</code>, guardado pelo teste de drift</td><td>O contrato nunca apodrece; doc e código não divergem.</td></tr>
+  <tr><td>Migrations aditivas, nunca editadas</td><td>Migration <code>0007</code> nova; <code>0002</code> (renda fixa original) intocada</td><td>Rollback seguro a qualquer ponto; histórico de schema auditável.</td></tr>
+  <tr><td>Stdlib-first; justifique cada dependência</td><td><strong>Nenhuma</strong> dependência nova — só o stack existente + <code>money.ApplyBps</code></td><td>Zero download novo; superfície de ataque e manutenção mínimas (ADR-0003).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">12. Conexão com AI Engineering</h2>
+
+<p>O SPEC-109 não é uma feature de IA — <strong>zero</strong> chamada a LLM, zero prompt, zero <code>Insighter</code>. É por isso
+que a conexão mais honesta aqui não é "como isso melhora um insight", mas sim "como essa fundação prepara e
+reforça o que já existe do lado de IA".</p>
+
+<h3>12.1 — O mesmo princípio ("fatos são computados, não gerados"), sem LLM nenhum</h3>
+<p>A lição mais direta já apareceu na seção 2: <code>EffectiveAnnualRateBps</code> segue a <strong>mesma</strong> disciplina que
+governa a nota do Health Score (SPEC-106) e as séries de Projeção (SPEC-107) — um valor derivado nunca é gravado
+como se fosse permanente; ele é recalculado a cada leitura contra o estado atual do mundo. Ver essa regra
+aplicada a uma multiplicação simples (<code>taxa × CDI ÷ 10000</code>) ajuda a entender que "fatos computados, não
+gerados" é uma regra sobre <strong>honestidade temporal de um número</strong>, não uma regra específica de LLM — o que
+torna mais fácil reconhecer o mesmo padrão quando ele aparece disfarçado em outro contexto.</p>
+
+<h3>12.2 — Um fato mais rico que a IA futura vai ler de graça</h3>
+<p>O <code>portfolio.Reader.ListHoldings</code> é exatamente o seam que o Fact Builder (SPEC-104) e o
+<code>Insighter</code>/chat (SPEC-108) já consomem para montar os fatos que vão ao LLM. Como o SPEC-109 resolve a taxa
+efetiva <strong>dentro</strong> desse mesmo seam (§6), qualquer feature de IA futura que já lê holdings passa a enxergar a
+taxa <strong>correta e atual</strong> de um CDB pós-fixado automaticamente — sem precisar ser reescrita, sem precisar saber
+que indexadores existem. É um exemplo concreto de como investir num port bem desenhado paga dividendos em
+features que ainda nem foram planejadas.</p>
+
+<h3>12.3 — Sem LLM, sem superfície de prompt-injection</h3>
+<p>Como no SPEC-107 (Projeções), a ausência total de LLM nesta spec significa que <strong>não existe</strong> vetor de
+prompt-injection aqui: nenhum dado de holding ou de mercado é enviado a um modelo. A resolução da taxa é uma
+função pura de três inputs conhecidos — indexador, valor armazenado, snapshot de macro. É outro lembrete de que
+a decisão de <strong>não</strong> usar IA numa parte do sistema é, por si só, uma decisão de segurança.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  O SPEC-109 não ensina nada de novo sobre prompts ou grounding — ensina que o <strong>princípio de fundo</strong> por trás
+  do grounding ("o modelo raciocina sobre fatos computados, nunca inventa números") é o mesmo princípio que já
+  vale para <strong>qualquer</strong> número derivado no sistema, com ou sem LLM por perto. Uma taxa "120% do CDI" resolvida
+  hoje e uma explicação de Health Score gerada hoje compartilham a mesma regra: <strong>o que é apresentado como
+  verdade atual precisa ser recalculado, não lembrado</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">13. O que vem a seguir</h2>
+
+<p>Com os indexadores no ar, a renda fixa do YieldForge finalmente reflete como o investidor brasileiro de
+verdade cadastra suas posições — e o dado fica correto <em>sozinho</em>, sem manutenção manual.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Como se conecta ao SPEC-109</th></tr>
+  <tr><td>SPEC-102</td><td>Gestão de Carteira</td><td>O SPEC-109 <strong>estende</strong> o tipo <code>FixedIncomeHolding</code> e a coluna <code>annual_rate_bps</code> já existentes — reinterpretados, nunca substituídos.</td></tr>
+  <tr><td>SPEC-006</td><td>Port <code>MarketDataProvider</code> &amp; ingestão</td><td>O SPEC-109 é puro <strong>consumo</strong> do que o SPEC-006 já ingere — nenhuma ingestão nova, só um port de leitura a mais.</td></tr>
+  <tr><td>SPEC-103 / 107</td><td>Dashboard / Projeções</td><td>Ambos passam a acumular renda fixa pela taxa <strong>efetiva</strong>, sem nenhuma mudança de assinatura em seus <code>Compute</code> puros.</td></tr>
+  <tr><td>SPEC-211</td><td>Telas de Gestão de Carteira (frontend)</td><td><strong>Desbloqueada</strong> por este spec: o formulário de renda fixa agora pode oferecer um seletor de indexador + mostrar a referência ao vivo via <code>GET /market/indicators</code>.</td></tr>
+</table>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…006</td><td>Esqueleto, persistência, auth, observabilidade, Insighter, market data</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-101…108</td><td>Perfil, Carteira, Dashboard, Insights, Rebalanceamento, Health Score, Projeções, Chat</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-109</td><td>Indexadores de Renda Fixa (% do CDI / IPCA+)</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-2xx</td><td>Trilha de frontend (SPEC-211 agora desbloqueado)</td><td>⬜ Em andamento</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Por que uma fundação pequena como esta importa para o futuro multi-agente</span>
+  Quando o sistema multi-agente (o "CIO") chegar, cada agente vai precisar de <strong>fatos confiáveis</strong> sobre a
+  carteira para raciocinar em cima — e um dos fatos mais básicos de renda fixa é "quanto isso está rendendo
+  <em>hoje</em>". O SPEC-109 garante que esse fato específico já está correto, resolvido em tempo real, no mesmo
+  seam (<code>ListHoldings</code>) que qualquer agente futuro vai consultar. É um exemplo pequeno, mas real, de como
+  fundações "chatas" (persistência, resolução determinística) sustentam a parte vistosa do produto (IA
+  conversacional, multi-agente) sem que ninguém precise voltar para consertá-las depois.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-109 a renda fixa do YieldForge ganhou um <strong>indexador</strong> (<code>prefixado</code> | <code>cdi_percentual</code> |
+  <code>ipca_spread</code>, enum fechado) e uma <strong>taxa efetiva COMPUTADA, nunca persistida</strong>
+  (<code>ResolveEffectiveRate</code>, pura, half-up via <code>money.ApplyBps</code>) — resolvida uma única vez, no seam de
+  <code>portfolio.Service.ListHoldings</code> que dashboard/projeção/health/chat já compartilhavam (uma simplificação
+  deliberada em relação ao plano original de três <code>MacroReader</code>s), retrocompatível byte a byte para toda
+  holding pré-existente (BR-1093), e graciosamente degradada de duas formas diferentes conforme o papel de quem
+  lê o macro (BR-1094) — mais um novo <code>GET /market/indicators</code> só-leitura, sem nenhuma tabela nova além de
+  uma coluna aditiva.
+</div>
+
+<footer>
+  YieldForge · Aula 109 (SPEC-109) · gerada como material de estudo. Veja também a
+  <a href="SPEC-107-aula.html">Aula 107</a> (as projeções — computação pura, sem LLM, e a mesma disciplina de reprodutibilidade), a
+  <a href="SPEC-106-aula.html">Aula 106</a> (o health score — a nota computada e a narrativa do professor), a
+  <a href="SPEC-103-aula.html">Aula 103</a> (o dashboard — a <code>Compute</code> e a disciplina de <code>ShareBps</code>/<code>ApplyBps</code>), a
+  <a href="SPEC-102-aula.html">Aula 102</a> (a carteira — os holdings de FII e renda fixa que este spec estende), a
+  <a href="SPEC-006-aula.html">Aula 06</a> (macro &amp; cotações — o SELIC/CDI/IPCA que este spec resolve contra), a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-109-fixed-income-rate-indexers.md">SPEC-109</a>
+  e o <a href="../03-plans/PLAN-109-fixed-income-rate-indexers.md">PLAN-109</a>.
+</footer>
+
+</div>
+</body>
+</html>
