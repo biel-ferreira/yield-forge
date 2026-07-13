@@ -1,10 +1,11 @@
-import { EmptyState } from "@/components/ui/empty-state";
+import { FiiSection } from "@/app/(app)/portfolio/fii-table";
 
+// The Carteira screen (SPEC-211). FII section wired (Phase 3, live-verified against the running
+// backend); the fixed-income section (Phase 4) still needs to be added alongside it (Phase 5).
 export default function PortfolioPage() {
   return (
-    <EmptyState
-      title="Carteira"
-      description="O cadastro e a gestão dos seus FIIs e renda fixa chega na SPEC-211 (Portfolio)."
-    />
+    <div className="space-y-8">
+      <FiiSection />
+    </div>
   );
 }

@@ -11,6 +11,7 @@ export function ConfirmDialog({
   confirmLabel = "Excluir",
   cancelLabel = "Cancelar",
   isPending = false,
+  error,
   onConfirm,
   onCancel,
 }: {
@@ -20,12 +21,15 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   isPending?: boolean;
+  /** A genuine failure (not a 404 — that's treated as success, BR-2111) to surface inline. */
+  error?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   return (
     <Dialog open={open} onClose={onCancel} title={title}>
       <p className="text-sm text-muted-strong">{description}</p>
+      {error && <p className="mt-2 text-xs text-loss">{error}</p>}
       <div className="mt-6 flex justify-end gap-3">
         <Button variant="secondary" size="sm" onClick={onCancel} disabled={isPending}>
           {cancelLabel}

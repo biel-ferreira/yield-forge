@@ -67,7 +67,9 @@ export function useUpdateFIIHolding() {
       }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: FII_KEY }),
+    // Invalidate on any settle, not just success: a 404 (already-gone/not-owned, BR-2111) still
+    // means the cached list is stale and must be refreshed, not just a genuine validation error.
+    onSettled: () => qc.invalidateQueries({ queryKey: FII_KEY }),
   });
 }
 
@@ -86,7 +88,7 @@ export function useDeleteFIIHolding() {
         );
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: FII_KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: FII_KEY }),
   });
 }
 
@@ -143,7 +145,7 @@ export function useUpdateFixedIncomeHolding() {
       }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: FIXED_INCOME_KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: FIXED_INCOME_KEY }),
   });
 }
 
@@ -162,6 +164,6 @@ export function useDeleteFixedIncomeHolding() {
         );
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: FIXED_INCOME_KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: FIXED_INCOME_KEY }),
   });
 }

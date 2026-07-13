@@ -213,15 +213,24 @@ involved.
 ### Phase 3 — FII section *(≈ first CRUD vertical, proves the pattern)*
 
 #### Tasks
-- [ ] `app/(app)/portfolio/fii-table.tsx` — populated table (ticker, quantity, average price,
+- [x] `app/(app)/portfolio/fii-table.tsx` — populated table (ticker, quantity, average price,
       actions) sorted by ticker; empty state ("nenhum FII cadastrado" + CTA); loading skeleton;
-      transient-error retry (FR-2111).
-- [ ] `app/(app)/portfolio/fii-form.tsx` — the D1 modal, add and edit (prefilled) sharing one
+      transient-error retry (FR-2111). Exports `FiiSection`, owning the list + modal orchestration
+      end to end (mirrors `app/(app)/profile/page.tsx`'s single-file load+form ownership).
+- [x] `app/(app)/portfolio/fii-form.tsx` — the D1 modal, add and edit (prefilled) sharing one
       component: ticker (free text, uppercase-normalized, D3), quantity (positive whole number,
       ≥1), average price (pt-BR input, `parseCentavos`, ≥0) (FR-2112/2113).
-- [ ] Delete wired through `confirm-dialog.tsx` (FR-2114).
-- [ ] A mutation `404` (edit/delete) refreshes the list rather than erroring (BR-2111); a `400`
-      surfaces the server message inline with input preserved.
+- [x] Delete wired through `confirm-dialog.tsx` (FR-2114). Extended `ConfirmDialog` with an
+      optional `error` slot for a genuine delete failure (not the 404 case).
+- [x] A mutation `404` (edit/delete) refreshes the list rather than erroring (BR-2111); a `400`
+      surfaces the server message inline with input preserved. Required switching the update/delete
+      hooks (Phase 1) from `onSuccess` to `onSettled` invalidation — a 404 doesn't fire `onSuccess`
+      but the cached list is still stale and must refresh; discovered while wiring this phase.
+- [x] **Live-verified against the real backend** (registered a fresh account via Playwright,
+      not a mock): create → row appears correctly formatted; edit → prefill matches exactly,
+      quantity update reflects; delete → confirm dialog → row removed, empty state returns.
+      Zero console errors. `app/(app)/portfolio/page.tsx` now renders `FiiSection` for real
+      (not a throwaway harness) — Phase 5 adds the fixed-income section alongside it.
 
 #### Deliverables
 - A working FII section: list/add/edit/delete against the live backend.
