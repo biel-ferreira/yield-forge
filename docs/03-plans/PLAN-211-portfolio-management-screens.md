@@ -6,19 +6,11 @@
 | --------------- | --------------------------------------- |
 | Plan Name       | Portfolio Management Screens            |
 | Related Feature | Portfolio Management Screens (Carteira) |
-| Related Spec    | [SPEC-211](../02-specs/SPEC-211-portfolio-management-screens.md) (Draft — see note below) |
+| Related Spec    | [SPEC-211](../02-specs/SPEC-211-portfolio-management-screens.md) (Approved) |
 | Version         | 0.1.0                                    |
 | Status          | Draft                                    |
 | Author          | Gabigol                                  |
 | Last Updated    | 2026-07-02                               |
-
-> **SPEC status note.** SPEC-211 is still `Draft` — this plan is provisional pending it being
-> flipped to `Approved`. All three of its Open Questions (§14) were resolved this session (see
-> §4 Blocking Decisions below) and a fresh audit against the actual shipped SPEC-109 contract
-> found no discrepancies in the API shapes — only a display-detail refinement to FR-2120
-> (already folded into the spec) and a Definition-of-Done range typo (FR-2119→FR-2120,
-> BR-2116→BR-2117, already fixed). Recommend flipping SPEC-211 to `Approved` before
-> `/spec-implement 211` begins.
 
 > **Phase-order note.** Frontend spec — the template's backend phase order is mapped to its
 > frontend analogue (data → components → screens → composition → tests → docs), the same
