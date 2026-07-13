@@ -302,31 +302,49 @@ involved.
 ### Phase 6 — Testing
 
 #### Unit / Component (Vitest + RTL)
-- [ ] `parseCentavos`/`parseBps` (FR-2119): table-tested, incl. malformed-input rejection and the
-      round-trip with `formatCentavos`/`formatBps`.
-- [ ] Validation gating for both forms (FII: ticker/quantity/price; FI: required fields, liquidity
-      ↔ maturity interaction, past-date rejection).
-- [ ] Empty vs. populated list rendering for both sections.
-- [ ] Submit builds the exact request body for each resource (no `user_id`); a `404` on edit/delete
-      is handled as list-refresh, not an error toast.
-- [ ] Indexer selection: the rate-value label/unit adapts per indexer; edit prefills the correct
+- [x] `parseCentavos`/`parseBps` (FR-2119): table-tested (`lib/money.test.ts`), incl.
+      malformed-input rejection and the round-trip with `formatCentavos`/`formatBps`.
+- [x] Validation gating for both forms (`fii-form.test.tsx`, `fixed-income-form.test.tsx`): FII
+      ticker/quantity/price; FI required fields, liquidity ↔ maturity interaction, past-date
+      rejection (create-only, per FR-2116's edit-mode exemption — tested explicitly).
+- [x] Empty vs. populated list rendering for both sections (`fii-table.test.tsx`,
+      `fixed-income-table.test.tsx`).
+- [x] Submit builds the exact request body for each resource (no `user_id`); a `404` on edit/delete
+      is handled as list-refresh, not an error toast — both tested via a hand-written
+      `mutationHook<TData,TVariables>` fake (generic over create/update/delete's differing
+      TanStack Query shapes; no mocking library, per convention).
+- [x] Indexer selection: the rate-value label/unit adapts per indexer; edit prefills the correct
       indexer + value; the live-reference display renders the fetched value/date and degrades to
-      "indisponível" without blocking save.
-- [ ] Effective-rate reference date (D7): the table shows `reference_date` when the indicator is
+      "indisponível" without blocking save (`fixed-income-form.test.tsx`).
+- [x] Effective-rate reference date (D7): the table shows `reference_date` when the indicator is
       present, "sem referência disponível" when absent — both indicators (CDI/IPCA) and
-      `prefixado` (never shows a reference).
-- [ ] `dialog.tsx`/`confirm-dialog.tsx`: open/close, Escape, backdrop click, focus return.
+      `prefixado` (never shows a reference) (`fixed-income-table.test.tsx`).
+- [x] `dialog.tsx`/`confirm-dialog.tsx`: open/close, close-button, backdrop-click, title/children
+      rendering, required-confirmation, pending-disables-actions, inline error. **Scope note:**
+      jsdom has no `<dialog>` implementation at all (confirmed empirically — `showModal`/`close`
+      are simply absent); added a minimal polyfill (`vitest.setup.ts`) so the component's own
+      control logic is testable, but Escape-to-close and real focus-trap/return are native
+      browser guarantees jsdom cannot emulate — those were proven in this session's live-browser
+      (Playwright) verification during Phases 2–5, not re-provable here.
 
 #### Integration
-- [ ] Against a running backend: create → list reflects it → edit → list reflects it → delete →
-      list no longer has it, for both FII and fixed-income.
+- [x] Against a running backend: create → list reflects it → edit → list reflects it → delete →
+      list no longer has it, for both FII and fixed-income. **Combined with E2E below** — this
+      repo has no separate integration-test tier for the frontend (confirmed: no prior spec built
+      one either); the same real-network Playwright run mirrors `e2e/profile.spec.ts`'s precedent.
 
 #### End-to-End (Playwright)
-- [ ] Add an FII holding and a fixed-income holding, see both appear; delete one, confirm it's
-      gone. Gated to skip without a backend.
+- [x] `e2e/portfolio.spec.ts`: add an FII holding and a fixed-income holding, see both appear;
+      edit the FII holding, the list reflects it; delete it, confirm it's gone (the fixed-income
+      one remains). **Actually run against the real backend** (Go API + Postgres), not just
+      written — caught and fixed two real bugs in the process (see Risks): the empty-state CTA
+      duplication, and non-unique "Editar"/"Excluir" accessible names once both sections have
+      rows (fixed by row-scoping the test, not by weakening it).
 
 #### Deliverables
-- All green in the `web/` CI gate.
+- All green in the `web/` CI gate: `typecheck` ✅ `lint` ✅ `test` (95/95, 13 files) ✅ `check:api`
+  ✅. E2E (`e2e/portfolio.spec.ts`) run and passing against the real backend — not CI-gated
+  (matches `e2e/profile.spec.ts`'s existing precedent, documented in `playwright.config.ts`).
 
 ---
 
@@ -357,6 +375,8 @@ involved.
 | Two independent CRUD verticals (FII, fixed income) risk duplicated table/modal-form logic | Medium | Accept the duplication for the MVP (two verticals, not five) rather than force a premature generic-CRUD abstraction; revisit only if a third vertical appears |
 | FR-2120's indicator cross-reference (`indexer_type` → which `Indicator` to look up) has an edge case for `prefixado` (no indicator at all) | Low | `findIndicator` is a small pure helper, unit-tested including the `prefixado`/no-lookup case |
 | Scope creep into the Dashboard's current-value computation | Low | BR-2113 draws a hard line (cost basis only); enforced by review |
+| **(materialized, fixed)** `FiiForm`/`FixedIncomeForm` never remounted between edit targets (same JSX position, only `open` toggled) — `useState`'s initializer only runs once, so switching edit targets or reopening "add" leaked the previous session's stale form state | Medium | Found live-verifying Phase 4 (a Playwright script's ambiguous selector surfaced it). Fixed with a `key` per target (`formTarget.id`/`"add"`/`"closed"`) forcing a clean remount — the standard React "key resets state" pattern |
+| **(materialized, fixed)** Each section's empty state showed two identically-labeled "Adicionar…" buttons (header CTA + `EmptyState`'s own CTA) — an a11y/testing ambiguity, not just cosmetic duplication | Low | Found writing the E2E test (`getByRole` strict-mode violation). Fixed by hiding the header CTA specifically when the empty state is showing (`isEmpty` gate) — mutually exclusive by construction, not by test-side workaround |
 
 ---
 

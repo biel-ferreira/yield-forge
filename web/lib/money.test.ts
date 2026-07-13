@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCentavos, formatBps, formatShareBps } from "@/lib/money";
+import { formatCentavos, formatBps, formatShareBps, parseCentavos, parseBps } from "@/lib/money";
 
 // The money/rate render edge (BR-2003 / FR-2005): integer in, exact pt-BR string out.
 describe("formatCentavos", () => {
@@ -33,5 +33,55 @@ describe("formatShareBps (compact percent for allocation)", () => {
     [10000, "100%"],
   ])("%d → %s", (bps, expected) => {
     expect(formatShareBps(bps)).toBe(expected);
+  });
+});
+
+// The input-side counterpart (SPEC-211 FR-2119, BR-2112): pt-BR string in, integer out —
+// never a float, never silently coerced to 0 on bad input.
+describe("parseCentavos", () => {
+  it.each([
+    ["1.234,56", 123456],
+    ["10,5", 1050],
+    ["0", 0],
+    ["1234", 123400],
+    ["-120,44", -12044],
+    ["  157,50  ", 15750], // surrounding whitespace trimmed
+  ])("%s → %d", (input, expected) => {
+    expect(parseCentavos(input)).toBe(expected);
+  });
+
+  it.each([
+    ["", "empty"],
+    ["abc", "non-numeric"],
+    ["12.34,56", "malformed thousands grouping"],
+    ["1,2,3", "multiple commas"],
+  ])("%s (%s) → null, never coerced to 0", (input) => {
+    expect(parseCentavos(input)).toBeNull();
+  });
+
+  it("round-trips with formatCentavos for a representative value", () => {
+    expect(parseCentavos(formatCentavos(123456).replace("R$ ", ""))).toBe(123456);
+  });
+});
+
+describe("parseBps", () => {
+  it.each([
+    ["10,5", 1050],
+    ["120", 12000],
+    ["5,80", 580],
+    ["0", 0],
+  ])("%s → %d", (input, expected) => {
+    expect(parseBps(input)).toBe(expected);
+  });
+
+  it.each([
+    ["", "empty"],
+    ["dez", "non-numeric"],
+  ])("%s (%s) → null", (input) => {
+    expect(parseBps(input)).toBeNull();
+  });
+
+  it("round-trips with formatBps for a representative value", () => {
+    expect(parseBps(formatBps(1050).replace("%", ""))).toBe(1050);
   });
 });

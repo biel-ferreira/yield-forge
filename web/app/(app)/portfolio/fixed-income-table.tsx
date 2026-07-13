@@ -32,14 +32,19 @@ export function FixedIncomeSection() {
   const [deleteTarget, setDeleteTarget] = useState<FixedIncomeHolding | null>(null);
 
   const sorted = [...holdings].sort((a, b) => a.name.localeCompare(b.name));
+  // The empty state below carries its own "Adicionar renda fixa" CTA — showing the header one
+  // too would be a redundant, identically-labeled duplicate (and an a11y/testing ambiguity).
+  const isEmpty = !isLoading && !isError && sorted.length === 0;
 
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-serif text-xl font-semibold text-on-dark">Renda fixa</h2>
-        <Button size="sm" onClick={() => setFormTarget("add")}>
-          Adicionar renda fixa
-        </Button>
+        {!isEmpty && (
+          <Button size="sm" onClick={() => setFormTarget("add")}>
+            Adicionar renda fixa
+          </Button>
+        )}
       </div>
 
       {isLoading && (
@@ -58,7 +63,7 @@ export function FixedIncomeSection() {
         </div>
       )}
 
-      {!isLoading && !isError && sorted.length === 0 && (
+      {isEmpty && (
         <EmptyState
           title="Nenhuma renda fixa cadastrada"
           description="Adicione sua primeira posição em renda fixa."

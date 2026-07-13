@@ -20,14 +20,19 @@ export function FiiSection() {
   const [deleteTarget, setDeleteTarget] = useState<FIIHolding | null>(null);
 
   const sorted = [...holdings].sort((a, b) => a.ticker.localeCompare(b.ticker));
+  // The empty state below carries its own "Adicionar FII" CTA — showing the header one too
+  // would be a redundant, identically-labeled duplicate (and an a11y/testing ambiguity).
+  const isEmpty = !isLoading && !isError && sorted.length === 0;
 
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-serif text-xl font-semibold text-on-dark">FIIs</h2>
-        <Button size="sm" onClick={() => setFormTarget("add")}>
-          Adicionar FII
-        </Button>
+        {!isEmpty && (
+          <Button size="sm" onClick={() => setFormTarget("add")}>
+            Adicionar FII
+          </Button>
+        )}
       </div>
 
       {isLoading && (
@@ -46,7 +51,7 @@ export function FiiSection() {
         </div>
       )}
 
-      {!isLoading && !isError && sorted.length === 0 && (
+      {isEmpty && (
         <EmptyState
           title="Nenhum FII cadastrado"
           description="Adicione sua primeira posição em FIIs."
