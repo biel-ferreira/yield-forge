@@ -43,13 +43,9 @@ export function Dialog({
         // click — never a click inside the visible modal.
         if (event.target === ref.current) onClose();
       }}
-      className={cn(
-        "fixed inset-0 m-auto rounded-lg border border-hairline bg-surface p-0 text-on-dark",
-        "backdrop:bg-black/60",
-        className,
-      )}
+      className="fixed inset-0 m-auto rounded-lg border border-hairline bg-surface p-0 text-on-dark backdrop:bg-black/60"
     >
-      <div className="w-full max-w-md p-6">
+      <div className={cn("w-full max-w-md p-6", className)}>
         <div className="mb-4 flex items-center justify-between gap-4">
           <h2 id={titleId} className="text-lg font-semibold">
             {title}

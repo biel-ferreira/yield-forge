@@ -94,6 +94,11 @@ export function FiiSection() {
       )}
 
       <FiiForm
+        // A fresh `key` per target forces a remount (and so a fresh useState init) instead of
+        // reusing the same instance — otherwise switching from editing one holding to another
+        // (or reopening "add" after an abandoned attempt) would leak the previous session's
+        // stale form state, since this component is always mounted (only `open` toggles).
+        key={formTarget === null ? "closed" : formTarget === "add" ? "add" : formTarget.id}
         open={formTarget !== null}
         onClose={() => setFormTarget(null)}
         initial={formTarget === "add" ? null : formTarget}

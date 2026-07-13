@@ -240,20 +240,37 @@ involved.
 ### Phase 4 — Fixed-income section *(≈ second CRUD vertical, adds the indexer)*
 
 #### Tasks
-- [ ] `app/(app)/portfolio/fixed-income-table.tsx` — populated table (name, institution, invested
+- [x] `app/(app)/portfolio/fixed-income-table.tsx` — populated table (name, institution, invested
       amount, resolved effective rate + `reference_date` or "sem referência disponível", liquidity
-      label, pt-BR maturity date or "—") (FR-2115/2120/D7); empty/loading/error states.
-- [ ] `app/(app)/portfolio/fixed-income-form.tsx` — the D1 modal: name/institution (required),
+      label, pt-BR maturity date or "—") (FR-2115/2120/D7); empty/loading/error states. Added
+      `lib/date.ts` (`formatDateBR`/`todayISO`) — the render-edge date helper this and the form need.
+- [x] `app/(app)/portfolio/fixed-income-form.tsx` — the D1 modal: name/institution (required),
       invested amount (`parseCentavos`, ≥1), **indexer** single-select (reuses `segmented.tsx`,
       D4) whose selection changes the rate-value input's label/unit, rate value (`parseBps`, ≥0),
       **liquidity** single-select (reuses `segmented.tsx`, D4) — choosing Diária clears/disables
       maturity (`null`), choosing No vencimento requires one; maturity date (D6, past-date
-      rejected at the edge for a new at-maturity holding) (FR-2116/2117).
-- [ ] Live reference display, inline with the indexer picker: when % do CDI / IPCA+ is selected,
+      rejected at the edge for a new at-maturity holding, edit-mode exempt per the backend's
+      create-time-only rule) (FR-2116/2117).
+- [x] Live reference display, inline with the indexer picker: when % do CDI / IPCA+ is selected,
       show `"CDI atual: 10,50% a.a. (ref. 01/07/2026)"` (or the IPCA equivalent) via
       `useMarketIndicators` + `findIndicator`; "indisponível no momento" when absent/loading, never
       blocking the save path (FR-2120).
-- [ ] Delete wired through `confirm-dialog.tsx` (FR-2118).
+- [x] Delete wired through `confirm-dialog.tsx` (FR-2118).
+- [x] **Bug found and fixed during live verification:** `FiiForm`/`FixedIncomeForm` are always
+      mounted (only `open` toggles the native `<dialog>`), so `useState`'s initializer — which
+      only runs on first mount — never re-ran when switching edit targets or reopening "add".
+      Reopening "add" after an abandoned attempt (or editing a different holding after closing a
+      previous edit) leaked the prior session's stale form state. Fixed with a `key` prop
+      (`"closed"` / `"add"` / the holding's id) on both forms forcing a fresh mount per target;
+      regression-verified live (reopening "add" after an edit session now shows a genuinely blank
+      form). Also fixed a `Dialog` `className` bug found in the same pass: it was merged onto the
+      outer `<dialog>` element, but the visible width comes from the inner content `<div>`'s
+      hardcoded `max-w-md` — so a consumer's `className="max-w-lg"` silently did nothing.
+- [x] **Live-verified against the real backend**, including the actual live-reference display
+      resolving a genuine seeded CDI/IPCA value (not a mock): create a `cdi_percentual` holding
+      (120% do CDI, CDI=10,50%) → table shows "% do CDI · 12,60%"; edit to `ipca_spread`
+      (+5,80%, IPCA=10,50%) → table shows "IPCA + · 16,30%" — both effective-rate computations
+      match the backend's math exactly. Zero console errors.
 
 #### Deliverables
 - A working fixed-income section: list/add/edit/delete, indexer picker, live reference display,
