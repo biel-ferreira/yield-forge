@@ -11,6 +11,8 @@ import { AllocationBar } from "@/components/allocation-bar";
 import { Segmented } from "@/components/ui/segmented";
 import { ChipToggleGroup } from "@/components/ui/chip-toggle";
 import { Slider } from "@/components/ui/slider";
+import { Dialog } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   RISK_PROFILES,
   RISK_PROFILE_LABELS,
@@ -27,6 +29,8 @@ export default function StyleguidePage() {
   const [risk, setRisk] = useState<RiskProfile | null>("moderate");
   const [objectives, setObjectives] = useState<Objective[]>(["passive_income"]);
   const [horizon, setHorizon] = useState(10);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function toggleObjective(o: Objective) {
     setObjectives((cur) => (cur.includes(o) ? cur.filter((x) => x !== o) : [...cur, o]));
@@ -122,6 +126,29 @@ export default function StyleguidePage() {
           <Badge variant="info">Info</Badge>
         </div>
         <Input className="mt-4 max-w-sm" placeholder="Pergunte ao copiloto…" />
+      </Section>
+
+      <Section title="Modal & confirmação (SPEC-211)">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="outline" onClick={() => setDialogOpen(true)}>
+            Abrir modal
+          </Button>
+          <Button variant="destructive" onClick={() => setConfirmOpen(true)}>
+            Excluir holding
+          </Button>
+        </div>
+        <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title="Adicionar FII">
+          <p className="text-sm text-muted-strong">
+            Conteúdo de exemplo — os formulários reais entram aqui (FR-2112/FR-2116).
+          </p>
+        </Dialog>
+        <ConfirmDialog
+          open={confirmOpen}
+          title="Excluir holding?"
+          description="Esta ação não pode ser desfeita."
+          onConfirm={() => setConfirmOpen(false)}
+          onCancel={() => setConfirmOpen(false)}
+        />
       </Section>
 
       <Section title="Alocação por setor (spectrum bar)">

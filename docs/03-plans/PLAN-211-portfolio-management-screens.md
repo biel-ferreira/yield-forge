@@ -189,15 +189,21 @@ involved.
 ### Phase 2 — Modal & confirm-dialog primitives *(≈ new UI vocabulary)*
 
 #### Tasks
-- [ ] `components/ui/dialog.tsx` (D1) — wraps the native `<dialog>` element: `open`/`onClose`
+- [x] `components/ui/dialog.tsx` (D1) — wraps the native `<dialog>` element: `open`/`onClose`
       props, imperative `showModal()`/`close()` sync via `useEffect`, backdrop-click-to-close,
       `aria-labelledby` wired to a required `title` prop (binding-guard-style: a dialog without a
       title is unrepresentable in the prop contract, mirroring `InsightCard`'s required
       `explanation`).
-- [ ] `components/ui/confirm-dialog.tsx` (D2) — built on `dialog.tsx`: `title`, `description`,
-      `onConfirm`, `onCancel`, destructive styling per Aurora tokens.
-- [ ] Token-styled per the Aurora design system; no raw hex; reduced-motion respected (mirrors
-      PLAN-210 Phase 2's a11y bar).
+- [x] `components/ui/confirm-dialog.tsx` (D2) — built on `dialog.tsx`: `title`, `description`,
+      `onConfirm`, `onCancel`, destructive styling per Aurora tokens. Added a new `destructive`
+      `Button` variant (`border-loss/50 bg-loss/5 text-loss`) — mirrors `Badge`'s existing
+      soft-tint pattern for semantic colors rather than inventing a separate saturated "danger"
+      brand color (CLAUDE.md reserves gain/loss/caution/info as figure colors, never a solid fill).
+- [x] Token-styled per the Aurora design system; no raw hex; reduced-motion respected (global
+      `prefers-reduced-motion` media query already covers it, no per-component work needed).
+- [x] **Live-verified in a browser** (Playwright against the dev server, not just typecheck):
+      both dialogs open centered with backdrop, backdrop-click and the X button both close them,
+      zero console errors. Screenshots reviewed, not committed (scratch verification only).
 
 #### Deliverables
 - Two reusable, tested primitives; render in the styleguide for a visual check.
