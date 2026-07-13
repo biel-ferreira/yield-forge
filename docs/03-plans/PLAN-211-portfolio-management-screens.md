@@ -161,19 +161,22 @@ involved.
 ### Phase 1 — Fix stale types; data hooks & input parsing *(≈ persistence/data)*
 
 #### Tasks
-- [ ] **`npm run gen:api` and commit the result** (D9) — closes the current `check:api` drift
+- [x] **`npm run gen:api` and commit the result** (D9) — closes the current `check:api` drift
       before any SPEC-109-shaped code is written.
-- [ ] `lib/portfolio/labels.ts` — `Indexer` (`prefixado`/`cdi_percentual`/`ipca_spread`),
+- [x] `lib/portfolio/labels.ts` — `Indexer` (`prefixado`/`cdi_percentual`/`ipca_spread`),
       `LiquidityType`, and `Indicator` (`selic`/`cdi`/`ipca`) enum ↔ pt-BR label maps, typed from
-      `components["schemas"]` (mirrors `lib/profile/labels.ts`).
-- [ ] `lib/money.ts`: `parseCentavos(input: string): number | null` and
+      `components["schemas"]` (mirrors `lib/profile/labels.ts`). Also added `referenceIndicator`
+      (`Indexer` → `Indicator | null`), used by Phase 4's live-reference display.
+- [x] `lib/money.ts`: `parseCentavos(input: string): number | null` and
       `parseBps(input: string): number | null` (FR-2119) — `"1.234,56"` → `123456`,
       `"10,5"` → `1050`; `null` on malformed/empty-when-required input (never coerced to `0`).
-- [ ] `lib/portfolio/holdings.ts` — `useFIIHoldings()` (list) + `useCreateFIIHolding()` /
+- [x] `lib/portfolio/holdings.ts` — `useFIIHoldings()` (list) + `useCreateFIIHolding()` /
       `useUpdateFIIHolding()` / `useDeleteFIIHolding()`; the fixed-income mirror
       (`useFixedIncomeHoldings()` + create/update/delete). List query invalidated on any mutation's
-      success (TanStack Query). No hand-written DTOs (BR-2116).
-- [ ] `lib/portfolio/market.ts` — `useMarketIndicators()` (`GET /market/indicators`) +
+      success (TanStack Query). No hand-written DTOs (BR-2116). Update/delete throw a new
+      `ApiError(status, message)` (`lib/api/error.ts`, extended) so Phase 3/4 form components can
+      distinguish a `404` (list-refresh, BR-2111) from a `400` (inline message) without string-sniffing.
+- [x] `lib/portfolio/market.ts` — `useMarketIndicators()` (`GET /market/indicators`) +
       `findIndicator(list, indicator)` pure helper (used by both the live-reference display and the
       table's per-holding reference lookup, FR-2120/D7).
 
