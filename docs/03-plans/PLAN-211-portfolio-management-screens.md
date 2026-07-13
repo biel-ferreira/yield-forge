@@ -281,10 +281,18 @@ involved.
 ### Phase 5 — The Carteira screen *(≈ composition)*
 
 #### Tasks
-- [ ] `app/(app)/portfolio/page.tsx` — compose the FII section + fixed-income section, page
+- [x] `app/(app)/portfolio/page.tsx` — compose the FII section + fixed-income section, page
       heading, "Adicionar FII" / "Adicionar renda fixa" CTAs opening their respective modals.
-- [ ] Verify both sections' empty states render independently (not a combined blank page) when the
-      portfolio is entirely empty.
+      No redundant top-level heading added: the shell's `TopBar` already renders the page-level
+      "Carteira" title (route-derived, SPEC-200), so the page just stacks the two sections, each
+      owning its own h2 + CTA — documented in a code comment so this isn't mistaken for an
+      oversight later. Not width-constrained (unlike the narrower Perfil form) — the
+      fixed-income table has 7 columns and needs the room.
+- [x] Verified both sections' empty states render independently (not a combined blank page) when
+      the portfolio is entirely empty — **live-verified** (fresh account, both "Nenhum FII
+      cadastrado" / "Nenhuma renda fixa cadastrada" render side by side, correctly separate).
+      Also live-verified both sections **populated simultaneously** (an FII + a fixed-income
+      holding together) — clean layout at a normal viewport width, zero console errors.
 
 #### Deliverables
 - A working, navigable Carteira screen wired to the live backend end to end.
