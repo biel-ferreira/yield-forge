@@ -172,11 +172,24 @@ once the row exists (`FixedIncomeResponse.effective_annual_rate_bps`) in the lis
 - [ ] Selecting **% do CDI** shows e.g. *"CDI atual: 10,50% a.a. (ref. 01/07/2026)"*; **IPCA +**
       shows the equivalent for IPCA. **Prefixado** shows nothing extra (no indexer to reference).
 - [ ] The fixed-income table shows the **resolved effective annual rate** for indexed holdings
-      (e.g. *"120% do CDI · ≈12,60% a.a."*), not just the raw stored percentage — read from the
-      response, **never recomputed client-side** (BR-2117).
+      (e.g. *"120% do CDI · ≈12,60% a.a. (ref. 01/07/2026)"*), not just the raw stored percentage —
+      read from the response, **never recomputed client-side** (BR-2117). The reference date comes
+      from `GET /market/indicators`'s `reference_date` for that holding's indicator, shown
+      **plainly, with no computed "stale" threshold** (MVP simplicity — SELIC/CDI update roughly
+      daily, IPCA monthly, so a one-size threshold would misjudge one or the other; the date alone
+      lets the investor judge freshness themselves).
 - [ ] If the reference indicator is unavailable (loading, or the backend degrades per SPEC-109
       BR-1094), show a clear "indisponível no momento" state — never a blank, never a stale-looking
       silent zero.
+- [ ] **Never-ingested cross-reference (SPEC-109 D3):** `FixedIncomeResponse.effective_annual_rate_bps`
+      carries no flag distinguishing a genuine live resolution from a silent fallback to the raw
+      stored rate (the backend degrades this way on purpose, BR-1094 — see PLAN-109 D3). For an
+      indexed holding (`indexer_type` ≠ `prefixado`) whose reference indicator (CDI for
+      `cdi_percentual`, IPCA for `ipca_spread`) is **entirely absent** from `GET /market/indicators`
+      (never ingested, or a transient fetch error), show "sem referência disponível" instead of a
+      reference date next to the effective rate — a plain presence/absence check, no staleness
+      threshold. This is a client-side **presentation** decision over two already-server-sourced
+      values; it does not compute or override the rate, so it does not violate BR-2117.
 - [ ] This is **read-only reference data**; it never overrides or auto-fills the rate-value input
       the user is entering (the user still explicitly types "120", not the raw CDI number).
 
@@ -294,6 +307,15 @@ inline reference (FR-2120) shows a clear "indisponível" state. The form is **no
 user can still enter and save "120% do CDI" (the raw rate value) even if today's live CDI can't be
 shown right now; only the reference *display*, not the save path, is affected.
 
+### An existing indexed holding's effective rate may be a silent fallback
+The same indicator absence that triggers the above also means any already-saved `cdi_percentual`/
+`ipca_spread` holding's `effective_annual_rate_bps` in the table could be a silent fallback to the
+raw stored rate (SPEC-109 D3), not a fresh resolution. MVP treatment is deliberately simple (no
+computed "stale" flag or per-indicator threshold): the table always shows the reference date
+alongside the resolved rate when the indicator is present in `GET /market/indicators`, and "sem
+referência disponível" when it's entirely absent — the investor judges freshness from the date
+itself, the same way they would reading a bank statement.
+
 ### Editing/deleting a holding that's already gone
 A `404` on `PUT`/`DELETE` (deleted in another tab, or an id that was never the caller's) is treated
 as **"already achieved the desired end state"** — refresh the list silently rather than alarm the user.
@@ -345,6 +367,10 @@ No new client instrumentation in the MVP; the backend already traces the holding
 - Indexer selection (FR-2116/2117): the rate-value label/unit adapts per indexer; edit prefills the
   correct indexer + value; the live-reference display (FR-2120) renders the fetched value/date,
   and degrades to "indisponível" without blocking the save path when unavailable.
+- Effective-rate reference date (FR-2120): given a `cdi_percentual` holding, the table shows the
+  `reference_date` next to the resolved rate when CDI is present in the `GET /market/indicators`
+  fixture, and "sem referência disponível" when CDI is absent — table-tested against both
+  indicators (CDI/IPCA) and `prefixado` (never shows a reference, no indexer to reference).
 
 ### Integration
 - Against a running backend: create → list reflects it → edit → list reflects it → delete → list
@@ -358,10 +384,10 @@ No new client instrumentation in the MVP; the backend already traces the holding
 
 ## 13. Definition of Done
 
-- [ ] FR-2111…FR-2119 implemented; Epic 1 acceptance criteria satisfied for both holding types.
-- [ ] BR-2111…BR-2116 respected (ownership-as-404, money bidirectional-integer, cost-basis-only,
-      edge validation, no AI guards needed, generated types).
-- [ ] Consumes SPEC-102 only; **no `api/openapi.yaml` change**.
+- [ ] FR-2111…FR-2120 implemented; Epic 1 acceptance criteria satisfied for both holding types.
+- [ ] BR-2111…BR-2117 respected (ownership-as-404, money bidirectional-integer, cost-basis-only,
+      edge validation, no AI guards needed, generated types, reference rates never client-computed).
+- [ ] Consumes SPEC-102 + SPEC-109 only; **no `api/openapi.yaml` change**.
 - [ ] Vitest/RTL + integration + gated E2E green in the `web/` CI gate.
 - [ ] Reviewed by **frontend-reviewer** + **react-correctness-reviewer**.
 - [ ] CHANGELOG updated; SPEC-211 + PLAN-211 flipped to Done; indexes updated.
