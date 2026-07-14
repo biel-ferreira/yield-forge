@@ -159,17 +159,22 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 ### Phase 2 — Presentational components *(≈ UI vocabulary, reusing existing primitives)*
 
 #### Tasks
-- [ ] `app/(app)/dashboard/summary-hero.tsx`: the hero (`current_value_centavos` +
+- [x] `app/(app)/dashboard/summary-hero.tsx`: the hero (`current_value_centavos` +
       growth badge — `▲`/`text-gain` or `▼`/`text-loss` or neutral at zero, FR-2121), the
-      3-metric row (total invested, monthly income, growth again via the **same** formatted
-      value, D1, FR-2122), and the stale-ticker notice (FR-2125, only rendered when
-      `stale_tickers` is non-empty).
-- [ ] `app/(app)/dashboard/allocation-sections.tsx`: asset-class allocation via `AllocationBar`
+      3-metric row (total invested, monthly income, growth again via the **same** shared
+      `GrowthFigure` component, D1, FR-2122), and the stale-ticker notice (FR-2125, only
+      rendered when `stale_tickers` is non-empty). Growth is explicitly labelled "vs. custo de
+      aquisição" — never "no mês" (the design mockup's inaccurate label; the backend tracks no
+      time series, per SPEC-212 FR-2121's correction).
+- [x] `app/(app)/dashboard/allocation-sections.tsx`: asset-class allocation via `AllocationBar`
       (FR-2123 — entries with `share_bps: 0` filtered out before rendering, D7 — zero-share
       classes never shown as a confusing zero-width segment) and FII sector exposure via
       `AllocationBar` (FR-2124 — rendered only when the FII asset-class slice is non-zero;
-      `other` sector labelled distinctly per `sectorLabel`'s fallback).
-- [ ] Token-styled per Aurora; no raw hex; no new component beyond composing existing ones (D2).
+      `other` sector labelled distinctly per `sectorLabel`'s fallback). Colors assigned
+      positionally from the 5 aurora tokens (cycling by index) — the backend already emits both
+      arrays in a fixed, stable order (`compute.go`'s `sectorOrder`, not map iteration), so no
+      client-side sort was needed to keep colors stable across fetches.
+- [x] Token-styled per Aurora; no raw hex; no new component beyond composing existing ones (D2).
 
 #### Deliverables
 - Two components render correctly against representative fixtures (verified in Phase 4's tests
