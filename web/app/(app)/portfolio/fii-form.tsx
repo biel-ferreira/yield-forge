@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/error";
-import { parseCentavos } from "@/lib/money";
+import { centavosToInputString, parseCentavos } from "@/lib/money";
 import {
   useCreateFIIHolding,
   useUpdateFIIHolding,
@@ -34,7 +34,7 @@ export function FiiForm({
   const [ticker, setTicker] = useState(initial?.ticker ?? "");
   const [quantity, setQuantity] = useState(initial ? String(initial.quantity) : "");
   const [price, setPrice] = useState(
-    initial ? (initial.average_price_centavos / 100).toFixed(2).replace(".", ",") : "",
+    initial ? centavosToInputString(initial.average_price_centavos) : "",
   );
 
   const quantityValue = Number(quantity);

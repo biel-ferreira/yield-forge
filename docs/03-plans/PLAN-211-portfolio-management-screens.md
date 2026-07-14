@@ -6,11 +6,11 @@
 | --------------- | --------------------------------------- |
 | Plan Name       | Portfolio Management Screens            |
 | Related Feature | Portfolio Management Screens (Carteira) |
-| Related Spec    | [SPEC-211](../02-specs/SPEC-211-portfolio-management-screens.md) (Approved) |
+| Related Spec    | [SPEC-211](../02-specs/SPEC-211-portfolio-management-screens.md) (Done) |
 | Version         | 0.1.0                                    |
-| Status          | Draft                                    |
+| Status          | Done                                      |
 | Author          | Gabigol                                  |
-| Last Updated    | 2026-07-02                               |
+| Last Updated    | 2026-07-13                               |
 
 > **Phase-order note.** Frontend spec — the template's backend phase order is mapped to its
 > frontend analogue (data → components → screens → composition → tests → docs), the same
@@ -195,10 +195,15 @@ involved.
       title is unrepresentable in the prop contract, mirroring `InsightCard`'s required
       `explanation`).
 - [x] `components/ui/confirm-dialog.tsx` (D2) — built on `dialog.tsx`: `title`, `description`,
-      `onConfirm`, `onCancel`, destructive styling per Aurora tokens. Added a new `destructive`
-      `Button` variant (`border-loss/50 bg-loss/5 text-loss`) — mirrors `Badge`'s existing
-      soft-tint pattern for semantic colors rather than inventing a separate saturated "danger"
-      brand color (CLAUDE.md reserves gain/loss/caution/info as figure colors, never a solid fill).
+      `onConfirm`, `onCancel`. **Revised in Phase 7 review:** originally styled the confirm
+      button with a new `destructive` `Button` variant (`border-loss/50 bg-loss/5 text-loss`),
+      reasoning it mirrored `Badge`'s soft-tint pattern closely enough to be a legitimate
+      exception. `frontend-reviewer` correctly called this out as still a **fill** — the design
+      system (`design-system.md`) is unambiguous: "None is ever brand voltage or a card fill" and
+      "gain/loss are figure colors, not actions," no low-opacity exception. Removed the
+      `destructive` variant entirely; the confirm button now uses the existing neutral
+      `secondary` treatment, relying on the explicit confirmation flow + copy ("Excluir",
+      "Esta ação não pode ser desfeita") to signal irreversibility, not color.
 - [x] Token-styled per the Aurora design system; no raw hex; reduced-motion respected (global
       `prefers-reduced-motion` media query already covers it, no per-component work needed).
 - [x] **Live-verified in a browser** (Playwright against the dev server, not just typecheck):
@@ -351,15 +356,38 @@ involved.
 ### Phase 7 — Documentation & Closeout
 
 #### Tasks
-- [ ] **CHANGELOG** `[Unreleased]` entry.
-- [ ] **No `api/openapi.yaml` change** — assert it (consumes SPEC-102 + SPEC-109; adds no
-      endpoint). Note the `lib/api/schema.ts` regen (D9) in the entry — it's a types-only fix, not
-      a contract change.
-- [ ] Flip **SPEC-211 + PLAN-211 → Done**; update the specs/plans indexes.
-- [ ] Optional: note `dialog`/`confirm-dialog` in `design-system.md`.
-- [ ] **Review** with **frontend-reviewer** + **react-correctness-reviewer**; fix blockers.
-- [ ] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` via **frontend-lesson-writer**
-      (product-focused).
+- [x] **CHANGELOG** `[Unreleased]` entry.
+- [x] **No `api/openapi.yaml` change** — confirmed via `git diff main -- api/openapi.yaml` (empty).
+      Noted the `lib/api/schema.ts` regen (D9) in the entry — it's a types-only fix, not a
+      contract change.
+- [x] Flip **SPEC-211 + PLAN-211 → Done**; update the specs/plans indexes.
+- [x] `design-system.md` note: **skipped**, consistent with PLAN-210's own precedent — SPEC-210's
+      new primitives (`segmented`/`chip-toggle`/`slider`) were never added to the design-system
+      doc's component inventory either, so adding it only for `dialog`/`confirm-dialog` would be
+      inconsistent partial documentation rather than closing a real gap.
+- [x] **Review** with **frontend-reviewer** + **react-correctness-reviewer**.
+      **`react-correctness-reviewer`: PASS**, two non-blocking notes (both addressed anyway since
+      they were cheap): `todayISO()`'s SSR-safety was implicit (resting on a default-state
+      short-circuit) — now computed once via `useState(() => todayISO())`, explicit and
+      immune to a same-session midnight boundary; dialogs don't block Escape/backdrop-dismiss
+      while a mutation is pending — confirmed safe (TanStack Query detaches listeners on unmount/
+      `reset()`, verified by reading the installed `@tanstack/query-core` source) and left as
+      intentional UX (blocking dismissal during a slow/hung request would be worse).
+      **`frontend-reviewer`: CHANGES REQUESTED → fixed → re-verified clean.** Two real, correctly
+      caught issues: (1) edit-mode prefill used `(centavos / 100).toFixed(2)` — float arithmetic
+      on a monetary value, banned by CLAUDE.md even for display-only prefill (a real correctness
+      risk, not just style — JS float/decimal rounding can land on a wrong cent for specific
+      values). Fixed with two new pure-integer helpers, `centavosToInputString`/`bpsToInputString`
+      (`lib/money.ts`), test-covered including exact round-trips through `parseCentavos`/
+      `parseBps`. (2) The new `destructive` `Button` variant used the reserved `loss` token as a
+      button fill even at low opacity — the design system explicitly forbids this with no
+      low-opacity exception. Removed the variant entirely; the confirm-delete button now uses the
+      existing neutral `secondary` style. Full gate (`typecheck`/`lint`/`test`/`check:api`/
+      `build`) and the E2E test re-run clean after both fixes.
+- [x] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` via **frontend-lesson-writer**
+      (product-focused, 646 lines) — centers the five real bugs found by five different means
+      (an audit, live-browser verification, an E2E test, and two code-review findings) as the
+      main lesson, alongside the product/UX/backend-contract/harness-engineering sections.
 
 #### Deliverables
 - Docs updated, spec closed, lesson published.
@@ -383,34 +411,38 @@ involved.
 ## 9. Validation Checklist
 
 ### Functional Validation
-- [ ] FR-2111…FR-2120 implemented; Epic 1 acceptance criteria satisfied for both holding types.
-- [ ] BR-2111…BR-2117 respected (ownership-as-404, money bidirectional-integer, cost-basis-only,
+- [x] FR-2111…FR-2120 implemented; Epic 1 acceptance criteria satisfied for both holding types.
+- [x] BR-2111…BR-2117 respected (ownership-as-404, money bidirectional-integer, cost-basis-only,
       edge validation, no AI guards needed, generated types, reference rates never
       client-computed).
 
 ### Technical Validation
-- [ ] Consumes SPEC-102 + SPEC-109 only; **no `api/openapi.yaml` change**; `check:api` drift
+- [x] Consumes SPEC-102 + SPEC-109 only; **no `api/openapi.yaml` change**; `check:api` drift
       guard green (proves D9 is resolved and stays resolved).
-- [ ] `404`→list-refresh and `401`→login handled; no `user_id` on the wire; no float, no order
-      affordance.
-- [ ] No new runtime dependency (D1/D5/D6 all native-primitive choices).
+- [x] `404`→list-refresh and `401`→login handled; no `user_id` on the wire; no float, no order
+      affordance (the float-in-edit-prefill finding from review is fixed — see Phase 7).
+- [x] No new runtime dependency (D1/D5/D6 all native-primitive choices).
 
 ### Quality Validation
-- [ ] Vitest/RTL + integration + gated E2E passing.
-- [ ] a11y (dialog focus trap/Escape/labelling; AA contrast); reduced-motion respected.
-- [ ] Reviewed by **frontend-reviewer** + **react-correctness-reviewer**; docs updated.
+- [x] Vitest/RTL (106 tests) + the combined integration/E2E run passing.
+- [x] a11y (dialog labelling via `aria-labelledby`, required `title`; AA contrast — no new colors
+      introduced); reduced-motion respected (global media query). Native `<dialog>` focus-trap/
+      Escape are the browser's own guarantee, live-verified in Phases 2–5; not re-provable in
+      jsdom (documented in Phase 6).
+- [x] Reviewed by **frontend-reviewer** + **react-correctness-reviewer**; docs updated.
 
 ---
 
 ## 10. Definition of Done
 
-- [ ] All phases complete; SPEC-211 acceptance criteria satisfied.
-- [ ] `lib/api/schema.ts` regenerated and in lockstep with `api/openapi.yaml` (`check:api` green).
-- [ ] Unit/component + integration + gated E2E green in the `web/` CI gate.
-- [ ] **CHANGELOG** updated; **`api/openapi.yaml` unchanged** (asserted).
-- [ ] **SPEC-211 + PLAN-211 flipped to Done**; specs/plans indexes updated.
-- [ ] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` produced (via **frontend-lesson-writer**).
-- [ ] Reviewed by the frontend review agents.
+- [x] All phases complete; SPEC-211 acceptance criteria satisfied.
+- [x] `lib/api/schema.ts` regenerated and in lockstep with `api/openapi.yaml` (`check:api` green).
+- [x] Unit/component (106 tests) + the combined integration/E2E run green; `web/` gate
+      (`typecheck`/`lint`/`test`/`check:api`/`build`) all clean.
+- [x] **CHANGELOG** updated; **`api/openapi.yaml` unchanged** (asserted via `git diff`).
+- [x] **SPEC-211 + PLAN-211 flipped to Done**; specs/plans indexes updated.
+- [x] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` produced (via **frontend-lesson-writer**).
+- [x] Reviewed by the frontend review agents (both required fixes applied, re-verified clean).
 - [ ] Pull Request approved.
 
 ---
@@ -418,11 +450,13 @@ involved.
 ## 11. Deliverables
 
 ### Code Deliverables
-- `lib/portfolio/{holdings,market,labels}.ts`, `lib/money.ts` (extended), `components/ui/{dialog,confirm-dialog}.tsx`,
+- `lib/portfolio/{holdings,market,labels}.ts`, `lib/date.ts`, `lib/money.ts` (extended, incl. the
+  review-driven `centavosToInputString`/`bpsToInputString`), `components/ui/{dialog,confirm-dialog}.tsx`,
   the FII and fixed-income table/form components, the Carteira screen, and their tests.
 
 ### Documentation Deliverables
-- CHANGELOG entry, PT-BR lesson, specs/plans index updates; optional `design-system.md` note.
+- CHANGELOG entry, PT-BR lesson, specs/plans index updates; `design-system.md` note skipped
+  (consistent with SPEC-210's own precedent).
 
 ---
 

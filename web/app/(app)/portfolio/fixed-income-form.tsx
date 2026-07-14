@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { ApiError } from "@/lib/api/error";
 import { formatDateBR, todayISO } from "@/lib/date";
-import { formatBps, parseBps, parseCentavos } from "@/lib/money";
+import {
+  bpsToInputString,
+  centavosToInputString,
+  formatBps,
+  parseBps,
+  parseCentavos,
+} from "@/lib/money";
 import {
   useCreateFixedIncomeHolding,
   useUpdateFixedIncomeHolding,
@@ -55,21 +61,23 @@ export function FixedIncomeForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [institution, setInstitution] = useState(initial?.institution ?? "");
   const [amount, setAmount] = useState(
-    initial ? (initial.invested_amount_centavos / 100).toFixed(2).replace(".", ",") : "",
+    initial ? centavosToInputString(initial.invested_amount_centavos) : "",
   );
   const [indexer, setIndexer] = useState<Indexer>(initial?.indexer_type ?? "prefixado");
-  const [rate, setRate] = useState(
-    initial ? (initial.annual_rate_bps / 100).toFixed(2).replace(".", ",") : "",
-  );
+  const [rate, setRate] = useState(initial ? bpsToInputString(initial.annual_rate_bps) : "");
   const [liquidity, setLiquidity] = useState<LiquidityType>(initial?.liquidity_type ?? "daily");
   const [maturity, setMaturity] = useState(initial?.maturity_date ?? "");
+  // Computed once (not on every render) — avoids the past-date check flipping mid-session if the
+  // form happens to stay open across a midnight boundary, and makes the SSR-safety explicit
+  // rather than resting on requiresMaturity's default-false short-circuit on first render.
+  const [today] = useState(() => todayISO());
 
   const amountCentavos = parseCentavos(amount);
   const rateBps = parseBps(rate);
   const requiresMaturity = liquidity === "at_maturity";
   // The create-time past-date rule (SPEC-102) only applies to a NEW at-maturity holding — an
   // existing one may have legitimately matured since it was recorded (FR-2116).
-  const maturityInPast = !isEdit && requiresMaturity && maturity !== "" && maturity < todayISO();
+  const maturityInPast = !isEdit && requiresMaturity && maturity !== "" && maturity < today;
 
   const valid =
     name.trim().length > 0 &&

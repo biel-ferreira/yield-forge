@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 211 — SPEC-211: Telas de Gestão de Carteira (Carteira) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#e9a94c,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 211 · A tela Carteira · onde os fatos que a IA vai raciocinar entram no sistema</span>
+    <h1>SPEC-211 — Telas de Gestão de Carteira (Carteira)</h1>
+    <p>O SPEC-210 ensinou o Perfil — uma tela pequena, sem dinheiro, sem IA. O SPEC-211 é maior e mais arriscado: a
+    tela <strong>Carteira</strong>, onde Rafael e Carla cadastram o que <em>realmente possuem</em> — FIIs e renda fixa. É aqui que
+    "facts are computed, not generated" (a regra binding #3 do CLAUDE.md) começa a valer de verdade: sem estes
+    dados, o Dashboard, os Insights, o Health Score e as Projeções não têm nada para calcular sobre. Mas o valor
+    maior desta aula não é o CRUD em si — é uma coleção de <strong>bugs reais</strong>, pegos de cinco jeitos diferentes
+    (uma auditoria, rodar num navegador de verdade, escrever um teste ponta a ponta, e duas revisões de código), que
+    ensina por que "compila e os testes passam" não é o mesmo que "funciona". Você <strong>não precisa dominar
+    React</strong> para acompanhar.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: duas verticais de CRUD, unificadas pelo indexador do SPEC-109</a></li>
+    <li><a href="#valor">O que a tela entrega e para quem (Rafael &amp; Carla)</a></li>
+    <li><a href="#jornada">A jornada do usuário: do estado vazio ao formulário preenchido</a></li>
+    <li><a href="#decisoes">As decisões de produto e UX — e como as travas do produto ficam visíveis</a></li>
+    <li><a href="#bugs">LIÇÃO PRINCIPAL — cinco bugs reais, pegos de cinco jeitos diferentes</a></li>
+    <li><a href="#recorte">O que ficou de fora e por quê (o recorte da spec)</a></li>
+    <li><a href="#contrato">Conexão com o backend: o contrato como fronteira</a></li>
+    <li><a href="#construido">Como foi construído (visão geral, sem virar tutorial de React)</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu e verificou isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering &amp; Produto</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: duas verticais de CRUD, unificadas pelo indexador do SPEC-109</h2>
+
+<p>O SPEC-211 transforma a rota <code>/portfolio</code> — até aqui um <code>EmptyState</code> stubado pelo SPEC-200 — na tela real
+<strong>Carteira</strong>: a frente de cliente do backend <strong>SPEC-102</strong> (o CRUD de holdings) somado ao <strong>SPEC-109</strong> (o
+indexador de renda fixa — % do CDI, IPCA + spread). São, na prática, <strong>duas verticais independentes</strong> que
+compartilham os mesmos padrões:</p>
+
+<ul>
+  <li><strong>FIIs</strong> — ticker, quantidade, preço médio. Rafael registra suas compras mensais de fundos imobiliários.</li>
+  <li><strong>Renda fixa</strong> — nome, instituição, valor investido, e um <strong>indexador</strong> (Prefixado / % do CDI / IPCA +
+  spread) em vez de uma taxa anual fixa forçada. Carla mantém sua escada de CDBs e Tesouro Direto do jeito que o
+  extrato do banco realmente mostra: "120% do CDI", não "10,50% ao ano" fingindo ser uma taxa fixa.</li>
+</ul>
+
+<div class="diagram">ANTES (SPEC-200 — a rota stubada)                  DEPOIS (SPEC-211 — a tela Carteira real)
+  /portfolio -&gt; EmptyState("chega depois")          /portfolio -&gt; duas secoes: FiiSection + FixedIncomeSection
+  nenhum holding e lido/escrito                       8 endpoints SPEC-102 + GET /market/indicators (SPEC-109)
+  0 modais no design system                           components/ui/dialog.tsx (nativo) + confirm-dialog.tsx
+  parsing pt-BR so em uma direcao (exibir)             parseCentavos/parseBps: a direcao INVERSA tambem (digitar)
+  0 telas de feature de verdade alem do Perfil         a 1a tela que grava os FATOS que a IA vai usar depois</div>
+
+<div class="box why">
+  <span class="lbl">Por que "Carteira antes de Dashboard/Insights" é a ordem certa</span>
+  A PRD é explícita: o produto raciocina <em>sobre</em> fatos computados, nunca inventa números (regra binding #3). Mas
+  um fato computado precisa primeiro ter sido <strong>registrado</strong> por alguém. Sem a Carteira, o Dashboard (SPEC-212)
+  não tem holdings para somar, os Insights (SPEC-213) não têm concentração para avaliar, o Health Score não tem
+  nada para pontuar. A Carteira é o <strong>ponto de entrada dos fatos</strong> — a tela mais "chata" (formulário, tabela,
+  CRUD) e, ao mesmo tempo, a mais estrutural de todo o track SPEC-21x depois da fundação.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="valor">2. O que a tela entrega e para quem (Rafael &amp; Carla)</h2>
+
+<table>
+  <tr><th>Persona</th><th>A dor</th><th>O que a Carteira resolve</th></tr>
+  <tr>
+    <td><strong>Rafael</strong>, o investidor de FIIs</td>
+    <td>Guarda suas compras numa planilha separada do app que gera os insights — os dois nunca conversam, e ele
+    precisa lembrar de atualizar os dois lugares</td>
+    <td>Um formulário direto (ticker, quantidade, preço médio) que grava a compra <strong>no mesmo sistema</strong> que depois
+    vai gerar os insights sobre ela — sem planilha paralela, sem sincronização manual</td>
+  </tr>
+  <tr>
+    <td><strong>Carla</strong>, a planejadora de longo prazo com uma escada de renda fixa</td>
+    <td>Apps de investimento forçam ela a converter "120% do CDI" numa taxa fixa estimada, perdendo a informação
+    real do extrato do banco — e essa taxa "achatada" fica errada assim que o CDI muda</td>
+    <td>O indexador (FR-2116): ela digita exatamente "120" no campo "% do CDI", e a tela mostra a <strong>taxa efetiva
+    resolvida</strong> hoje (ex. "120% do CDI · ≈12,60% a.a.") — calculada pelo backend, nunca pelo cliente</td>
+  </tr>
+</table>
+
+<p>Um princípio comum às duas: a Carteira mostra <strong>o que o investidor pagou</strong> — preço médio, valor investido — e
+nunca inventa um valor de mercado ou um ganho/perda. Isso é uma decisão de escopo deliberada (BR-2113, seção 4) que
+mantém esta tela honesta sobre o que ela sabe: fatos de custo, não avaliação.</p>
+
+<!-- ============================================================ -->
+<h2 id="jornada">3. A jornada do usuário: do estado vazio ao formulário preenchido</h2>
+
+<div class="diagram">1. Usuario abre /portfolio  --&gt;  GET /holdings/fii  +  GET /holdings/fixed-income (paralelo)
+
+   Populado                                          Vazio
+   --&gt; tabela ordenada por ticker/nome                --&gt; EmptyState com CTA propria
+       acoes "Editar" / "Excluir" por linha                 ("Adicionar FII" / "Adicionar renda fixa")
+                                                             o CTA do cabecalho SOME (nao duplica)
+
+2. "Adicionar FII" ou "Adicionar renda fixa" --&gt; abre um modal (&lt;dialog&gt; nativo)
+   FII: ticker, quantidade, preco medio
+   Renda fixa: nome, instituicao, valor, INDEXADOR (Prefixado/%CDI/IPCA+), taxa, liquidez, vencimento
+
+3. Salvar --&gt; POST .../fii ou .../fixed-income  (SEM user_id)
+
+   201 -&gt; linha nova aparece na tabela, sem reload   400 -&gt; mensagem do servidor inline; dado preservado
+
+4. Editar --&gt; mesmo modal, agora preenchido  --&gt;  PUT .../{id}
+   404 (ja foi excluido em outra aba) --&gt; lista atualiza sozinha, SEM alarmar o usuario
+
+5. Excluir --&gt; ConfirmDialog explicito --&gt; DELETE .../{id}
+   404 (ja excluido) --&gt; tratado como SUCESSO (o fim desejado ja foi alcancado)</div>
+
+<p>Repare de novo no padrão "404 não é erro" que o SPEC-210 já tinha ensinado para <code>/profile</code> — aqui ele aparece
+duas vezes, para editar e para excluir, e com uma nuance nova: um <code>404</code> ao <strong>excluir</strong> é tratado como
+<strong>sucesso</strong> (BR-2111), porque o estado desejado — "esse holding não existe mais na lista" — já foi alcançado,
+independente de quem o removeu primeiro.</p>
+
+<pre><code>// web/lib/portfolio/holdings.ts — um 404 ao excluir É sucesso (BR-2111)
+export function useDeleteFIIHolding() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE("/holdings/fii/{id}", { params: { path: { id } } });
+      if (error && response.status !== 404) {
+        throw new ApiError(response.status, backendError(error) ?? "delete failed (" + response.status + ")");
+      }
+      // 404 aqui não lança — a lista é recarregada e o holding já não está nela, que é o objetivo.
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: FII_KEY }),
+  });
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">4. As decisões de produto e UX — e como as travas do produto ficam visíveis</h2>
+
+<p>O SPEC-200 ensinou que a explicabilidade (FR-013) e a não-consultoria (FR-014) viram <strong>componentes</strong> em telas
+que produzem saída de IA. A Carteira <strong>não produz</strong> saída de IA — ela só registra fatos — então essas travas
+específicas não se aplicam aqui (BR-2115, o mesmo raciocínio do Perfil, BR-2103). Mas isso não significa que a
+Carteira não tem disciplina de produto própria. Ela tem três, visíveis no cliente:</p>
+
+<table>
+  <tr><th>Decisão</th><th>Onde aparece</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>Custo, nunca valor de mercado</strong> (BR-2113)</td>
+    <td>A tabela mostra <code>average_price_centavos</code> / <code>invested_amount_centavos</code> — o que foi pago — nunca um
+    valor atual calculado nem um ganho/perda</td>
+    <td>Calcular valor de mercado exige preço atual + a matemática de ganho/perda — isso é trabalho do <strong>Dashboard</strong>
+    (SPEC-212), que cruza holdings com dados de mercado. Misturar as duas responsabilidades aqui seria a Carteira
+    "inventando" um número que não é seu para calcular.</td>
+  </tr>
+  <tr>
+    <td><strong>Dinheiro em centavos inteiros, pt-BR só na borda — nas duas direções</strong> (BR-2112, FR-2119)</td>
+    <td>O usuário digita "157,50"; <code>parseCentavos</code> converte para <code>15750</code> centavos antes do <code>POST</code>. Na
+    edição, <code>centavosToInputString</code> reconverte <code>15750</code> de volta para "157,50" — sem passar por float em
+    nenhum dos dois sentidos</td>
+    <td>O SPEC-200 já formatava centavos → string pt-BR para <strong>exibir</strong>. O SPEC-211 adiciona a direção
+    inversa: string digitada pelo usuário → inteiro, antes de qualquer requisição. É a mesma disciplina "dinheiro
+    nunca é float", agora bidirecional.</td>
+  </tr>
+  <tr>
+    <td><strong>Exclusão explícita, nunca um clique só</strong> (D2, FR-2114/FR-2118)</td>
+    <td>Excluir sempre passa por um <code>ConfirmDialog</code> com o nome/ticker do holding e o aviso "Esta ação não pode
+    ser desfeita" — nunca um botão de exclusão direta</td>
+    <td>É dinheiro real do usuário sendo registrado; um clique acidental não pode apagar uma posição. E, como a
+    seção 5.5 mostra, essa confirmação é reforçada por <strong>texto explícito</strong>, não por uma cor de alarme —
+    outra trava do produto ficando visível no cliente.</td>
+  </tr>
+</table>
+
+<pre><code>// web/lib/money.ts — a direção INVERSA da formatação (FR-2119): string digitada -> inteiro, nunca float
+export function parseCentavos(input: string): number | null {
+  const value = parsePtBrDecimal(input);   // "1.234,56" -&gt; 1234.56 (ainda decimal, mas validado)
+  if (value === null) return null;          // malformado/vazio -&gt; null, NUNCA coagido para 0
+  return Math.round(value * 100);           // -&gt; 123456 centavos, inteiro
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que "nenhum bloqueio de botão de compra/venda" nem precisa ser mencionado aqui</span>
+  Vale notar o que a Carteira <em>não</em> tem: nenhum botão "Comprar mais" ou "Vender". Ela é puramente um
+  formulário de <strong>registro</strong> — o usuário conta ao sistema o que já fez, fora do app, na corretora ou no banco. A
+  ausência de qualquer affordance de execução de ordem não é nem uma trava explícita desta spec: é simplesmente
+  consequência de o design system do SPEC-200 nunca ter criado esse componente (seção 4 da Aula 200). A Carteira
+  herda essa ausência de graça, como qualquer outra tela do produto.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="bugs">5. LIÇÃO PRINCIPAL — cinco bugs reais, pegos de cinco jeitos diferentes</h2>
+
+<p>Esta é a aula central do SPEC-211. Diferente do SPEC-210 (cuja lição foi sobre <em>quando</em> uma trava não se
+aplica), o SPEC-211 ensina algo sobre <strong>processo</strong>: nenhum destes cinco bugs foi pego só por escrever código com
+cuidado. Cada um foi pego porque <strong>alguma coisa foi de fato executada</strong> — uma auditoria, o app rodando num
+navegador real, um teste ponta a ponta real, ou um revisor lendo a intenção do código, não só sua sintaxe.</p>
+
+<h3>5.1 — O bug pego ANTES de qualquer código de feature: tipos desatualizados</h3>
+<p>O primeiro item do PLAN-211 (D9) não é uma feature — é uma auditoria. Ao planejar o SPEC-211, ficou claro que
+<code>web/lib/api/schema.ts</code> tinha ficado <strong>desatualizado</strong> em relação a <code>api/openapi.yaml</code> desde que o SPEC-109
+(o indexador, um PR só de backend) foi mesclado: o próprio gate daquele PR não cobria a regeneração do frontend, e
+<code>npm run check:api</code> estava <strong>falhando na <code>main</code></strong> havia dias.</p>
+
+<div class="box bug">
+  <span class="lbl">Por que isso é uma boa lição de engenharia, não uma vergonha</span>
+  O bug não foi descoberto por sorte — foi descoberto porque alguém <strong>rodou <code>check:api</code> antes de escrever
+  qualquer linha nova</strong>, em vez de assumir que o chão sob os pés estava firme. Virou literalmente a Tarefa 1 da
+  Fase 1 do PLAN-211: <code>npm run gen:api</code> e commit do resultado, <strong>antes</strong> de qualquer hook de dados do SPEC-211
+  ser escrito — porque nada tipa contra o contrato real do SPEC-109 (<code>indexer_type</code>,
+  <code>effective_annual_rate_bps</code>, <code>MarketIndicatorResponse</code>) enquanto os tipos gerados estiverem desatualizados. A
+  lição: <strong>verifique o chão antes de construir em cima dele</strong> — um <code>check:api</code> vermelho no início da spec é
+  informação valiosa, não um detalhe a ignorar.
+</div>
+
+<h3>5.2 — O bug pego rodando o app num navegador de verdade: estado de formulário vazando entre sessões</h3>
+<p>Os modais de adicionar/editar (<code>FiiForm</code>/<code>FixedIncomeForm</code>) ficam <strong>sempre montados</strong> — só o prop
+<code>open</code> alterna entre mostrar/esconder o <code>&lt;dialog&gt;</code>. Só que o estado inicial do formulário vem de
+<code>useState(initial?.ticker ?? "")</code> — e o inicializador de <code>useState</code> só roda <strong>uma vez</strong>, na primeira
+montagem. Resultado: trocar de editar um holding para editar outro, ou reabrir "Adicionar" depois de uma tentativa
+abandonada, deixava os <strong>dados da sessão anterior</strong> ainda no formulário.</p>
+
+<p>Isso não foi encontrado lendo o código — foi encontrado <strong>rodando a Fase 4 ao vivo</strong> num navegador de verdade
+(Playwright contra o servidor de desenvolvimento), quando um seletor ambíguo do script chamou atenção para algo
+estranho no formulário.</p>
+
+<pre><code>// web/app/(app)/portfolio/fii-table.tsx — o `key` força um remount limpo por alvo
+&lt;FiiForm
+  // Um `key` por alvo força um remount (e assim um useState novo em folha) em vez de reusar
+  // a mesma instância — senão trocar de editar um holding para outro (ou reabrir "add" depois
+  // de uma tentativa abandonada) vazaria o estado da sessão anterior, já que este componente
+  // fica sempre montado (só `open` alterna).
+  key={formTarget === null ? "closed" : formTarget === "add" ? "add" : formTarget.id}
+  open={formTarget !== null}
+  onClose={() =&gt; setFormTarget(null)}
+  initial={formTarget === "add" ? null : formTarget}
+/&gt;</code></pre>
+
+<div class="box bug">
+  <span class="lbl">Por que este bug é invisível a typecheck, lint e a um teste ingênuo</span>
+  O código é <strong>perfeitamente válido</strong> em TypeScript. <code>useState(initial?.ticker ?? "")</code> compila, não gera
+  nenhum warning de lint, e um teste que só monta o formulário <strong>uma vez</strong> e verifica o valor inicial passaria
+  tranquilamente. O bug só existe na <strong>sequência de interações</strong> — abrir, fechar, abrir de novo com um alvo
+  diferente — algo que só aparece rodando o componente de verdade, num DOM de verdade, clicando de verdade. É o
+  padrão React "a <code>key</code> reseta o estado" aplicado a um caso concreto: a correção é de uma linha, mas achar o
+  problema exigiu <strong>executar</strong> o app, não apenas escrevê-lo.
+</div>
+
+<h3>5.3 — O bug pego escrevendo um teste ponta a ponta de verdade: dois botões idênticos</h3>
+<p>Cada seção (FII e renda fixa) tinha, no estado vazio, <strong>dois</strong> botões rotulados exatamente "Adicionar FII" —
+um no cabeçalho da seção (persistente) e outro dentro do próprio <code>EmptyState</code>. Para o olho humano isso é
+inofensivo — os dois fazem a mesma coisa, e visualmente um substitui o outro. Mas é uma <strong>ambiguidade real</strong> de
+acessibilidade e automação: dois botões, o mesmo nome acessível.</p>
+
+<p>Isso não apareceu escrevendo o componente, nem revisando o código — apareceu escrevendo o teste
+<code>e2e/portfolio.spec.ts</code>: um localizador Playwright em modo estrito (<code>getByRole</code>) se <strong>recusou a adivinhar</strong>
+qual dos dois botões clicar, e quebrou com um erro claro em vez de silenciosamente escolher um.</p>
+
+<pre><code>// web/app/(app)/portfolio/fii-table.tsx — os dois CTAs agora são mutuamente exclusivos POR CONSTRUÇÃO
+const isEmpty = !isLoading &amp;&amp; !isError &amp;&amp; sorted.length === 0;
+// ...
+{!isEmpty &amp;&amp; (
+  &lt;Button size="sm" onClick={() =&gt; setFormTarget("add")}&gt;Adicionar FII&lt;/Button&gt;
+)}
+// ...
+{isEmpty &amp;&amp; (
+  &lt;EmptyState title="Nenhum FII cadastrado" description="Adicione sua primeira posição em FIIs."&gt;
+    &lt;Button size="sm" onClick={() =&gt; setFormTarget("add")}&gt;Adicionar FII&lt;/Button&gt;
+  &lt;/EmptyState&gt;
+)}</code></pre>
+
+<div class="box why">
+  <span class="lbl">A correção certa: não afrouxar o teste, tornar a UI inequívoca</span>
+  A tentação fácil seria "consertar" o teste — usar <code>.first()</code> no localizador, ou um seletor mais específico
+  que ignorasse a duplicação. Isso teria escondido o problema, não resolvido. A correção real foi tornar os dois
+  CTAs <strong>mutuamente exclusivos por construção</strong>: o botão do cabeçalho só existe quando <code>isEmpty</code> é falso. Agora
+  não há ambiguidade nem para uma pessoa lendo a tela na diagonal, nem para um script, nem para um leitor de tela.
+  É o mesmo princípio de "trava por construção" que o SPEC-200 aplicou ao <code>InsightCard</code> — só que aqui aplicado a
+  uma questão de UX/acessibilidade, não de governança de IA.
+</div>
+
+<h3>5.4 — O bug pego pela revisão de código: aritmética de float num valor monetário, só de exibição</h3>
+<p>Ao pré-preencher o formulário de edição com o valor já salvo, o código original fazia
+<code>(centavos / 100).toFixed(2)</code> — divisão de ponto flutuante sobre um valor monetário, exatamente o padrão que o
+projeto <strong>bane em todo lugar</strong>, com a justificativa precisa registrada no CLAUDE.md: arredondamento de
+float/decimal pode acertar o centavo errado para valores específicos. O <code>frontend-reviewer</code> pegou isso — mesmo
+sendo "só" um valor de pré-preenchimento de exibição, não um cálculo que vai para o servidor.</p>
+
+<pre><code>// web/lib/money.ts — os novos helpers de pré-preenchimento: inteiro entra, string pt-BR sai, sem float
+/** Integer centavos -&gt; "157,50" (sem "R$ "). e.g. centavosToInputString(15750) === "157,50". */
+export function centavosToInputString(centavos: number): string {
+  const abs = Math.abs(Math.trunc(centavos));
+  const reais = Math.trunc(abs / 100);   // divisão INTEIRA, não /100 com toFixed
+  const cents = abs % 100;               // resto INTEIRO
+  return reais.toLocaleString("pt-BR") + "," + String(cents).padStart(2, "0");
+  // (nunca `(centavos / 100).toFixed(2)` — isso seria float arredondando um valor monetário)
+}</code></pre>
+
+<div class="box bug">
+  <span class="lbl">Por que "é só pré-preenchimento" não é desculpa</span>
+  <code>toFixed(2)</code> sobre um <code>float</code> parece inofensivo porque o resultado costuma <em>parecer</em> certo — a
+  imprecisão do ponto flutuante em JavaScript só aparece para valores específicos, imprevisíveis a olho nu. É
+  exatamente esse comportamento intermitente que faz do float uma escolha ruim para dinheiro em qualquer contexto,
+  inclusive exibição: se um valor der errado uma vez a cada muitas centenas, ainda é um bug de confiança para o
+  usuário que ver seu próprio dinheiro exibido errado. A correção — <code>centavosToInputString</code>/<code>bpsToInputString</code>,
+  construídos com a mesma matemática inteira de <code>formatCentavos</code>/<code>formatBps</code> — fecha a lacuna nos <strong>dois</strong>
+  sentidos: exibir (SPEC-200) e agora também pré-preencher para edição (SPEC-211), com testes cobrindo o
+  round-trip exato via <code>parseCentavos</code>/<code>parseBps</code>.
+</div>
+
+<h3>5.5 — O bug pego pela revisão de código: uma cor reservada usada como preenchimento de botão</h3>
+<p>O primeiro rascunho do botão de confirmação de exclusão usava uma nova variante <code>destructive</code> do
+<code>Button</code>, estilizada com <code>border-loss/50 bg-loss/5 text-loss</code> — usando o token <code>loss</code> (reservado para
+indicar perda financeira em uma figura numérica) como <strong>preenchimento de fundo</strong> de um botão, ainda que em baixa
+opacidade. O <code>frontend-reviewer</code> apontou: o design system Aurora é inequívoco — "None is ever brand voltage or a
+card fill" e "gain/loss are figure colors, not actions", <strong>sem exceção para baixa opacidade</strong>.</p>
+
+<div class="box why">
+  <span class="lbl">A correção: não um novo tom de vermelho, e sim reaproveitar o que já existe</span>
+  A resposta não foi inventar uma nova regra de exceção nem um tom de vermelho "mais seguro" — foi <strong>remover a
+  variante inteira</strong> e usar o tratamento neutro <code>secondary</code> que o <code>Button</code> já tinha, confiando no texto
+  explícito do <code>ConfirmDialog</code> — "Excluir?", "Esta ação não pode ser desfeita" — para comunicar o peso da ação,
+  em vez de uma cor. É uma lição pequena com uma generalização grande: <strong>nem toda nova interação precisa de uma
+  nova linguagem visual</strong>; muitas vezes o vocabulário que já existe (aqui, texto claro + um passo de confirmação
+  explícito) já carrega o peso certo, e cores semânticas reservadas devem continuar reservadas.
+</div>
+
+<h3>5.6 — O primitivo <code>&lt;dialog&gt;</code> nativo, e o teste que precisou de um polyfill mínimo</h3>
+<p>Em vez de importar uma biblioteca de modal, o SPEC-211 usa o elemento <code>&lt;dialog&gt;</code> do próprio navegador — a
+mesma filosofia "primitivo nativo antes de dependência" que o SPEC-210 usou para o slider (D5). O método
+<code>showModal()</code> dá <strong>foco preso</strong>, <strong>fechar com Escape</strong> e <strong>bloqueio de fundo</strong> de graça, sem nenhuma
+dependência nova.</p>
+
+<pre><code>// web/components/ui/dialog.tsx — o modal É o &lt;dialog&gt; nativo; showModal()/close() dão foco-trap +
+// Escape + bloqueio de fundo sem nenhuma dependência nova (D1, espelha o slider nativo do SPEC-210)
+useEffect(() =&gt; {
+  const dialog = ref.current;
+  if (!dialog) return;
+  if (open &amp;&amp; !dialog.open) dialog.showModal();
+  if (!open &amp;&amp; dialog.open) dialog.close();
+}, [open]);</code></pre>
+
+<p>Um detalhe interessante, não um bug: antes de escrever qualquer teste do <code>Dialog</code>, verificou-se
+<strong>empiricamente</strong> — não por suposição — que o jsdom (o navegador falso usado pela suíte de testes rápida) <strong>não
+implementa <code>showModal()</code>/<code>close()</code> de jeito nenhum</strong>. Um pequeno polyfill foi adicionado só para que a
+<strong>lógica própria</strong> do componente fosse testável (ele chama <code>showModal</code> quando deveria? um clique no fundo
+chama <code>onClose</code>?) — mas o foco-preso e o Escape-para-fechar de verdade são garantias <strong>nativas do navegador
+real</strong>, provadas rodando o app de verdade no Playwright várias vezes ao longo da construção, não fingidas num
+navegador falso.</p>
+
+<!-- ============================================================ -->
+<h2 id="recorte">6. O que ficou de fora e por quê (o recorte da spec)</h2>
+
+<table>
+  <tr><th>Ficou de fora</th><th>Por quê</th></tr>
+  <tr><td>Qualquer <strong>mudança no backend</strong> ou no <code>api/openapi.yaml</code></td><td>SPEC-102 e SPEC-109 já estão Done. O SPEC-211 <strong>consome</strong>, não altera, o contrato — confirmado via <code>git diff main -- api/openapi.yaml</code> vazio.</td></tr>
+  <tr><td><strong>Valor de mercado atual / ganho-perda</strong> não realizado</td><td>BR-2113: a Carteira mostra custo, não valuation. Essa computação (holdings + dados de mercado) é do <strong>Dashboard</strong> (SPEC-212).</td></tr>
+  <tr><td><strong>Autocomplete de ticker</strong> contra o universo de marketdata</td><td>Decisão D3: texto livre normalizado para maiúsculas, espelhando o backend, que também não valida contra uma lista conhecida na criação (SPEC-102). Um endpoint de busca dedicado seria escopo novo.</td></tr>
+  <tr><td>Um <strong>indicador de "taxa desatualizada"</strong> com limiar calculado (D7)</td><td>SELIC/CDI atualizam quase diariamente, IPCA mensalmente — um único limiar erraria para um dos dois. A tela mostra a <code>reference_date</code> crua e confia no investidor para julgar, como ele já faz lendo um extrato de banco.</td></tr>
+  <tr><td>Uma abstração de <strong>CRUD genérico</strong> reutilizável entre FII e renda fixa</td><td>São só duas verticais no MVP; a duplicação controlada foi aceita em vez de uma abstração prematura — revisitar só se uma terceira aparecer.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="contrato">7. Conexão com o backend: o contrato como fronteira</h2>
+
+<p>Esta seção ensina a costura frontend↔backend desta spec — o que substitui, do lado do cliente, a "ponte
+hexagonal" que a aula de backend ensinaria. O SPEC-211 <strong>não abre nenhum endpoint novo</strong>: consome oito
+endpoints do SPEC-102 e um do SPEC-109.</p>
+
+<table>
+  <tr><th>Endpoint (api/openapi.yaml)</th><th>Usado por</th><th>Resposta que a tela trata</th></tr>
+  <tr><td><code>GET /holdings/fii</code></td><td><code>useFIIHoldings()</code></td><td><code>200 FIIHoldingResponse[]</code> → tabela ordenada por ticker</td></tr>
+  <tr><td><code>POST /holdings/fii</code></td><td><code>useCreateFIIHolding()</code></td><td><code>201</code> → invalida a lista · <code>400</code> → mensagem inline</td></tr>
+  <tr><td><code>PUT /holdings/fii/{id}</code></td><td><code>useUpdateFIIHolding()</code></td><td><code>200</code> → linha atualizada · <code>404</code> → lista atualiza silenciosamente (BR-2111)</td></tr>
+  <tr><td><code>DELETE /holdings/fii/{id}</code></td><td><code>useDeleteFIIHolding()</code></td><td><code>204</code> ou <code>404</code> → ambos tratados como sucesso</td></tr>
+  <tr><td><code>GET /holdings/fixed-income</code></td><td><code>useFixedIncomeHoldings()</code></td><td><code>200 FixedIncomeResponse[]</code> (inclui <code>indexer_type</code> + <code>effective_annual_rate_bps</code>)</td></tr>
+  <tr><td><code>POST</code>/<code>PUT</code>/<code>DELETE /holdings/fixed-income[/{id}]</code></td><td><code>useCreate/Update/DeleteFixedIncomeHolding()</code></td><td>espelha o fluxo de FII</td></tr>
+  <tr><td><code>GET /market/indicators</code> (SPEC-109)</td><td><code>useMarketIndicators()</code></td><td><code>200 MarketIndicatorResponse[]</code> (SELIC/CDI/IPCA) → a referência ao vivo (FR-2120)</td></tr>
+</table>
+
+<h3>7.1 — Tipos gerados, nunca DTOs à mão</h3>
+<p>Como nas telas anteriores, nenhum tipo <code>FIIHoldingRequest</code>/<code>FixedIncomeResponse</code>/<code>MarketIndicatorResponse</code>
+foi escrito à mão — todos vêm de <code>web/lib/api/schema.ts</code>, gerado de <code>api/openapi.yaml</code>:</p>
+
+<pre><code>// web/lib/portfolio/holdings.ts — os tipos vêm do contrato GERADO, nunca escritos à mão
+export type FIIHolding = components["schemas"]["FIIHoldingResponse"];
+export type FIIHoldingInput = components["schemas"]["FIIHoldingRequest"];
+export type FixedIncomeHolding = components["schemas"]["FixedIncomeResponse"];
+export type FixedIncomeInput = components["schemas"]["FixedIncomeRequest"];</code></pre>
+
+<p>E, como no SPEC-210, os enums do indexador e da liquidez também vêm do contrato, com um <code>Record</code> tipado
+como estrutura de garantia — uma nova opção de indexador quebraria o build, não silenciosamente:</p>
+
+<pre><code>// web/lib/portfolio/labels.ts — o Record é tipado do enum GERADO; toda chave é obrigatória
+type FixedIncomeReq = components["schemas"]["FixedIncomeRequest"];
+export type Indexer = FixedIncomeReq["indexer_type"];
+
+export const INDEXER_LABELS: Record&lt;Indexer, string&gt; = {
+  prefixado: "Prefixado",
+  cdi_percentual: "% do CDI",
+  ipca_spread: "IPCA +",
+};</code></pre>
+
+<h3>7.2 — O guardião de deriva, agora exercitado a sério pela primeira vez</h3>
+<p>A seção 5.1 já contou a história: <code>check:api</code> estava <strong>vermelho na <code>main</code></strong> quando o SPEC-211 começou, por
+causa da deriva deixada pelo SPEC-109. Consertá-lo foi a Tarefa 1 da Fase 1 — o guardião fez exatamente o que
+deveria fazer: <strong>impedir</strong> que qualquer código novo fosse escrito contra um contrato desatualizado.</p>
+
+<h3>7.3 — O frontend continua sendo apenas um cliente</h3>
+<div class="diagram">   Navegador (Carteira)                    Next.js (mesma origem)              API Go
+   ---------------------                    -----------------------            -------------------
+   FiiSection / FixedIncomeSection           /api/holdings/* -- rewrite -->     GET/POST/PUT/DELETE
+   useFIIHoldings() / useMarketIndicators()  proxy same-origin (D1 SPEC-200)    /holdings/fii, /fixed-income
+   tipos: lib/api/schema.ts (GERADO)         cookie HttpOnly Lax, sem CORS      GET /market/indicators
+                                                                                  identidade = sessao (ctx)
+
+   hoje: so o cliente web fala esse contrato -- amanha: app nativo / MCP / agente falam o MESMO contrato</div>
+
+<!-- ============================================================ -->
+<h2 id="construido">8. Como foi construído (visão geral, sem virar tutorial de React)</h2>
+
+<p>Você não precisa dominar React para acompanhar. O suficiente para entender a estrutura:</p>
+
+<ul>
+  <li><strong>A rota.</strong> <code>web/app/(app)/portfolio/page.tsx</code> — dentro do shell autenticado do SPEC-200. Só compõe
+  <code>FiiSection</code> + <code>FixedIncomeSection</code>; cada uma possui seu próprio título e chamada-para-ação.</li>
+  <li><strong>As seções.</strong> <code>fii-table.tsx</code> (exporta <code>FiiSection</code>) e <code>fixed-income-table.tsx</code> (exporta
+  <code>FixedIncomeSection</code>) — cada uma dona da própria lista, modal e confirmação de exclusão, ponta a ponta.</li>
+  <li><strong>Os formulários.</strong> <code>fii-form.tsx</code> e <code>fixed-income-form.tsx</code> — um componente só para adicionar
+  <em>e</em> editar (o modo depende de a prop <code>initial</code> existir ou não), o mesmo padrão do <code>ProfileForm</code> do
+  SPEC-210.</li>
+  <li><strong>Os primitivos novos.</strong> <code>components/ui/dialog.tsx</code> (o <code>&lt;dialog&gt;</code> nativo) e
+  <code>components/ui/confirm-dialog.tsx</code> (construído em cima dele) — a primeira vez que o design system Aurora
+  ganha um modal.</li>
+  <li><strong>Os dados.</strong> <code>lib/portfolio/{holdings,market,labels}.ts</code> + <code>lib/date.ts</code> (formatação de data
+  pt-BR) — hooks TanStack Query sobre o cliente tipado do SPEC-200, no mesmo padrão de
+  <code>lib/profile/profile.ts</code>.</li>
+</ul>
+
+<p>Se você quiser se aprofundar, os arquivos reais estão apontados acima. A mensagem da aula continua sendo o
+<strong>porquê</strong> do produto e do processo — não a mecânica de hooks ou de renderização do React.</p>
+
+<!-- ============================================================ -->
+<h2 id="harness">9. Harness Engineering: como a máquina construiu e verificou isto</h2>
+
+<p>O PLAN-211 é bem maior que o PLAN-210 — duas verticais de CRUD independentes e um primitivo de UI genuinamente
+novo (o modal) — e por isso ganhou <strong>sete fases</strong> em vez de cinco, cada uma deixando <code>web/</code> compilando,
+lintando e type-checando verde.</p>
+
+<table>
+  <tr><th>Fase</th><th>O que entregou</th></tr>
+  <tr><td>1 — Tipos + dados</td><td>D9: <code>npm run gen:api</code> fechando a deriva (seção 5.1); <code>lib/portfolio/{labels,holdings,market}.ts</code>; <code>parseCentavos</code>/<code>parseBps</code> (FR-2119).</td></tr>
+  <tr><td>2 — Primitivos de modal</td><td><code>dialog.tsx</code> (D1, nativo) + <code>confirm-dialog.tsx</code> (D2) — revisados e verificados ao vivo num navegador antes de seguir.</td></tr>
+  <tr><td>3 — Vertical FII</td><td>A primeira vertical completa (lista/add/edit/delete), verificada ao vivo contra o backend real — prova o padrão antes de replicar.</td></tr>
+  <tr><td>4 — Vertical renda fixa</td><td>Reusa o padrão da Fase 3, adiciona o indexador + referência ao vivo (FR-2120). É aqui que o bug de remount (seção 5.2) foi encontrado e corrigido.</td></tr>
+  <tr><td>5 — Composição</td><td><code>app/(app)/portfolio/page.tsx</code> juntando as duas seções; verificado ao vivo com portfólio vazio e populado.</td></tr>
+  <tr><td>6 — Testes</td><td>Vitest/RTL (106 testes) + o E2E real (<code>e2e/portfolio.spec.ts</code>) — onde o bug dos botões duplicados (seção 5.3) apareceu.</td></tr>
+  <tr><td>7 — Docs &amp; fechamento</td><td>CHANGELOG, SPEC-211/PLAN-211 → Done, revisão pelos dois subagentes (onde os bugs de float e de cor apareceram, seções 5.4/5.5), esta aula.</td></tr>
+</table>
+
+<h3>Os dois subagentes de revisão — e o veredito real: CHANGES REQUESTED</h3>
+<p>Diferente do SPEC-210, onde os dois revisores retornaram <code>PASS</code> de primeira, o SPEC-211 teve um veredito mais
+interessante de estudar: um <code>PASS</code> limpo e um <code>CHANGES REQUESTED</code> corrigido.</p>
+
+<div class="box tip">
+  <span class="lbl">react-correctness-reviewer — PASS (com duas notas não-bloqueantes, ambas corrigidas mesmo assim)</span>
+  Rodou <code>typecheck</code>/<code>lint</code>/<code>build</code> e leu o código de perto. Duas observações, endereçadas por serem baratas
+  de corrigir: (1) <code>todayISO()</code>'s segurança em SSR era implícita, dependendo de um curto-circuito de estado
+  padrão — agora é computada uma vez via <code>useState(() =&gt; todayISO())</code>, explícito e imune a uma virada de
+  meia-noite na mesma sessão. (2) Os diálogos não bloqueiam Escape/fechar-pelo-fundo enquanto uma mutação está
+  pendente — confirmado seguro (o TanStack Query desanexa listeners no unmount/<code>reset()</code>, verificado lendo o
+  código-fonte instalado de <code>@tanstack/query-core</code>) e deixado como UX intencional: bloquear o fechamento durante
+  uma requisição lenta/travada seria pior, não melhor.
+</div>
+
+<div class="box bug">
+  <span class="lbl">frontend-reviewer — CHANGES REQUESTED → corrigido → reverificado limpo</span>
+  Este é o caso mais didático desta aula sobre revisão de código: o revisor não deu um <code>PASS</code> educado com notas
+  de rodapé — ele <strong>bloqueou</strong> a mudança até duas questões reais serem corrigidas. São exatamente os bugs 5.4
+  (float no pré-preenchimento) e 5.5 (cor reservada como preenchimento de botão) descritos acima. Depois das
+  correções, o gate completo (<code>typecheck</code>/<code>lint</code>/<code>test</code>/<code>check:api</code>/<code>build</code>) e o E2E foram
+  <strong>re-executados do zero</strong> e vieram limpos — não foi um "conserta e assume que está certo", foi conserta e
+  <strong>reverifica</strong>.
+</div>
+
+<div class="box why">
+  <span class="lbl">Por que um "CHANGES REQUESTED" corrigido é uma vitória do harness, não uma falha dele</span>
+  É tentador achar que um <code>PASS</code> de primeira é o resultado desejável e um <code>CHANGES REQUESTED</code> é um problema. O
+  oposto é o ponto: o <code>frontend-reviewer</code> pegou <strong>dois bugs reais</strong> — um de correção monetária, um de
+  violação do design system — <strong>antes</strong> de qualquer um deles chegar à <code>main</code>. Isso é o harness fazendo
+  exatamente o que deveria: baixar a taxa de erro <em>antes</em> do merge, não depois. Um <code>PASS</code> de primeira só
+  seria melhor se o código já estivesse certo; aqui, o processo de revisão foi o que <em>tornou</em> o código certo.
+</div>
+
+<h3>Os gates e a disciplina que baixam erro (concreto, desta spec)</h3>
+<table>
+  <tr><th>Gate / disciplina</th><th>Como apareceu no SPEC-211</th><th>Por que baixa erro</th></tr>
+  <tr><td><code>check:api</code> (drift guard)</td><td>Estava vermelho no início; virou a Tarefa 1 da Fase 1; ficou verde pelo resto da spec</td><td>Impede escrever contra tipos que não refletem o contrato real — pego <em>antes</em> de qualquer feature, não depois.</td></tr>
+  <tr><td>Gate <code>typecheck</code>/<code>lint</code>/<code>build</code></td><td>Verde ao fim de cada uma das 7 fases</td><td>Elimina bugs sintáticos/de tipo antes de gastar o tempo (caro) dos subagentes de revisão semântica.</td></tr>
+  <tr><td>Verificação ao vivo num navegador real (Playwright, não CI)</td><td>Fases 2 a 5 — foi assim que o bug de remount (5.2) apareceu</td><td>Cobre a classe de bug "compila, mas quebra numa sequência de interações reais" — invisível a typecheck e a um teste que só monta o componente uma vez.</td></tr>
+  <tr><td>Teste E2E real contra o backend (<code>e2e/portfolio.spec.ts</code>)</td><td>Encontrou o bug dos botões duplicados (5.3) e as ambiguidades de nome acessível em linhas de tabela</td><td>Um localizador em modo estrito recusa adivinhar — força a UI a ser inequívoca, não só "funcional na prática".</td></tr>
+  <tr><td>Dinheiro-sem-float (<code>frontend-reviewer</code>)</td><td>Pegou <code>(centavos/100).toFixed(2)</code> no pré-preenchimento de edição (5.4)</td><td>A regra vale para <strong>todo</strong> caminho que toca dinheiro, inclusive exibição — não só o caminho que vai para o servidor.</td></tr>
+  <tr><td>Tokens reservados (<code>frontend-reviewer</code>)</td><td>Pegou <code>loss</code> usado como preenchimento de botão, mesmo em baixa opacidade (5.5)</td><td>Uma regra "sem exceções" só funciona se o revisor a aplica sem exceções — inclusive contra uma justificativa razoável ("é só 5% de opacidade").</td></tr>
+  <tr><td>Zero-dep para o modal (ADR-0003)</td><td><code>&lt;dialog&gt;</code> nativo em vez de uma lib de modal de terceiros (D1)</td><td>Foco-trap e Escape-para-fechar vêm de graça do navegador — nenhuma nova dependência de runtime para um problema que o HTML já resolve.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">10. Conexão com AI Engineering &amp; Produto</h2>
+
+<p>A Carteira parece "só um formulário", mas é onde a promessa central do produto — <em>facts are computed, not
+generated</em> — deixa de ser uma frase no CLAUDE.md e vira dados reais no banco.</p>
+
+<h3>10.1 — O primeiro fato de verdade que o Fact Builder vai ler</h3>
+<p>SPEC-104 (motor de insights), SPEC-105 (rebalanceamento), SPEC-106 (Health Score) e SPEC-107 (projeções) já
+sabem <em>como</em> ler holdings — mas até o SPEC-211, nenhum usuário tinha uma tela web para <em>escrever</em> esses
+holdings de verdade. Agora existe: cada FII e cada posição de renda fixa cadastrados aqui são literalmente os
+<strong>fatos de entrada</strong> que o Fact Builder do backend vai considerar antes de qualquer <code>Insighter</code> gerar uma
+explicação. Sem esta tela, toda a Fase 1 de IA do backend estaria calculando sobre um portfólio vazio.</p>
+
+<h3>10.2 — Por que a ausência das travas de IA aqui prepara o SPEC-213 (de novo)</h3>
+<p>O mesmo par didático do SPEC-210 se repete: a Carteira <strong>captura</strong> fatos sem as travas FR-013/FR-014 (BR-2115)
+— não porque a governança de IA seja opcional, mas porque não há saída de IA aqui para gatear. Quando o SPEC-213
+(Insights/Dashboard) ler estes holdings e gerar uma sugestão de rebalanceamento, é <em>lá</em> que o <code>InsightCard</code> com
+<code>explanation</code> obrigatório e o <code>NonAdviceDisclaimer</code> reaparecem em força total — agora tendo dados reais de
+Rafael e Carla para explicar.</p>
+
+<h3>10.3 — A taxa efetiva resolvida no servidor: uma pequena prova da disciplina "facts are computed"</h3>
+<p>A exibição da taxa efetiva (FR-2120 — "120% do CDI · ≈12,60% a.a.") é um exemplo em miniatura da regra binding
+#3 sendo aplicada literalmente: o cliente <strong>nunca calcula</strong> essa matemática. Ele lê
+<code>effective_annual_rate_bps</code>, já resolvido pelo SPEC-109 no backend (BR-2117). Se o produto algum dia ganhar um
+app nativo ou um servidor MCP, eles vão ler o <strong>mesmo</strong> número resolvido — nenhuma lógica de indexador
+duplicada em nenhum cliente.</p>
+
+<h3>10.4 — A costura para a visão multi-agente / MCP</h3>
+<p>Como nas telas anteriores, a Carteira reforça a mesma propriedade: o frontend não sabe o que "120% do CDI"
+significa em termos de matemática — ele só renderiza o que o backend já resolveu, e submete o que o usuário digitou
+sem reinterpretar. Isso significa que um futuro CIO multi-agente ou servidor MCP pode ler e escrever exatamente os
+mesmos oito endpoints de holdings que esta tela usa, sem nenhuma lógica de domínio duplicada esperando para ser
+migrada.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  Engenharia de IA responsável não termina no <code>Insighter</code> gated do backend — ela também depende de os
+  <strong>fatos de entrada</strong> serem registrados com a mesma disciplina: dinheiro sempre inteiro (nas duas direções),
+  taxas sempre resolvidas no servidor, nunca recalculadas no cliente. E a lição desta aula generaliza além de IA:
+  a taxa de erro de um sistema não cai só porque alguém escreveu código com cuidado — ela cai quando alguém
+  <strong>executa</strong> esse código de verdade, de vários jeitos diferentes, e trata cada discrepância encontrada como
+  informação, não como um incômodo a contornar.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">11. O que vem a seguir</h2>
+
+<p>Com a Carteira no ar, o produto tem, pela primeira vez no track de frontend, um lugar real onde Rafael e Carla
+registram o que possuem — o pré-requisito de dados para tudo que vem depois.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tela</th><th>Como se apoia no SPEC-211</th></tr>
+  <tr><td><strong>SPEC-212</strong></td><td><strong>Dashboard</strong></td><td>Lê os mesmos holdings desta tela + dados de mercado para calcular valor atual e alocação — a computação que a Carteira deliberadamente não faz (BR-2113).</td></tr>
+  <tr><td>SPEC-213</td><td>Insights &amp; rebalanceamento</td><td>É onde <code>InsightCard</code>/<code>NonAdviceDisclaimer</code> reaparecem com força total, agora explicando sugestões calculadas sobre os fatos que o SPEC-211 registrou.</td></tr>
+  <tr><td>SPEC-214</td><td>Projeções</td><td>Usa as posições de renda fixa (incluindo o indexador) como ponto de partida das projeções de longo prazo.</td></tr>
+  <tr><td>SPEC-215</td><td>Copiloto conversacional</td><td>Quando Rafael perguntar "estou muito concentrado em logística?", o copiloto vai ler exatamente os holdings que esta tela deixou salvos.</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-211 o YieldForge ganhou a <strong>Carteira</strong> — duas verticais de CRUD (FII e renda fixa, esta última
+  unificada pelo indexador do SPEC-109) que registram os fatos que toda feature de IA futura vai consumir, com
+  dinheiro em centavos/bps inteiros nas <strong>duas</strong> direções, um novo modal nativo (<code>&lt;dialog&gt;</code>, zero
+  dependência) e um <code>check:api</code> consertado antes de qualquer código novo — mas a lição que fica é de
+  <strong>processo</strong>: cinco bugs reais, cada um invisível a <code>typecheck</code>/<code>lint</code>/<code>build</code> sozinhos, só foram pegos
+  porque alguém rodou uma auditoria, rodou o app num navegador de verdade, escreveu um teste ponta a ponta
+  rigoroso, e um revisor aplicou as regras do projeto sem abrir exceção.
+</div>
+
+<footer>
+  YieldForge · Aula 211 (SPEC-211) · gerada como material de estudo. Veja também a
+  <a href="SPEC-210-aula.html">Aula 210</a> (o Perfil — a primeira tela SPEC-21x, de onde vem o padrão
+  <code>404</code>→primeiro-acesso e "guardas não se aplicam quando não há saída de IA"), a
+  <a href="SPEC-200-aula.html">Aula 200</a> (a fundação do frontend — o cliente tipado, o shell, o <code>money.ts</code>), a
+  <a href="SPEC-102-aula.html">Aula 102</a> (o twin de backend — gestão de carteira) e a
+  <a href="SPEC-109-aula.html">Aula 109</a> (o twin de backend — o indexador de renda fixa que esta tela
+  consome), o
+  <a href="../02-specs/SPEC-211-portfolio-management-screens.md">SPEC-211</a>,
+  o <a href="../03-plans/PLAN-211-portfolio-management-screens.md">PLAN-211</a>
+  e o contrato <a href="../../api/openapi.yaml">api/openapi.yaml</a>.
+</footer>
+
+</div>
+</body>
+</html>

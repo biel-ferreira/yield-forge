@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 
 // Aurora buttons (SPEC-200 FR-2004). Note: there is deliberately NO buy/sell/order
 // variant — the copilot never issues a transaction order (FR-014).
-type Variant = "primary" | "outline" | "secondary" | "ghost" | "link" | "destructive";
+type Variant = "primary" | "outline" | "secondary" | "ghost" | "link";
 type Size = "sm" | "md";
 
 const base =
@@ -18,10 +18,6 @@ const variants: Record<Variant, string> = {
   secondary: "border border-hairline bg-elevated text-on-dark hover:bg-hairline/50",
   ghost: "text-muted-strong hover:bg-elevated hover:text-on-dark",
   link: "text-primary-tint underline-offset-4 hover:underline",
-  // SPEC-211: an irreversible action (e.g. confirm-delete). Mirrors Badge's soft-tint pattern
-  // for the `loss` semantic token (never a solid fill — CLAUDE.md reserves gain/loss/caution/info
-  // as figure colors) rather than inventing a separate saturated "danger" brand color.
-  destructive: "border border-loss/50 bg-loss/5 text-loss hover:bg-loss/10",
 };
 
 const sizes: Record<Size, string> = {

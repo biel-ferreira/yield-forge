@@ -14,6 +14,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-211 — Portfolio Management Screens (Carteira)**: turns the `/portfolio` stub into the
+  frontend face of SPEC-102 (FII + fixed income) and SPEC-109 (the rate indexer). Two independent
+  CRUD verticals — **FII** (ticker, quantity, average price) and **fixed income** (name,
+  institution, invested amount, the SPEC-109 **indexer picker** — Prefixado / % do CDI / IPCA +
+  spread — liquidity, maturity) — each with list/add/edit/delete against the live backend. The
+  fixed-income table shows the **resolved effective rate** with its `reference_date`, or "sem
+  referência disponível" when the indicator was never ingested — a deliberately simple MVP
+  treatment (no computed staleness threshold, D7) since SELIC/CDI update ~daily and IPCA
+  ~monthly, so one threshold would misjudge one of them. A new **modal dialog primitive**
+  (`components/ui/dialog.tsx`) built on the **native `<dialog>` element** — `showModal()`/
+  `close()` give focus-trap, Escape-to-close, and backdrop blocking for free, zero new
+  dependency — plus a `confirm-dialog.tsx` built on it for delete confirmation, styled with the
+  existing neutral `secondary` `Button` treatment (gain/loss/caution/info stay figure-text-only,
+  never a button fill, per the design system). pt-BR money/rate **input parsing**
+  (`parseCentavos`/`parseBps`, plus the edit-prefill counterparts `centavosToInputString`/
+  `bpsToInputString`, `lib/money.ts`) — the inverse of the existing display formatters, built with
+  the same pure-integer-math discipline (no `/100` + `toFixed`, which is float arithmetic on a
+  monetary value) — and the new `lib/portfolio/{holdings,market,labels}.ts` data hooks.
+  **Regenerated `web/lib/api/schema.ts`**, which had drifted from `api/openapi.yaml` since
+  SPEC-109 shipped (a backend-only PR whose own gate didn't catch the missed frontend regen) —
+  `check:api` now passes against the real contract for the first time. No new endpoint; **no
+  `api/openapi.yaml` change**. Several real bugs caught by actually running the tests and the
+  reviews, not just writing/requesting them: stale form state leaking across edit sessions (both
+  add/edit forms never remounted between targets — fixed with a `key` per target), a duplicate,
+  identically-labeled "Adicionar…" button in each section's empty state (fixed by making the
+  header CTA and the empty-state CTA mutually exclusive), float-arithmetic edit-prefill
+  (`frontend-reviewer` finding — money must be integer end to end, prefill included), and a
+  reserved semantic color used as a button fill (`frontend-reviewer` finding — the design system
+  is explicit: gain/loss/caution/info are figure colors, never brand or a fill, no exception for
+  low opacity). Reviewed by `frontend-reviewer` + `react-correctness-reviewer` (both required
+  fixes, both re-verified clean). PT-BR lesson `docs/lessons/SPEC-211-aula.html`.
+
 - **SPEC-109 — Fixed-Income Rate Indexers (% do CDI / IPCA+)**: a fixed-income holding now
   carries an `indexer_type` (`prefixado` | `cdi_percentual` | `ipca_spread`, closed enum,
   `internal/portfolio/indexer.go`) alongside its stored `annual_rate_bps`. The **effective

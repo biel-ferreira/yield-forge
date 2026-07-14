@@ -133,7 +133,7 @@ export default function StyleguidePage() {
           <Button variant="outline" onClick={() => setDialogOpen(true)}>
             Abrir modal
           </Button>
-          <Button variant="destructive" onClick={() => setConfirmOpen(true)}>
+          <Button variant="secondary" onClick={() => setConfirmOpen(true)}>
             Excluir holding
           </Button>
         </div>
