@@ -140,15 +140,16 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 ### Phase 1 — Data hook & sector labels *(≈ persistence/data)*
 
 #### Tasks
-- [ ] `lib/dashboard/dashboard.ts` — `useDashboard()`: `GET /dashboard`, typed from
+- [x] `lib/dashboard/dashboard.ts` — `useDashboard()`: `GET /dashboard`, typed from
       `components["schemas"]["DashboardResponse"]`, exposing `{dashboard, isLoading, isError,
       refetch}` (mirrors `useFIIHoldings`'s shape). No hand-written DTOs (BR-2124).
-- [ ] `lib/dashboard/labels.ts` — `SECTOR_LABELS: Record<string, string>` for the six known
+- [x] `lib/dashboard/labels.ts` — `SECTOR_LABELS: Record<string, string>` for the six known
       backend sector values (`logistics`/`offices`/`shopping`/`hybrid`/`paper`/`other`, per
       `internal/marketdata/sector.go` — not enforced by the wire type, D6) plus a
       `sectorLabel(sector: string): string` helper falling back to a capitalized raw value for
       anything unmapped, so a future backend sector addition degrades gracefully instead of
-      silently rendering blank.
+      silently rendering blank. `other`'s label is the distinct "Outros / sem cotação" per
+      FR-2124, not a generic sector name.
 
 #### Deliverables
 - Typed hook + label helper, unit-testable in isolation; the gate stays green.
