@@ -185,14 +185,25 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 ### Phase 3 — The Painel screen *(≈ application/edge)*
 
 #### Tasks
-- [ ] `app/(app)/dashboard/page.tsx` — replace the stub: loading skeleton (FR-2127), error +
+- [x] `app/(app)/dashboard/page.tsx` — replace the stub: loading skeleton (FR-2127), error +
       retry (FR-2127), the empty-portfolio state (`total_invested_centavos === 0 &&
       current_value_centavos === 0` → a dedicated empty state with a CTA to `/portfolio`,
       FR-2126 — distinct from loading/error), else compose `SummaryHero` +
-      `AllocationSections`.
-- [ ] **Live-verify against the real backend**: an account with holdings shows real figures; a
-      fresh account shows the empty state; both independently confirmed, not assumed from
-      typecheck (mirrors the verification discipline from SPEC-211's Phases 3–5).
+      `AllocationSections`. **Found and fixed a real bug while wiring this**: the empty state's
+      CTA was written as `<Button asChild><a href="/portfolio">...</a></Button>`, but `Button`
+      has no Radix `Slot`/`asChild` support at all (confirmed — plain `<button>` wrapper) and
+      the codebase's own established pattern for navigation-after-action is `useRouter()`
+      (`register`/`login` pages), not composing `Button` with an anchor. Fixed with
+      `useRouter().push("/portfolio")` on a plain `onClick`.
+- [x] **Live-verified against the real backend** (registered a fresh account via Playwright, not
+      a mock): fresh account → the empty state renders, its CTA correctly navigates to
+      `/portfolio`; added an FII (HGLG11, 100@R$157,50) + a fixed-income holding (R$5.000,00 @
+      10% prefixado) via Carteira, returned to `/dashboard` → hero shows R$21.000,00 patrimony,
+      +R$250,00/+1,20% growth (green, ▲); the metric row's growth card shows the **identical**
+      figure (D1 proven, not just asserted); asset-class allocation shows FIIs 76,19% / Renda
+      fixa 23,81%; FII sector exposure shows Logística 100% as a correct full-width single
+      segment. Every number cross-checked arithmetically (100 shares × R$160,00 quoted price −
+      R$157,50 cost = exactly the R$250,00 growth shown). Zero console errors.
 
 #### Deliverables
 - A working, navigable Painel screen wired to the live backend end to end.
@@ -254,6 +265,7 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 | Growth-figure duplication (hero + metric card) drifts if a future edit changes one but not the other | Low | D1's shared-value discipline + a test asserting both render the identical figure from one fixture |
 | Empty-portfolio detection (`both totals === 0`) misfires for a real edge case (e.g. a FII gifted at zero cost basis, nonzero current value) | Low | The condition requires **both** totals to be zero — a nonzero current value with zero cost basis does not trigger it; covered in SPEC-212 §9 Edge Cases and worth a regression test if it proves fragile |
 | Scope creep into Health Score / Insights, since the current stub's copy already (incorrectly) implies they're part of this spec | Low | SPEC-212 §2 Scope is explicit; Phase 3 replaces the stub's copy along with the rest of it |
+| **(materialized, fixed)** The empty state's CTA was written as `Button asChild` wrapping an anchor — `Button` has no `Slot`/`asChild` support at all | Low | Found wiring Phase 3, before it ever shipped. Fixed with `useRouter().push(...)` on a plain `onClick`, matching the codebase's own established navigation-after-action pattern (`register`/`login` pages) |
 
 ---
 
