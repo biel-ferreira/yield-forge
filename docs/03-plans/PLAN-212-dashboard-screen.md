@@ -213,32 +213,39 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 ### Phase 4 — Testing
 
 #### Unit / Component (Vitest + RTL)
-- [ ] `lib/dashboard/labels.ts`: every known sector maps to a non-empty pt-BR label; an
-      unmapped sector falls back to its capitalized raw value (D6).
-- [ ] `SummaryHero`: a gain fixture (green, `▲`), a loss fixture (red, `▼`), a zero-growth
+- [x] `lib/dashboard/labels.ts`: every known sector maps to a non-empty pt-BR label; an
+      unmapped sector falls back to its capitalized raw value (D6); `other` labelled distinctly.
+- [x] `SummaryHero`: a gain fixture (green, `▲`), a loss fixture (red, `▼`), a zero-growth
       fixture (neutral, no arrow); the stale-ticker notice present/absent by fixture; the hero
-      badge and the metric-row growth card show the identical figure (D1, not two divergent
-      reads).
-- [ ] `AllocationSections`: a zero-share class is omitted from the legend; a single-class
+      badge and the metric-row growth card assert the **identical** formatted string appears
+      exactly twice (D1, not two divergent reads); growth labelled "vs. custo de aquisição",
+      never "no mês".
+- [x] `AllocationSections`: a zero-share class is omitted from the legend; a single-class
       portfolio renders without error; FII sectors omitted entirely for a fixed-income-only
-      fixture.
-- [ ] `DashboardPage`: loading → skeleton, no data section rendered; error → retry calls
-      refetch; empty portfolio → the dedicated empty state, not a zeroed dashboard; populated →
-      both sections render.
+      fixture; the `other` sector's distinct label renders correctly.
+- [x] `DashboardPage`: loading → skeleton, no data section rendered; error → retry calls
+      refetch; empty portfolio → the dedicated empty state, not a zeroed dashboard; the empty
+      state's CTA calls `router.push("/portfolio")` (catches a regression of the Phase 3
+      `asChild` bug); populated → both sections render.
 
 #### Integration
-- [ ] Against a running backend: seed holdings (reusing SPEC-211's create flow) + market data,
-      load `/dashboard`, assert the rendered figures match the backend's computed response. This
-      repo has no separate integration-test tier for the frontend (SPEC-211's precedent) — the
-      same real-network Playwright run below serves both roles.
+- [x] Against a running backend: seeded holdings via Carteira's real create flow, loaded
+      `/dashboard`, asserted the rendered figures match the backend's computed response
+      (combined with the E2E run below — this repo has no separate integration-test tier for
+      the frontend, SPEC-211's precedent).
 
 #### End-to-End (Playwright)
-- [ ] `e2e/dashboard.spec.ts`: register → add a holding via Carteira → visit `/dashboard` → see
-      the hero reflect a non-zero patrimony. Gated to skip without a backend, mirroring
-      `e2e/portfolio.spec.ts`.
+- [x] `e2e/dashboard.spec.ts`: register → the fresh dashboard shows the empty state → its CTA
+      navigates to Carteira → add a holding → back on `/dashboard`, the hero reflects the
+      non-zero patrimony (asserted `toHaveCount(2)` for the hero + "Total investido" card,
+      which legitimately show the identical figure for a same-day zero-accrual holding — not a
+      bug, found and correctly diagnosed via the same strict-mode-locator signal that caught
+      SPEC-211's real duplicate-CTA bug). Gated to skip without a backend, mirroring
+      `e2e/portfolio.spec.ts`. **Run and passing** against the real backend, not just written.
 
 #### Deliverables
-- All green in the `web/` CI gate; E2E run and passing against the real backend.
+- All green in the `web/` CI gate (131/131 tests, 17 files) + a clean production `build`; E2E
+  run and passing against the real backend.
 
 ---
 
