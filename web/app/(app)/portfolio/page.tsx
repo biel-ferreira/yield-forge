@@ -1,10 +1,16 @@
-import { EmptyState } from "@/components/ui/empty-state";
+import { FiiSection } from "@/app/(app)/portfolio/fii-table";
+import { FixedIncomeSection } from "@/app/(app)/portfolio/fixed-income-table";
 
+// The Carteira screen (SPEC-211) — the frontend face of SPEC-102 (holdings) + SPEC-109 (the
+// fixed-income rate indexer). The shell's TopBar already renders the page-level "Carteira"
+// heading (SPEC-200, route-derived from lib/shell/nav.ts); each section owns its own h2 + CTA,
+// so there's no redundant top-level heading here. Not width-constrained like the narrower
+// Perfil form (SPEC-210) — the fixed-income table has 7 columns and needs the room.
 export default function PortfolioPage() {
   return (
-    <EmptyState
-      title="Carteira"
-      description="O cadastro e a gestão dos seus FIIs e renda fixa chega na SPEC-211 (Portfolio)."
-    />
+    <div className="space-y-8">
+      <FiiSection />
+      <FixedIncomeSection />
+    </div>
   );
 }

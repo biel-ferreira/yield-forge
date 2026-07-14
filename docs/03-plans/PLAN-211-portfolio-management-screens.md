@@ -6,19 +6,11 @@
 | --------------- | --------------------------------------- |
 | Plan Name       | Portfolio Management Screens            |
 | Related Feature | Portfolio Management Screens (Carteira) |
-| Related Spec    | [SPEC-211](../02-specs/SPEC-211-portfolio-management-screens.md) (Draft — see note below) |
+| Related Spec    | [SPEC-211](../02-specs/SPEC-211-portfolio-management-screens.md) (Done) |
 | Version         | 0.1.0                                    |
-| Status          | Draft                                    |
+| Status          | Done                                      |
 | Author          | Gabigol                                  |
-| Last Updated    | 2026-07-02                               |
-
-> **SPEC status note.** SPEC-211 is still `Draft` — this plan is provisional pending it being
-> flipped to `Approved`. All three of its Open Questions (§14) were resolved this session (see
-> §4 Blocking Decisions below) and a fresh audit against the actual shipped SPEC-109 contract
-> found no discrepancies in the API shapes — only a display-detail refinement to FR-2120
-> (already folded into the spec) and a Definition-of-Done range typo (FR-2119→FR-2120,
-> BR-2116→BR-2117, already fixed). Recommend flipping SPEC-211 to `Approved` before
-> `/spec-implement 211` begins.
+| Last Updated    | 2026-07-13                               |
 
 > **Phase-order note.** Frontend spec — the template's backend phase order is mapped to its
 > frontend analogue (data → components → screens → composition → tests → docs), the same
@@ -169,19 +161,22 @@ involved.
 ### Phase 1 — Fix stale types; data hooks & input parsing *(≈ persistence/data)*
 
 #### Tasks
-- [ ] **`npm run gen:api` and commit the result** (D9) — closes the current `check:api` drift
+- [x] **`npm run gen:api` and commit the result** (D9) — closes the current `check:api` drift
       before any SPEC-109-shaped code is written.
-- [ ] `lib/portfolio/labels.ts` — `Indexer` (`prefixado`/`cdi_percentual`/`ipca_spread`),
+- [x] `lib/portfolio/labels.ts` — `Indexer` (`prefixado`/`cdi_percentual`/`ipca_spread`),
       `LiquidityType`, and `Indicator` (`selic`/`cdi`/`ipca`) enum ↔ pt-BR label maps, typed from
-      `components["schemas"]` (mirrors `lib/profile/labels.ts`).
-- [ ] `lib/money.ts`: `parseCentavos(input: string): number | null` and
+      `components["schemas"]` (mirrors `lib/profile/labels.ts`). Also added `referenceIndicator`
+      (`Indexer` → `Indicator | null`), used by Phase 4's live-reference display.
+- [x] `lib/money.ts`: `parseCentavos(input: string): number | null` and
       `parseBps(input: string): number | null` (FR-2119) — `"1.234,56"` → `123456`,
       `"10,5"` → `1050`; `null` on malformed/empty-when-required input (never coerced to `0`).
-- [ ] `lib/portfolio/holdings.ts` — `useFIIHoldings()` (list) + `useCreateFIIHolding()` /
+- [x] `lib/portfolio/holdings.ts` — `useFIIHoldings()` (list) + `useCreateFIIHolding()` /
       `useUpdateFIIHolding()` / `useDeleteFIIHolding()`; the fixed-income mirror
       (`useFixedIncomeHoldings()` + create/update/delete). List query invalidated on any mutation's
-      success (TanStack Query). No hand-written DTOs (BR-2116).
-- [ ] `lib/portfolio/market.ts` — `useMarketIndicators()` (`GET /market/indicators`) +
+      success (TanStack Query). No hand-written DTOs (BR-2116). Update/delete throw a new
+      `ApiError(status, message)` (`lib/api/error.ts`, extended) so Phase 3/4 form components can
+      distinguish a `404` (list-refresh, BR-2111) from a `400` (inline message) without string-sniffing.
+- [x] `lib/portfolio/market.ts` — `useMarketIndicators()` (`GET /market/indicators`) +
       `findIndicator(list, indicator)` pure helper (used by both the live-reference display and the
       table's per-holding reference lookup, FR-2120/D7).
 
@@ -194,15 +189,26 @@ involved.
 ### Phase 2 — Modal & confirm-dialog primitives *(≈ new UI vocabulary)*
 
 #### Tasks
-- [ ] `components/ui/dialog.tsx` (D1) — wraps the native `<dialog>` element: `open`/`onClose`
+- [x] `components/ui/dialog.tsx` (D1) — wraps the native `<dialog>` element: `open`/`onClose`
       props, imperative `showModal()`/`close()` sync via `useEffect`, backdrop-click-to-close,
       `aria-labelledby` wired to a required `title` prop (binding-guard-style: a dialog without a
       title is unrepresentable in the prop contract, mirroring `InsightCard`'s required
       `explanation`).
-- [ ] `components/ui/confirm-dialog.tsx` (D2) — built on `dialog.tsx`: `title`, `description`,
-      `onConfirm`, `onCancel`, destructive styling per Aurora tokens.
-- [ ] Token-styled per the Aurora design system; no raw hex; reduced-motion respected (mirrors
-      PLAN-210 Phase 2's a11y bar).
+- [x] `components/ui/confirm-dialog.tsx` (D2) — built on `dialog.tsx`: `title`, `description`,
+      `onConfirm`, `onCancel`. **Revised in Phase 7 review:** originally styled the confirm
+      button with a new `destructive` `Button` variant (`border-loss/50 bg-loss/5 text-loss`),
+      reasoning it mirrored `Badge`'s soft-tint pattern closely enough to be a legitimate
+      exception. `frontend-reviewer` correctly called this out as still a **fill** — the design
+      system (`design-system.md`) is unambiguous: "None is ever brand voltage or a card fill" and
+      "gain/loss are figure colors, not actions," no low-opacity exception. Removed the
+      `destructive` variant entirely; the confirm button now uses the existing neutral
+      `secondary` treatment, relying on the explicit confirmation flow + copy ("Excluir",
+      "Esta ação não pode ser desfeita") to signal irreversibility, not color.
+- [x] Token-styled per the Aurora design system; no raw hex; reduced-motion respected (global
+      `prefers-reduced-motion` media query already covers it, no per-component work needed).
+- [x] **Live-verified in a browser** (Playwright against the dev server, not just typecheck):
+      both dialogs open centered with backdrop, backdrop-click and the X button both close them,
+      zero console errors. Screenshots reviewed, not committed (scratch verification only).
 
 #### Deliverables
 - Two reusable, tested primitives; render in the styleguide for a visual check.
@@ -212,15 +218,24 @@ involved.
 ### Phase 3 — FII section *(≈ first CRUD vertical, proves the pattern)*
 
 #### Tasks
-- [ ] `app/(app)/portfolio/fii-table.tsx` — populated table (ticker, quantity, average price,
+- [x] `app/(app)/portfolio/fii-table.tsx` — populated table (ticker, quantity, average price,
       actions) sorted by ticker; empty state ("nenhum FII cadastrado" + CTA); loading skeleton;
-      transient-error retry (FR-2111).
-- [ ] `app/(app)/portfolio/fii-form.tsx` — the D1 modal, add and edit (prefilled) sharing one
+      transient-error retry (FR-2111). Exports `FiiSection`, owning the list + modal orchestration
+      end to end (mirrors `app/(app)/profile/page.tsx`'s single-file load+form ownership).
+- [x] `app/(app)/portfolio/fii-form.tsx` — the D1 modal, add and edit (prefilled) sharing one
       component: ticker (free text, uppercase-normalized, D3), quantity (positive whole number,
       ≥1), average price (pt-BR input, `parseCentavos`, ≥0) (FR-2112/2113).
-- [ ] Delete wired through `confirm-dialog.tsx` (FR-2114).
-- [ ] A mutation `404` (edit/delete) refreshes the list rather than erroring (BR-2111); a `400`
-      surfaces the server message inline with input preserved.
+- [x] Delete wired through `confirm-dialog.tsx` (FR-2114). Extended `ConfirmDialog` with an
+      optional `error` slot for a genuine delete failure (not the 404 case).
+- [x] A mutation `404` (edit/delete) refreshes the list rather than erroring (BR-2111); a `400`
+      surfaces the server message inline with input preserved. Required switching the update/delete
+      hooks (Phase 1) from `onSuccess` to `onSettled` invalidation — a 404 doesn't fire `onSuccess`
+      but the cached list is still stale and must refresh; discovered while wiring this phase.
+- [x] **Live-verified against the real backend** (registered a fresh account via Playwright,
+      not a mock): create → row appears correctly formatted; edit → prefill matches exactly,
+      quantity update reflects; delete → confirm dialog → row removed, empty state returns.
+      Zero console errors. `app/(app)/portfolio/page.tsx` now renders `FiiSection` for real
+      (not a throwaway harness) — Phase 5 adds the fixed-income section alongside it.
 
 #### Deliverables
 - A working FII section: list/add/edit/delete against the live backend.
@@ -230,20 +245,37 @@ involved.
 ### Phase 4 — Fixed-income section *(≈ second CRUD vertical, adds the indexer)*
 
 #### Tasks
-- [ ] `app/(app)/portfolio/fixed-income-table.tsx` — populated table (name, institution, invested
+- [x] `app/(app)/portfolio/fixed-income-table.tsx` — populated table (name, institution, invested
       amount, resolved effective rate + `reference_date` or "sem referência disponível", liquidity
-      label, pt-BR maturity date or "—") (FR-2115/2120/D7); empty/loading/error states.
-- [ ] `app/(app)/portfolio/fixed-income-form.tsx` — the D1 modal: name/institution (required),
+      label, pt-BR maturity date or "—") (FR-2115/2120/D7); empty/loading/error states. Added
+      `lib/date.ts` (`formatDateBR`/`todayISO`) — the render-edge date helper this and the form need.
+- [x] `app/(app)/portfolio/fixed-income-form.tsx` — the D1 modal: name/institution (required),
       invested amount (`parseCentavos`, ≥1), **indexer** single-select (reuses `segmented.tsx`,
       D4) whose selection changes the rate-value input's label/unit, rate value (`parseBps`, ≥0),
       **liquidity** single-select (reuses `segmented.tsx`, D4) — choosing Diária clears/disables
       maturity (`null`), choosing No vencimento requires one; maturity date (D6, past-date
-      rejected at the edge for a new at-maturity holding) (FR-2116/2117).
-- [ ] Live reference display, inline with the indexer picker: when % do CDI / IPCA+ is selected,
+      rejected at the edge for a new at-maturity holding, edit-mode exempt per the backend's
+      create-time-only rule) (FR-2116/2117).
+- [x] Live reference display, inline with the indexer picker: when % do CDI / IPCA+ is selected,
       show `"CDI atual: 10,50% a.a. (ref. 01/07/2026)"` (or the IPCA equivalent) via
       `useMarketIndicators` + `findIndicator`; "indisponível no momento" when absent/loading, never
       blocking the save path (FR-2120).
-- [ ] Delete wired through `confirm-dialog.tsx` (FR-2118).
+- [x] Delete wired through `confirm-dialog.tsx` (FR-2118).
+- [x] **Bug found and fixed during live verification:** `FiiForm`/`FixedIncomeForm` are always
+      mounted (only `open` toggles the native `<dialog>`), so `useState`'s initializer — which
+      only runs on first mount — never re-ran when switching edit targets or reopening "add".
+      Reopening "add" after an abandoned attempt (or editing a different holding after closing a
+      previous edit) leaked the prior session's stale form state. Fixed with a `key` prop
+      (`"closed"` / `"add"` / the holding's id) on both forms forcing a fresh mount per target;
+      regression-verified live (reopening "add" after an edit session now shows a genuinely blank
+      form). Also fixed a `Dialog` `className` bug found in the same pass: it was merged onto the
+      outer `<dialog>` element, but the visible width comes from the inner content `<div>`'s
+      hardcoded `max-w-md` — so a consumer's `className="max-w-lg"` silently did nothing.
+- [x] **Live-verified against the real backend**, including the actual live-reference display
+      resolving a genuine seeded CDI/IPCA value (not a mock): create a `cdi_percentual` holding
+      (120% do CDI, CDI=10,50%) → table shows "% do CDI · 12,60%"; edit to `ipca_spread`
+      (+5,80%, IPCA=10,50%) → table shows "IPCA + · 16,30%" — both effective-rate computations
+      match the backend's math exactly. Zero console errors.
 
 #### Deliverables
 - A working fixed-income section: list/add/edit/delete, indexer picker, live reference display,
@@ -254,10 +286,18 @@ involved.
 ### Phase 5 — The Carteira screen *(≈ composition)*
 
 #### Tasks
-- [ ] `app/(app)/portfolio/page.tsx` — compose the FII section + fixed-income section, page
+- [x] `app/(app)/portfolio/page.tsx` — compose the FII section + fixed-income section, page
       heading, "Adicionar FII" / "Adicionar renda fixa" CTAs opening their respective modals.
-- [ ] Verify both sections' empty states render independently (not a combined blank page) when the
-      portfolio is entirely empty.
+      No redundant top-level heading added: the shell's `TopBar` already renders the page-level
+      "Carteira" title (route-derived, SPEC-200), so the page just stacks the two sections, each
+      owning its own h2 + CTA — documented in a code comment so this isn't mistaken for an
+      oversight later. Not width-constrained (unlike the narrower Perfil form) — the
+      fixed-income table has 7 columns and needs the room.
+- [x] Verified both sections' empty states render independently (not a combined blank page) when
+      the portfolio is entirely empty — **live-verified** (fresh account, both "Nenhum FII
+      cadastrado" / "Nenhuma renda fixa cadastrada" render side by side, correctly separate).
+      Also live-verified both sections **populated simultaneously** (an FII + a fixed-income
+      holding together) — clean layout at a normal viewport width, zero console errors.
 
 #### Deliverables
 - A working, navigable Carteira screen wired to the live backend end to end.
@@ -267,46 +307,87 @@ involved.
 ### Phase 6 — Testing
 
 #### Unit / Component (Vitest + RTL)
-- [ ] `parseCentavos`/`parseBps` (FR-2119): table-tested, incl. malformed-input rejection and the
-      round-trip with `formatCentavos`/`formatBps`.
-- [ ] Validation gating for both forms (FII: ticker/quantity/price; FI: required fields, liquidity
-      ↔ maturity interaction, past-date rejection).
-- [ ] Empty vs. populated list rendering for both sections.
-- [ ] Submit builds the exact request body for each resource (no `user_id`); a `404` on edit/delete
-      is handled as list-refresh, not an error toast.
-- [ ] Indexer selection: the rate-value label/unit adapts per indexer; edit prefills the correct
+- [x] `parseCentavos`/`parseBps` (FR-2119): table-tested (`lib/money.test.ts`), incl.
+      malformed-input rejection and the round-trip with `formatCentavos`/`formatBps`.
+- [x] Validation gating for both forms (`fii-form.test.tsx`, `fixed-income-form.test.tsx`): FII
+      ticker/quantity/price; FI required fields, liquidity ↔ maturity interaction, past-date
+      rejection (create-only, per FR-2116's edit-mode exemption — tested explicitly).
+- [x] Empty vs. populated list rendering for both sections (`fii-table.test.tsx`,
+      `fixed-income-table.test.tsx`).
+- [x] Submit builds the exact request body for each resource (no `user_id`); a `404` on edit/delete
+      is handled as list-refresh, not an error toast — both tested via a hand-written
+      `mutationHook<TData,TVariables>` fake (generic over create/update/delete's differing
+      TanStack Query shapes; no mocking library, per convention).
+- [x] Indexer selection: the rate-value label/unit adapts per indexer; edit prefills the correct
       indexer + value; the live-reference display renders the fetched value/date and degrades to
-      "indisponível" without blocking save.
-- [ ] Effective-rate reference date (D7): the table shows `reference_date` when the indicator is
+      "indisponível" without blocking save (`fixed-income-form.test.tsx`).
+- [x] Effective-rate reference date (D7): the table shows `reference_date` when the indicator is
       present, "sem referência disponível" when absent — both indicators (CDI/IPCA) and
-      `prefixado` (never shows a reference).
-- [ ] `dialog.tsx`/`confirm-dialog.tsx`: open/close, Escape, backdrop click, focus return.
+      `prefixado` (never shows a reference) (`fixed-income-table.test.tsx`).
+- [x] `dialog.tsx`/`confirm-dialog.tsx`: open/close, close-button, backdrop-click, title/children
+      rendering, required-confirmation, pending-disables-actions, inline error. **Scope note:**
+      jsdom has no `<dialog>` implementation at all (confirmed empirically — `showModal`/`close`
+      are simply absent); added a minimal polyfill (`vitest.setup.ts`) so the component's own
+      control logic is testable, but Escape-to-close and real focus-trap/return are native
+      browser guarantees jsdom cannot emulate — those were proven in this session's live-browser
+      (Playwright) verification during Phases 2–5, not re-provable here.
 
 #### Integration
-- [ ] Against a running backend: create → list reflects it → edit → list reflects it → delete →
-      list no longer has it, for both FII and fixed-income.
+- [x] Against a running backend: create → list reflects it → edit → list reflects it → delete →
+      list no longer has it, for both FII and fixed-income. **Combined with E2E below** — this
+      repo has no separate integration-test tier for the frontend (confirmed: no prior spec built
+      one either); the same real-network Playwright run mirrors `e2e/profile.spec.ts`'s precedent.
 
 #### End-to-End (Playwright)
-- [ ] Add an FII holding and a fixed-income holding, see both appear; delete one, confirm it's
-      gone. Gated to skip without a backend.
+- [x] `e2e/portfolio.spec.ts`: add an FII holding and a fixed-income holding, see both appear;
+      edit the FII holding, the list reflects it; delete it, confirm it's gone (the fixed-income
+      one remains). **Actually run against the real backend** (Go API + Postgres), not just
+      written — caught and fixed two real bugs in the process (see Risks): the empty-state CTA
+      duplication, and non-unique "Editar"/"Excluir" accessible names once both sections have
+      rows (fixed by row-scoping the test, not by weakening it).
 
 #### Deliverables
-- All green in the `web/` CI gate.
+- All green in the `web/` CI gate: `typecheck` ✅ `lint` ✅ `test` (95/95, 13 files) ✅ `check:api`
+  ✅. E2E (`e2e/portfolio.spec.ts`) run and passing against the real backend — not CI-gated
+  (matches `e2e/profile.spec.ts`'s existing precedent, documented in `playwright.config.ts`).
 
 ---
 
 ### Phase 7 — Documentation & Closeout
 
 #### Tasks
-- [ ] **CHANGELOG** `[Unreleased]` entry.
-- [ ] **No `api/openapi.yaml` change** — assert it (consumes SPEC-102 + SPEC-109; adds no
-      endpoint). Note the `lib/api/schema.ts` regen (D9) in the entry — it's a types-only fix, not
-      a contract change.
-- [ ] Flip **SPEC-211 + PLAN-211 → Done**; update the specs/plans indexes.
-- [ ] Optional: note `dialog`/`confirm-dialog` in `design-system.md`.
-- [ ] **Review** with **frontend-reviewer** + **react-correctness-reviewer**; fix blockers.
-- [ ] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` via **frontend-lesson-writer**
-      (product-focused).
+- [x] **CHANGELOG** `[Unreleased]` entry.
+- [x] **No `api/openapi.yaml` change** — confirmed via `git diff main -- api/openapi.yaml` (empty).
+      Noted the `lib/api/schema.ts` regen (D9) in the entry — it's a types-only fix, not a
+      contract change.
+- [x] Flip **SPEC-211 + PLAN-211 → Done**; update the specs/plans indexes.
+- [x] `design-system.md` note: **skipped**, consistent with PLAN-210's own precedent — SPEC-210's
+      new primitives (`segmented`/`chip-toggle`/`slider`) were never added to the design-system
+      doc's component inventory either, so adding it only for `dialog`/`confirm-dialog` would be
+      inconsistent partial documentation rather than closing a real gap.
+- [x] **Review** with **frontend-reviewer** + **react-correctness-reviewer**.
+      **`react-correctness-reviewer`: PASS**, two non-blocking notes (both addressed anyway since
+      they were cheap): `todayISO()`'s SSR-safety was implicit (resting on a default-state
+      short-circuit) — now computed once via `useState(() => todayISO())`, explicit and
+      immune to a same-session midnight boundary; dialogs don't block Escape/backdrop-dismiss
+      while a mutation is pending — confirmed safe (TanStack Query detaches listeners on unmount/
+      `reset()`, verified by reading the installed `@tanstack/query-core` source) and left as
+      intentional UX (blocking dismissal during a slow/hung request would be worse).
+      **`frontend-reviewer`: CHANGES REQUESTED → fixed → re-verified clean.** Two real, correctly
+      caught issues: (1) edit-mode prefill used `(centavos / 100).toFixed(2)` — float arithmetic
+      on a monetary value, banned by CLAUDE.md even for display-only prefill (a real correctness
+      risk, not just style — JS float/decimal rounding can land on a wrong cent for specific
+      values). Fixed with two new pure-integer helpers, `centavosToInputString`/`bpsToInputString`
+      (`lib/money.ts`), test-covered including exact round-trips through `parseCentavos`/
+      `parseBps`. (2) The new `destructive` `Button` variant used the reserved `loss` token as a
+      button fill even at low opacity — the design system explicitly forbids this with no
+      low-opacity exception. Removed the variant entirely; the confirm-delete button now uses the
+      existing neutral `secondary` style. Full gate (`typecheck`/`lint`/`test`/`check:api`/
+      `build`) and the E2E test re-run clean after both fixes.
+- [x] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` via **frontend-lesson-writer**
+      (product-focused, 646 lines) — centers the five real bugs found by five different means
+      (an audit, live-browser verification, an E2E test, and two code-review findings) as the
+      main lesson, alongside the product/UX/backend-contract/harness-engineering sections.
 
 #### Deliverables
 - Docs updated, spec closed, lesson published.
@@ -322,40 +403,46 @@ involved.
 | Two independent CRUD verticals (FII, fixed income) risk duplicated table/modal-form logic | Medium | Accept the duplication for the MVP (two verticals, not five) rather than force a premature generic-CRUD abstraction; revisit only if a third vertical appears |
 | FR-2120's indicator cross-reference (`indexer_type` → which `Indicator` to look up) has an edge case for `prefixado` (no indicator at all) | Low | `findIndicator` is a small pure helper, unit-tested including the `prefixado`/no-lookup case |
 | Scope creep into the Dashboard's current-value computation | Low | BR-2113 draws a hard line (cost basis only); enforced by review |
+| **(materialized, fixed)** `FiiForm`/`FixedIncomeForm` never remounted between edit targets (same JSX position, only `open` toggled) — `useState`'s initializer only runs once, so switching edit targets or reopening "add" leaked the previous session's stale form state | Medium | Found live-verifying Phase 4 (a Playwright script's ambiguous selector surfaced it). Fixed with a `key` per target (`formTarget.id`/`"add"`/`"closed"`) forcing a clean remount — the standard React "key resets state" pattern |
+| **(materialized, fixed)** Each section's empty state showed two identically-labeled "Adicionar…" buttons (header CTA + `EmptyState`'s own CTA) — an a11y/testing ambiguity, not just cosmetic duplication | Low | Found writing the E2E test (`getByRole` strict-mode violation). Fixed by hiding the header CTA specifically when the empty state is showing (`isEmpty` gate) — mutually exclusive by construction, not by test-side workaround |
 
 ---
 
 ## 9. Validation Checklist
 
 ### Functional Validation
-- [ ] FR-2111…FR-2120 implemented; Epic 1 acceptance criteria satisfied for both holding types.
-- [ ] BR-2111…BR-2117 respected (ownership-as-404, money bidirectional-integer, cost-basis-only,
+- [x] FR-2111…FR-2120 implemented; Epic 1 acceptance criteria satisfied for both holding types.
+- [x] BR-2111…BR-2117 respected (ownership-as-404, money bidirectional-integer, cost-basis-only,
       edge validation, no AI guards needed, generated types, reference rates never
       client-computed).
 
 ### Technical Validation
-- [ ] Consumes SPEC-102 + SPEC-109 only; **no `api/openapi.yaml` change**; `check:api` drift
+- [x] Consumes SPEC-102 + SPEC-109 only; **no `api/openapi.yaml` change**; `check:api` drift
       guard green (proves D9 is resolved and stays resolved).
-- [ ] `404`→list-refresh and `401`→login handled; no `user_id` on the wire; no float, no order
-      affordance.
-- [ ] No new runtime dependency (D1/D5/D6 all native-primitive choices).
+- [x] `404`→list-refresh and `401`→login handled; no `user_id` on the wire; no float, no order
+      affordance (the float-in-edit-prefill finding from review is fixed — see Phase 7).
+- [x] No new runtime dependency (D1/D5/D6 all native-primitive choices).
 
 ### Quality Validation
-- [ ] Vitest/RTL + integration + gated E2E passing.
-- [ ] a11y (dialog focus trap/Escape/labelling; AA contrast); reduced-motion respected.
-- [ ] Reviewed by **frontend-reviewer** + **react-correctness-reviewer**; docs updated.
+- [x] Vitest/RTL (106 tests) + the combined integration/E2E run passing.
+- [x] a11y (dialog labelling via `aria-labelledby`, required `title`; AA contrast — no new colors
+      introduced); reduced-motion respected (global media query). Native `<dialog>` focus-trap/
+      Escape are the browser's own guarantee, live-verified in Phases 2–5; not re-provable in
+      jsdom (documented in Phase 6).
+- [x] Reviewed by **frontend-reviewer** + **react-correctness-reviewer**; docs updated.
 
 ---
 
 ## 10. Definition of Done
 
-- [ ] All phases complete; SPEC-211 acceptance criteria satisfied.
-- [ ] `lib/api/schema.ts` regenerated and in lockstep with `api/openapi.yaml` (`check:api` green).
-- [ ] Unit/component + integration + gated E2E green in the `web/` CI gate.
-- [ ] **CHANGELOG** updated; **`api/openapi.yaml` unchanged** (asserted).
-- [ ] **SPEC-211 + PLAN-211 flipped to Done**; specs/plans indexes updated.
-- [ ] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` produced (via **frontend-lesson-writer**).
-- [ ] Reviewed by the frontend review agents.
+- [x] All phases complete; SPEC-211 acceptance criteria satisfied.
+- [x] `lib/api/schema.ts` regenerated and in lockstep with `api/openapi.yaml` (`check:api` green).
+- [x] Unit/component (106 tests) + the combined integration/E2E run green; `web/` gate
+      (`typecheck`/`lint`/`test`/`check:api`/`build`) all clean.
+- [x] **CHANGELOG** updated; **`api/openapi.yaml` unchanged** (asserted via `git diff`).
+- [x] **SPEC-211 + PLAN-211 flipped to Done**; specs/plans indexes updated.
+- [x] **PT-BR lesson** `docs/lessons/SPEC-211-aula.html` produced (via **frontend-lesson-writer**).
+- [x] Reviewed by the frontend review agents (both required fixes applied, re-verified clean).
 - [ ] Pull Request approved.
 
 ---
@@ -363,11 +450,13 @@ involved.
 ## 11. Deliverables
 
 ### Code Deliverables
-- `lib/portfolio/{holdings,market,labels}.ts`, `lib/money.ts` (extended), `components/ui/{dialog,confirm-dialog}.tsx`,
+- `lib/portfolio/{holdings,market,labels}.ts`, `lib/date.ts`, `lib/money.ts` (extended, incl. the
+  review-driven `centavosToInputString`/`bpsToInputString`), `components/ui/{dialog,confirm-dialog}.tsx`,
   the FII and fixed-income table/form components, the Carteira screen, and their tests.
 
 ### Documentation Deliverables
-- CHANGELOG entry, PT-BR lesson, specs/plans index updates; optional `design-system.md` note.
+- CHANGELOG entry, PT-BR lesson, specs/plans index updates; `design-system.md` note skipped
+  (consistent with SPEC-210's own precedent).
 
 ---
 

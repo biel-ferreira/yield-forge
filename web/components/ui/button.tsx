@@ -13,7 +13,8 @@ const variants: Record<Variant, string> = {
   // gold fill + soft glow
   primary: "bg-primary text-on-primary glow-gold hover:bg-primary-active",
   // preferred lighter treatment: gold glowing outline
-  outline: "border border-primary/50 bg-primary/5 text-primary-tint glow-gold-soft hover:bg-primary/10",
+  outline:
+    "border border-primary/50 bg-primary/5 text-primary-tint glow-gold-soft hover:bg-primary/10",
   secondary: "border border-hairline bg-elevated text-on-dark hover:bg-hairline/50",
   ghost: "text-muted-strong hover:bg-elevated hover:text-on-dark",
   link: "text-primary-tint underline-offset-4 hover:underline",

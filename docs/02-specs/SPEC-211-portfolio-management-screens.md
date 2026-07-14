@@ -7,7 +7,7 @@
 | Feature Name | Portfolio Management Screens                                          |
 | Feature ID   | SPEC-211                                                              |
 | Version      | 0.1.0                                                                 |
-| Status       | Draft                                                                 |
+| Status       | Done                                                                  |
 | Author       | Gabigol                                                              |
 | Last Updated | 2026-07-02                                                            |
 | Related PRD  | [Epic 1 / FR-001, FR-002](../01-product/PRD.md)                       |

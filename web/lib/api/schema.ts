@@ -404,6 +404,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/market/indicators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The latest SELIC/CDI/IPCA reference rates
+         * @description Global reference data (no user_id) reused to resolve a fixed-income holding's
+         *     effective annual rate (SPEC-109). An indicator with no ingested value yet is
+         *     omitted from the response rather than failing the request.
+         */
+        get: operations["listMarketIndicators"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -658,8 +680,18 @@ export interface components {
              * @description Invested amount in centavos (integer, never a float).
              */
             invested_amount_centavos: number;
-            /** @description Annual rate in basis points (1 bp = 0.01%). */
+            /**
+             * @description Meaning depends on indexer_type (SPEC-109): the flat annual rate for
+             *     prefixado; the percentage of CDI in bps-of-percent for cdi_percentual
+             *     (12000 = 120%); the spread over IPCA in bps for ipca_spread (580 = +5.80%).
+             */
             annual_rate_bps: number;
+            /**
+             * @description "" / omitted defaults to prefixado (SPEC-109 BR-1093).
+             * @default prefixado
+             * @enum {string}
+             */
+            indexer_type: "prefixado" | "cdi_percentual" | "ipca_spread";
             /**
              * Format: date
              * @description Maturity as `YYYY-MM-DD`; null/omitted for daily-liquidity holdings.
@@ -675,7 +707,16 @@ export interface components {
             institution: string;
             /** Format: int64 */
             invested_amount_centavos: number;
+            /** @description The raw stored value — see FixedIncomeRequest.annual_rate_bps. */
             annual_rate_bps: number;
+            /** @enum {string} */
+            indexer_type?: "prefixado" | "cdi_percentual" | "ipca_spread";
+            /**
+             * @description Computed, never persisted (SPEC-109): the resolved current annual rate —
+             *     equal to annual_rate_bps for prefixado; resolved against the latest
+             *     SELIC/CDI/IPCA (GET /market/indicators) for cdi_percentual/ipca_spread.
+             */
+            effective_annual_rate_bps?: number;
             /** Format: date */
             maturity_date?: string | null;
             /** @enum {string} */
@@ -684,6 +725,18 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /** @description One latest observation of a SPEC-006 macro indicator (SPEC-109 FR-1095). */
+        MarketIndicatorResponse: {
+            /** @enum {string} */
+            indicator: "selic" | "cdi" | "ipca";
+            /**
+             * Format: int64
+             * @description The rate in basis points (1 bp = 0.01%) — never a float.
+             */
+            value_bps: number;
+            /** Format: date */
+            reference_date: string;
         };
     };
     responses: {
@@ -1462,6 +1515,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listMarketIndicators: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The latest observation per indicator (possibly a subset, or empty). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketIndicatorResponse"][];
+                };
             };
             401: components["responses"]["Unauthorized"];
         };

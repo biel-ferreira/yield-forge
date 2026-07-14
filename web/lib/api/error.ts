@@ -9,3 +9,18 @@ export function backendError(error: unknown): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * A backend error carrying its HTTP status, so a caller can distinguish e.g. a `404`
+ * (already-gone/not-owned — SPEC-211 BR-2111, refresh the list silently) from a `400`
+ * (validation — show the message inline).
+ */
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
