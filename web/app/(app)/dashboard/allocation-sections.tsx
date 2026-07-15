@@ -54,17 +54,17 @@ export function AllocationSections({ dashboard }: { dashboard: Dashboard }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card className="p-6">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
           Alocação por classe de ativo
-        </h3>
+        </h2>
         <AllocationBar segments={classSegments} className="mt-4" />
       </Card>
 
       {hasFiiExposure && (
         <Card className="p-6">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Exposição por setor (FIIs)
-          </h3>
+          </h2>
           <AllocationBar segments={sectorSegments} className="mt-4" />
         </Card>
       )}

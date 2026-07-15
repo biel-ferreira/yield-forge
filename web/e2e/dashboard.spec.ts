@@ -32,9 +32,13 @@ test("empty dashboard, then reflects a holding added via Carteira", async ({ pag
   await fiDialog.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("CDB Banco X")).toBeVisible();
 
-  // Back on the Painel: a non-zero patrimony, matching what was just invested (no market-value
-  // drift possible for a same-day prefixado holding — the figures must match exactly).
-  await page.goto("/dashboard");
+  // Back on the Painel — via the sidebar (a real SPA navigation, not a full reload/page.goto).
+  // This is the exact path a review finding caught as broken: with a 30s global staleTime and
+  // no cross-feature cache invalidation, this client-side transition would have silently served
+  // the pre-mutation (empty) dashboard from cache. Proves the fix, not just a reload that would
+  // mask it by starting from a fresh QueryClient regardless.
+  await page.getByRole("link", { name: "Painel" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText("Patrimônio total")).toBeVisible();
   // Both the hero AND the "Total investido" metric card legitimately show R$ 5.000,00 — a
   // same-day prefixado holding has zero elapsed days of accrual, so current value === cost basis.

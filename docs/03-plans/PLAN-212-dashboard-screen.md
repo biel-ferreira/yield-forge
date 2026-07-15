@@ -6,11 +6,11 @@
 | --------------- | --------------------------------------- |
 | Plan Name       | Dashboard Screen (Painel)               |
 | Related Feature | Dashboard Screen (Painel)               |
-| Related Spec    | [SPEC-212](../02-specs/SPEC-212-dashboard-screen.md) (Approved) |
+| Related Spec    | [SPEC-212](../02-specs/SPEC-212-dashboard-screen.md) (Done) |
 | Version         | 0.1.0                                    |
-| Status          | Draft                                    |
+| Status          | Done                                      |
 | Author          | Gabigol                                  |
-| Last Updated    | 2026-07-13                               |
+| Last Updated    | 2026-07-14                               |
 
 > **Phase-order note.** Frontend spec — the template's backend phase order is mapped to its
 > frontend analogue (data → components → screen → tests → docs), the same mapping PLAN-210 used.
@@ -60,8 +60,8 @@ Carteira. No new endpoint, **no `api/openapi.yaml` change**.
   Open Question #1 / this plan's D3).
 - A donut chart or any new chart primitive (resolved: reuse `AllocationBar`, SPEC-212 Open
   Question #2 / this plan's D4).
-- Cross-screen cache invalidation from Carteira's mutations (resolved: deferred, SPEC-212 Open
-  Question #3 / this plan's D5).
+- ~~Cross-screen cache invalidation from Carteira's mutations~~ — **originally deferred, then
+  implemented in Phase 5** once review proved the deferral assumption wrong (D5).
 - Any historical/time-series balance view — the backend computes only the current snapshot.
 
 ---
@@ -91,7 +91,7 @@ primitives.
 | D2 | Component granularity | **Two** new presentational files, not five: `summary-hero.tsx` (hero + metric row + stale-ticker notice — everything derived from `summary`/`stale_tickers`) and `allocation-sections.tsx` (asset-class + FII-sector breakdowns — both `AllocationBar`-based, no per-item interactivity, unlike SPEC-211's CRUD verticals which justified more files). Matches "don't over-abstract" — this screen has no forms/modals to separate out. |
 | D3 | SPEC-212 Open Question #1 (the shell's global "+ Adicionar ativo" button) | **Resolved, user-accepted: stays a no-op.** Not wired to anything from this screen. |
 | D4 | SPEC-212 Open Question #2 (donut vs. spectrum bar for FII sectors) | **Resolved, user-accepted: reuse `AllocationBar`** for both FR-2123 and FR-2124 — no new chart component. |
-| D5 | SPEC-212 Open Question #3 (cross-screen cache invalidation) | **Resolved, user-accepted: deferred.** TanStack Query's default `refetchOnMount` covers the common Carteira→Painel navigation case adequately for the MVP. |
+| D5 | SPEC-212 Open Question #3 (cross-screen cache invalidation) | **Reversed in Phase 5 review.** Originally resolved as "deferred — `refetchOnMount`'s default covers it." `react-correctness-reviewer` proved that assumption wrong: `refetchOnMount` only forces a network refetch when the cached data is already **stale**, and the global `staleTime` is 30s (`app/providers.tsx`) — so a Carteira→Painel SPA navigation within that window silently served pre-mutation figures, undermining BR-2121's core premise. **Implemented**: all six holdings mutations (`lib/portfolio/holdings.ts`) now invalidate `DASHBOARD_KEY` (exported from `lib/dashboard/dashboard.ts`) alongside their own list, via a small shared `invalidateHoldingsAndDashboard` helper. A direct `lib/portfolio` → `lib/dashboard` import is a bit of reaching-across for two peer feature modules; a more scalable cross-feature invalidation strategy (a shared prefix/predicate) is worth revisiting once SPEC-213+ adds more consumers of holdings-derived data (see Post-Implementation Tasks) — not built now to avoid speculative overengineering for consumers that don't exist yet. |
 | D6 | FII sector label map exhaustiveness (discovered drafting this plan) | `api/openapi.yaml`'s `fii_sectors[].sector` is declared `type: string` with **no `enum:` constraint** (unlike `indexer_type`, SPEC-109) — so the generated TS type is plain `string`, not a closed union. `lib/dashboard/labels.ts`'s `SECTOR_LABELS` is built as a `Record<string, string>` with a **documented fallback** (an unmapped sector shows its raw value, capitalized) rather than assuming exhaustiveness — a `Record<Sector, string>` (SPEC-211's `INDEXER_LABELS` pattern) isn't achievable here without an `api/openapi.yaml` change, which is out of scope for this spec. |
 | D7 | Zero-share allocation entries (FR-2123) | `allocation[]` entries with `share_bps: 0` (Stocks/ETFs, always 0 in the MVP per SPEC-103 D5) are **filtered out before rendering** — a pure client-side display decision over an already-server-sourced list, not hiding real data (the number is still legitimately 0; it's just not worth a zero-width bar segment or a confusing legend row). |
 
@@ -252,11 +252,37 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 ### Phase 5 — Documentation & Closeout
 
 #### Tasks
-- [ ] **CHANGELOG** `[Unreleased]` entry.
-- [ ] **No `api/openapi.yaml` change** — assert it (consumes SPEC-103; adds no endpoint).
-- [ ] Flip **SPEC-212 + PLAN-212 → Done**; update the specs/plans indexes.
-- [ ] **Review** with **frontend-reviewer** + **react-correctness-reviewer**; fix blockers.
-- [ ] **PT-BR lesson** `docs/lessons/SPEC-212-aula.html` via **frontend-lesson-writer**
+- [x] **CHANGELOG** `[Unreleased]` entry.
+- [x] **No `api/openapi.yaml` change** — confirmed via `git diff main -- api/openapi.yaml` (empty).
+- [x] Flip **SPEC-212 + PLAN-212 → Done**; update the specs/plans indexes.
+- [x] **Review** with **frontend-reviewer** + **react-correctness-reviewer**.
+      **`frontend-reviewer`: PASS**, two non-blocking notes, one applied: the two
+      `AllocationSections` card titles used `<h3>` with no `<h2>` anywhere on the page (the
+      shell's `TopBar` renders the page `<h1>`) — bumped to `<h2>` to match
+      `fii-table.tsx`/`fixed-income-table.tsx`'s precedent. The second note (`aria-live` on
+      loading/error) was **not** applied — no sibling screen has it either, so a one-screen
+      addition would read as inconsistent rather than an improvement (see Post-Implementation
+      Tasks for the systemic follow-up).
+      **`react-correctness-reviewer`: CHANGES REQUESTED → fixed → re-verified clean.** One real,
+      significant bug: none of the six holdings mutations (`lib/portfolio/holdings.ts`,
+      SPEC-211) invalidated the Dashboard's query cache, and the global `staleTime` is 30s
+      (`app/providers.tsx`) — so a Carteira→Painel **SPA navigation** (not a full reload) within
+      that window silently served pre-mutation figures, directly undermining BR-2121's "every
+      figure is authoritative" premise. This also reverses this plan's own D5 (originally
+      "deferred, `refetchOnMount` covers it" — that assumption was wrong). Fixed: `DASHBOARD_KEY`
+      exported from `lib/dashboard/dashboard.ts`, all six mutations now invalidate it alongside
+      their own list via a shared `invalidateHoldingsAndDashboard` helper. Added **new** direct
+      hook tests (`lib/portfolio/holdings.test.tsx` — the existing SPEC-211 component tests mock
+      this module wholesale and never actually exercised the real invalidation logic) proving the
+      fix for both `onSuccess` and `onSettled` mutation paths, across both FII and fixed-income
+      resources. Also **strengthened** `e2e/dashboard.spec.ts` to navigate back to `/dashboard`
+      via a real sidebar click (`getByRole("link", { name: "Painel" })`) instead of
+      `page.goto()` — the reviewer correctly noted the original E2E test's full-reload navigation
+      accidentally masked the bug (a fresh page load always gets a fresh `QueryClient`, so it
+      never exercises the SPA-cache staleness path a real user would hit). Re-ran the E2E test
+      against the real backend after the fix: passes, proving the invalidation actually works
+      live, not just in a mocked unit test.
+- [x] **PT-BR lesson** `docs/lessons/SPEC-212-aula.html` via **frontend-lesson-writer**
       (product-focused).
 
 #### Deliverables
@@ -273,37 +299,42 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 | Empty-portfolio detection (`both totals === 0`) misfires for a real edge case (e.g. a FII gifted at zero cost basis, nonzero current value) | Low | The condition requires **both** totals to be zero — a nonzero current value with zero cost basis does not trigger it; covered in SPEC-212 §9 Edge Cases and worth a regression test if it proves fragile |
 | Scope creep into Health Score / Insights, since the current stub's copy already (incorrectly) implies they're part of this spec | Low | SPEC-212 §2 Scope is explicit; Phase 3 replaces the stub's copy along with the rest of it |
 | **(materialized, fixed)** The empty state's CTA was written as `Button asChild` wrapping an anchor — `Button` has no `Slot`/`asChild` support at all | Low | Found wiring Phase 3, before it ever shipped. Fixed with `useRouter().push(...)` on a plain `onClick`, matching the codebase's own established navigation-after-action pattern (`register`/`login` pages) |
+| **(materialized, fixed — High, not Low)** No holdings mutation invalidated the Dashboard's query cache; a 30s global `staleTime` meant an SPA navigation back to Painel after editing Carteira could silently show pre-mutation figures | High | Caught by `react-correctness-reviewer` in Phase 5, not by the original D5 assumption or by the E2E test as first written (which used `page.goto()`, a full reload, accidentally sidestepping the bug). Fixed with cross-feature cache invalidation (D5, reversed); proven with new direct hook tests plus a strengthened E2E test that actually performs an SPA navigation |
 
 ---
 
 ## 9. Validation Checklist
 
 ### Functional Validation
-- [ ] FR-2121…FR-2128 implemented; Epic 3 acceptance criteria satisfied.
-- [ ] BR-2121…BR-2126 respected (read-only/no-client-computation, integer money display-only,
+- [x] FR-2121…FR-2128 implemented; Epic 3 acceptance criteria satisfied.
+- [x] BR-2121…BR-2126 respected (read-only/no-client-computation, integer money display-only,
       no AI guards needed, generated types, visible degradation, identity from session).
 
 ### Technical Validation
-- [ ] Consumes SPEC-103 only; **no `api/openapi.yaml` change**; `check:api` drift guard green.
-- [ ] `401`→login handled; no `user_id` on the wire; no float, no order affordance.
-- [ ] No new runtime dependency; no new UI primitive (D2/D4).
+- [x] Consumes SPEC-103 only; **no `api/openapi.yaml` change**; `check:api` drift guard green.
+- [x] `401`→login handled; no `user_id` on the wire; no float, no order affordance.
+- [x] No new runtime dependency; no new UI primitive (D2/D4).
 
 ### Quality Validation
-- [ ] Vitest/RTL + integration + gated E2E passing.
-- [ ] a11y (AA contrast on gain/loss text; no color-only signal — the `▲`/`▼` glyphs carry the
-      direction too, not just color).
-- [ ] Reviewed by **frontend-reviewer** + **react-correctness-reviewer**; docs updated.
+- [x] Vitest/RTL (134 tests) + the combined integration/E2E run passing.
+- [x] a11y (AA contrast on gain/loss text; no color-only signal — the `▲`/`▼` glyphs carry the
+      direction too, not just color; heading levels corrected to `<h2>` per Phase 5 review).
+- [x] Reviewed by **frontend-reviewer** (PASS) + **react-correctness-reviewer** (CHANGES
+      REQUESTED → the cross-screen cache-invalidation bug fixed → re-verified clean); docs
+      updated.
 
 ---
 
 ## 10. Definition of Done
 
-- [ ] All phases complete; SPEC-212 acceptance criteria satisfied.
-- [ ] Unit/component + integration + gated E2E green in the `web/` CI gate.
-- [ ] **CHANGELOG** updated; **`api/openapi.yaml` unchanged** (asserted).
-- [ ] **SPEC-212 + PLAN-212 flipped to Done**; specs/plans indexes updated.
-- [ ] **PT-BR lesson** `docs/lessons/SPEC-212-aula.html` produced (via **frontend-lesson-writer**).
-- [ ] Reviewed by the frontend review agents.
+- [x] All phases complete; SPEC-212 acceptance criteria satisfied.
+- [x] Unit/component (134 tests) + the combined integration/E2E run green; `web/` gate
+      (`typecheck`/`lint`/`test`/`check:api`/`build`) all clean.
+- [x] **CHANGELOG** updated; **`api/openapi.yaml` unchanged** (asserted via `git diff`).
+- [x] **SPEC-212 + PLAN-212 flipped to Done**; specs/plans indexes updated.
+- [x] **PT-BR lesson** `docs/lessons/SPEC-212-aula.html` produced (via **frontend-lesson-writer**).
+- [x] Reviewed by the frontend review agents (one real bug found and fixed — the cross-screen
+      cache-invalidation gap — re-verified clean after the fix).
 - [ ] Pull Request approved.
 
 ---
@@ -312,7 +343,8 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 
 ### Code Deliverables
 - `lib/dashboard/{dashboard,labels}.ts`, `app/(app)/dashboard/{summary-hero,allocation-sections,page}.tsx`,
-  and their tests.
+  the cross-feature invalidation fix in `lib/portfolio/holdings.ts`, and their tests (incl. the
+  new `lib/portfolio/holdings.test.tsx`).
 
 ### Documentation Deliverables
 - CHANGELOG entry, PT-BR lesson, specs/plans index updates.
@@ -322,14 +354,20 @@ Revert the `web/**` changes — no backend, no data, no migration involved.
 ## 12. Post-Implementation Tasks
 
 ### Future Improvements
-- Cross-screen cache invalidation (SPEC-212 Open Question #3 / D5) if stale-after-Carteira-edit
-  proves confusing in practice.
+- A more scalable cross-feature cache-invalidation strategy (a shared prefix/predicate instead of
+  each holdings mutation explicitly knowing about `DASHBOARD_KEY`) once SPEC-213+ adds more
+  consumers of holdings-derived data — D5's direct-import fix is right-sized for one consumer,
+  not built to anticipate more.
 - A donut-chart upgrade for FII sector exposure (Open Question #2 / D4) if the spectrum bar
   proves visually insufficient once real users see it.
 - Wiring the shell's "+ Adicionar ativo" button (Open Question #1 / D3), once some screen
   actually claims it.
 - An `api/openapi.yaml` `enum:` constraint on `fii_sectors[].sector` (D6) — a small backend-side
   contract precision improvement, out of scope for this frontend spec.
+- A systemic `aria-live`/`role="status"` pass for loading/error states across the whole app
+  (`frontend-reviewer` non-blocking note) — not added to this screen alone, since no sibling
+  screen (Carteira, Perfil) has it either; a one-screen addition would read as inconsistent
+  rather than an improvement. Worth its own cross-cutting pass.
 
 ### Technical Debt
 - None anticipated beyond D6's documented fallback, which is a deliberate defensive design

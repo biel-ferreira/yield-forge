@@ -7,7 +7,11 @@ import type { components } from "@/lib/api/schema";
 // money/percentage value client-side (BR-2121).
 export type Dashboard = components["schemas"]["DashboardResponse"];
 
-const DASHBOARD_KEY = ["dashboard"] as const;
+// Exported so lib/portfolio/holdings.ts's mutations can invalidate it (SPEC-212 review finding):
+// staleTime is 30s globally (app/providers.tsx), so without this, a Carteira→Painel SPA
+// navigation within that window would silently serve pre-mutation figures — undermining
+// BR-2121's "every figure is authoritative" premise for exactly as long as the cache lives.
+export const DASHBOARD_KEY = ["dashboard"] as const;
 
 /** The caller's computed dashboard (GET /dashboard). */
 export function useDashboard() {

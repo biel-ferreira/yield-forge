@@ -7,7 +7,7 @@
 | Feature Name | Dashboard Screen (Painel)                                              |
 | Feature ID   | SPEC-212                                                                |
 | Version      | 0.1.0                                                                   |
-| Status       | Approved                                                                |
+| Status       | Done                                                                    |
 | Author       | Gabigol                                                                |
 | Last Updated | 2026-07-13                                                              |
 | Related PRD  | [Epic 3](../01-product/PRD.md) (FR-004 Portfolio Summary, FR-005 Allocation Breakdown) |
