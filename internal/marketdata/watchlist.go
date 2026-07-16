@@ -2,9 +2,11 @@ package marketdata
 
 import "context"
 
-// Watchlist is a static TickerSource backed by a configured list of tickers — the MVP
-// stand-in until holdings drive ingestion (SPEC-102). It validates every ticker up front,
-// so a typo in MARKETDATA_WATCHLIST fails fast at startup rather than silently each run.
+// Watchlist is a static TickerSource backed by a configured list of tickers. Since SPEC-007,
+// holdings-derived tickers are the primary source (internal/marketdata/ingest's holdingsSource);
+// Watchlist now serves as an optional seed unioned with them — handy for seeding local/dev/CI
+// before any holdings exist. It validates every ticker up front, so a typo in
+// MARKETDATA_WATCHLIST fails fast at startup rather than silently each run.
 type Watchlist struct {
 	tickers []Ticker
 }

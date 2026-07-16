@@ -14,22 +14,28 @@ import (
 	"github.com/biel-ferreira/yield-forge/internal/marketdata/yahoo"
 	"github.com/biel-ferreira/yield-forge/internal/platform/clock"
 	"github.com/biel-ferreira/yield-forge/internal/platform/config"
+	portfoliopostgres "github.com/biel-ferreira/yield-forge/internal/portfolio/postgres"
 )
 
 // New builds the ingestion Worker from config: the configured provider (fake | live), the
-// Postgres repositories, and the watchlist TickerSource. An invalid watchlist ticker fails
+// Postgres repositories, and the TickerSource. The effective ticker set is the deduplicated
+// union of the tickers users actually hold (the primary source, SPEC-007 FR-072) and the
+// optional MARKETDATA_WATCHLIST seed (SPEC-007 FR-073) — an invalid watchlist entry still fails
 // fast here (SPEC-006 FR-604). Nothing runs until RunOnce/the scheduler is invoked.
 func New(cfg config.Config, db *sql.DB, logger *slog.Logger, clk clock.Clock) (*Worker, error) {
 	watchlist, err := marketdata.NewWatchlist(cfg.MarketDataWatchlist)
 	if err != nil {
 		return nil, fmt.Errorf("market data watchlist: %w", err)
 	}
+	holdings := newHoldingsSource(portfoliopostgres.New(db), logger)
+	tickers := newUnionSource(logger, holdings, watchlist)
+
 	return newWorker(
 		buildProvider(cfg, clk),
 		cfg.MarketDataProvider,
 		mdpostgres.NewFIIQuoteRepository(db),
 		mdpostgres.NewMacroRepository(db),
-		watchlist,
+		tickers,
 		clk,
 		logger,
 	), nil
