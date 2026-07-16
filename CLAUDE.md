@@ -139,6 +139,13 @@ Task runner is [`Task`](https://taskfile.dev) (`Taskfile.yml`); raw `go` fallbac
 - Migrations are paired up/down SQL in `migrations/` (embedded via `go:embed`),
   applied **manually** — never auto-run. Local Postgres is on host port **5433**.
 - Integration tests skip cleanly without `TEST_DATABASE_URL`; gated by `testing.Short()`.
+- **`TEST_DATABASE_URL` must point at a disposable Postgres, never the dev stack (port 5433 /
+  `yieldforge_dev`).** Integration test setup helpers `TRUNCATE` tables — pointed at the dev DB
+  they destroy real hand-seeded data (this happened once; a `PreToolUse` hook,
+  `.claude/hooks/block-dev-db-test.ps1`, now blocks it). Spin up a throwaway instance instead:
+  `docker run --rm -d --name yf-test-pg -e POSTGRES_USER=yieldforge -e POSTGRES_PASSWORD=yieldforge
+  -e POSTGRES_DB=yieldforge_test -p 5434:5432 postgres:16-alpine`, then
+  `TEST_DATABASE_URL="postgres://yieldforge:yieldforge@localhost:5434/yieldforge_test?sslmode=disable"`.
 
 ## Environment notes
 

@@ -148,6 +148,10 @@ func (w *Worker) ingestFII(ctx context.Context, sum *Summary) {
 	if len(tickers) == 0 {
 		return // macro-only run
 	}
+	// Resolved ticker count (SPEC-007 FR-077/observability): no user_id, no PII — just a count,
+	// so an operator can see ingestion learned N tickers from holdings (+ any watchlist seed)
+	// without needing a DB query.
+	w.logger.Info("market data: resolved ticker set", slog.Int("count", len(tickers)))
 
 	// Child span for the provider call (SPEC-006 FR-609): provider/kind/outcome only.
 	fctx, span := w.tracer.Start(ctx, "marketdata.fetch_fii")
