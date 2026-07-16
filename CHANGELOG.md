@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-212 — Dashboard Screen (Painel)**: turns the `/dashboard` stub into the frontend face
+  of SPEC-103 — a single read-only view of the hero patrimony (current value + growth **vs. cost
+  basis**, never mislabelled as a monthly figure the backend doesn't track), a three-metric row
+  (total invested, monthly passive income, growth), asset-class allocation, and FII sector
+  exposure. Every figure is read verbatim from `GET /dashboard`, never summed or recomputed
+  client-side (BR-2121) — this screen's only job is faithful display. Reuses the existing
+  `AllocationBar` (SPEC-200) for both breakdowns rather than a new chart component; a zero-share
+  asset class (Stocks/ETFs, always 0 in the MVP) is filtered from the legend rather than shown as
+  a confusing zero-width segment. A held FII with no current quote is surfaced as a visible
+  degradation notice (never hidden, never silently blended in), and a fully empty portfolio gets
+  its own dedicated empty state with a CTA to Carteira, distinct from a loading/error state. The
+  FII sector label map (`lib/dashboard/labels.ts`) is built defensively — `api/openapi.yaml`'s
+  `fii_sectors[].sector` is plain `string` with no `enum:` constraint (unlike `indexer_type`),
+  so an unmapped future sector value falls back to its capitalized raw value instead of
+  rendering blank. No new endpoint; **no `api/openapi.yaml` change**. Two real bugs caught before
+  they shipped: the empty-state CTA was initially written as `Button asChild` wrapping an anchor
+  — `Button` has no Radix `Slot`/`asChild` support at all in this codebase — fixed with
+  `useRouter().push(...)`, matching the established navigation-after-action pattern; and an E2E
+  assertion initially expected a unique `R$ 5.000,00` match, which correctly turned out to be a
+  strict-mode locator catching a *real, non-buggy* duplicate (the hero and "Total investido"
+  legitimately show the identical figure for a same-day zero-accrual holding) — diagnosed
+  correctly rather than loosened blindly. Reviewed by `frontend-reviewer` +
+  `react-correctness-reviewer`. PT-BR lesson `docs/lessons/SPEC-212-aula.html`.
+
 - **SPEC-211 — Portfolio Management Screens (Carteira)**: turns the `/portfolio` stub into the
   frontend face of SPEC-102 (FII + fixed income) and SPEC-109 (the rate indexer). Two independent
   CRUD verticals — **FII** (ticker, quantity, average price) and **fixed income** (name,
