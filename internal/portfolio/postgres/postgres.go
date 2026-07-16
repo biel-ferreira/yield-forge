@@ -29,6 +29,9 @@ const invalidTextRepresentation = "22P02"
 // Compile-time check that the adapter satisfies the port.
 var _ portfolio.Repository = Repository{}
 
+// Compile-time check that the adapter also satisfies the system-scoped read port (SPEC-007).
+var _ portfolio.SystemReader = Repository{}
+
 // Repository is the Postgres-backed portfolio.Repository.
 type Repository struct {
 	db *sql.DB
@@ -84,6 +87,31 @@ func (r Repository) ListFIIHoldingsByUserID(ctx context.Context, userID string) 
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list fii holdings: %w", err)
+	}
+	return out, nil
+}
+
+// DistinctFIITickers returns the distinct FII tickers held across ALL users (SPEC-007 FR-071,
+// BR-071) — a system read, deliberately parameterless and unscoped, never WHERE user_id = $1.
+// An empty result is a valid empty slice, not a "not found" error.
+func (r Repository) DistinctFIITickers(ctx context.Context) ([]string, error) {
+	const q = `SELECT DISTINCT ticker FROM fii_holdings ORDER BY ticker`
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("list distinct fii tickers: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var ticker string
+		if err := rows.Scan(&ticker); err != nil {
+			return nil, fmt.Errorf("list distinct fii tickers: %w", err)
+		}
+		out = append(out, ticker)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list distinct fii tickers: %w", err)
 	}
 	return out, nil
 }
