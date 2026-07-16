@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 212 — SPEC-212: Tela Dashboard (Painel) | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#e9a94c,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 212 · O Painel · onde os fatos registrados na Carteira viram um retrato do patrimônio</span>
+    <h1>SPEC-212 — Tela Dashboard (Painel)</h1>
+    <p>O SPEC-211 ensinou onde Rafael e Carla <strong>registram</strong> o que possuem. O SPEC-212 ensina onde eles
+    <strong>enxergam</strong> o resultado: a tela <strong>Painel</strong>, a primeira que o investidor vê ao entrar no app — o
+    patrimônio total, a valorização, e como tudo está distribuído entre classes de ativo e setores de FII. É a tela
+    mais simples deste track em termos de escrita de código (nenhum formulário, nenhuma mutação, um único
+    <code>GET</code>) e, ao mesmo tempo, a que carrega a promessa mais absoluta da spec: <strong>nenhum número aqui é
+    calculado pelo cliente</strong>. A aula de hoje é sobre um jeito específico de essa promessa quase ter sido quebrada
+    — não por um cálculo errado, mas por um <strong>cache que ninguém avisou de que estava desatualizado</strong> — e as
+    quatro camadas de verificação que precisaram existir até alguém finalmente enxergar o problema. Você <strong>não
+    precisa dominar React</strong> para acompanhar.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#big">A visão geral: a tela mais simples de escrever, a garantia mais absoluta de manter</a></li>
+    <li><a href="#valor">O que o Painel entrega e para quem (Rafael &amp; Carla)</a></li>
+    <li><a href="#jornada">A jornada do usuário: do estado vazio ao painel populado</a></li>
+    <li><a href="#decisoes">As decisões de produto e UX — e como as travas do produto ficam visíveis</a></li>
+    <li><a href="#bug">LIÇÃO PRINCIPAL — o painel desatualizado: um bug pego em quatro camadas</a></li>
+    <li><a href="#outros">Dois bugs menores, pegos antes de chegarem à revisão</a></li>
+    <li><a href="#recorte">O que ficou de fora e por quê (o recorte da spec)</a></li>
+    <li><a href="#contrato">Conexão com o backend: o contrato como fronteira</a></li>
+    <li><a href="#construido">Como foi construído (visão geral, sem virar tutorial de React)</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu e verificou isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering &amp; Produto</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. A visão geral: a tela mais simples de escrever, a garantia mais absoluta de manter</h2>
+
+<p>O SPEC-212 transforma a rota <code>/dashboard</code> — até aqui um <code>EmptyState</code> stubado pelo SPEC-200, com um texto
+que insinuava (incorretamente) que Health Score e Insights de IA já estariam ali — na tela real <strong>Painel</strong>: a
+frente de cliente do backend <strong>SPEC-103</strong>, que já calcula tudo (patrimônio, alocação, exposição setorial) a
+partir dos holdings que o SPEC-211 deixou salvos mais os dados de mercado que o SPEC-006 ingere.</p>
+
+<div class="diagram">ANTES (SPEC-200 — a rota stubada)                    DEPOIS (SPEC-212 — o Painel real)
+  /dashboard -&gt; EmptyState com texto sobre           /dashboard -&gt; SummaryHero + AllocationSections
+    "Health Score" e "Insights de IA" (nao e          um unico GET /dashboard, ZERO calculo no cliente
+    escopo desta spec, e o texto estava errado)       cada figura formatada, nunca somada/subtraida
+  nenhuma leitura real do backend SPEC-103            reusa o AllocationBar que ja existia (SPEC-200)
+  0 conexao visivel entre Carteira e Painel           ...ou quase: o cache entre as duas telas tinha um furo</div>
+
+<p>Ao contrário do SPEC-211 (duas verticais de CRUD, um modal novo, sete fases), o PLAN-212 previu só <strong>cinco
+fases</strong> — sem formulário, sem mutação, sem nenhum primitivo de UI novo. Na letra da spec, era "só" compor um hook
+de dados com dois componentes de exibição. Na prática, foi aqui que apareceu o bug mais sério de todo o track de
+frontend até agora — não porque o Painel em si fizesse algo errado, mas porque ele <strong>depende</strong> de uma tela
+diferente (a Carteira) avisar que os dados mudaram, e essa ligação simplesmente não existia.</p>
+
+<div class="box why">
+  <span class="lbl">Por que "Painel depois de Carteira" é a ordem certa — e por que essa ordem também é o risco</span>
+  A Carteira (SPEC-211) escreve fatos; o Painel (SPEC-212) só os lê e mostra, já calculados pelo SPEC-103. É a
+  divisão de trabalho correta: nenhuma tela deveria recalcular o que o backend já resolveu. Mas duas telas que leem
+  a <em>mesma</em> fonte de verdade por caminhos de dados independentes só ficam de fato sincronizadas se alguém
+  <strong>desenhar</strong> essa sincronização — ela não acontece de graça. É exatamente esse fio que faltava, e é o
+  assunto central desta aula.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="valor">2. O que o Painel entrega e para quem (Rafael &amp; Carla)</h2>
+
+<table>
+  <tr><th>Persona</th><th>A dor</th><th>O que o Painel resolve</th></tr>
+  <tr>
+    <td><strong>Rafael</strong>, o investidor de FIIs</td>
+    <td>Depois de cadastrar suas compras na Carteira, ele quer uma resposta rápida e honesta para "quanto eu tenho
+    hoje, e como isso está distribuído entre logística, lajes corporativas, shoppings?" — sem abrir uma planilha,
+    sem somar nada na cabeça</td>
+    <td>Um único olhar: patrimônio total, valorização vs. o que pagou, e a barra de exposição por setor de FII —
+    tudo já calculado, nunca por ele</td>
+  </tr>
+  <tr>
+    <td><strong>Carla</strong>, a planejadora de longo prazo</td>
+    <td>Precisa entender rapidamente sua diversificação entre FIIs e renda fixa, e confiar que a renda passiva
+    mensal mostrada é a mesma matemática que o resto do produto (Insights, Projeções) vai usar depois</td>
+    <td>A linha de métricas (total investido, renda passiva/mês, valorização) e a alocação por classe de ativo —
+    lidas do mesmo <code>GET /dashboard</code> que qualquer futura tela de IA vai consumir</td>
+  </tr>
+</table>
+
+<p>O princípio comum: o Painel é a primeira tela do produto que mostra um <strong>valor de mercado</strong> — algo que a
+Carteira, por decisão deliberada (BR-2113 da Aula 211), nunca mostra. Essa é literalmente a divisão de trabalho
+entre as duas telas: a Carteira registra custo, o Painel exibe avaliação — mas a avaliação em si é resolvida
+inteiramente no backend (SPEC-103), nunca no navegador.</p>
+
+<!-- ============================================================ -->
+<h2 id="jornada">3. A jornada do usuário: do estado vazio ao painel populado</h2>
+
+<div class="diagram">1. Usuario abre /dashboard (rota padrao do shell)  --&gt;  GET /dashboard
+
+   Carregando                 Vazio (200, tudo zerado)              Erro (rede/5xx)
+   --&gt; skeleton, sem          --&gt; EmptyState dedicado, NAO           --&gt; mensagem + botao
+       "pulo" de layout           um painel com zeros confusos            "Tentar novamente"
+                                   CTA "Ir para a Carteira" -&gt; useRouter().push("/portfolio")
+
+   Populado
+   --&gt; hero: patrimonio total + valorizacao (vs. custo de aquisicao, NUNCA "no mes")
+   --&gt; linha de 3 metricas: total investido / renda passiva-mes / valorizacao (mesmo valor do hero)
+   --&gt; alocacao por classe de ativo (classes com 0% somem da legenda)
+   --&gt; exposicao por setor de FII (so aparece se ha FII na carteira)
+   --&gt; aviso de cotacao desatualizada, se algum ticker caiu para custo por falta de cotacao
+
+2. Usuario edita a Carteira em outra tela, volta ao Painel clicando na barra lateral
+   --&gt; deveria refletir a mudanca imediatamente. Ate a revisao da Fase 5, NAO refletia (secao 5).</div>
+
+<p>Repare no último passo do fluxo: ele não está na spec original como um "acidente de percurso" — é o próprio
+caminho que um usuário real percorre o tempo todo (edita algo na Carteira, volta ao Painel para conferir). É
+justamente esse caminho, tão comum que parece óbvio demais para escrever um teste sobre ele, que escondeu o bug
+central desta aula.</p>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">4. As decisões de produto e UX — e como as travas do produto ficam visíveis</h2>
+
+<p>Como a Carteira (BR-2115 da Aula 211), o Painel não produz saída de IA — então FR-013/FR-014 não têm nada a
+gatear aqui (BR-2123). Mas o Painel tem sua própria disciplina, e ela é mais rígida que a de qualquer tela anterior:
+esta é a <strong>primeira</strong> tela do frontend cujo trabalho inteiro é somar/comparar/exibir números — o lugar exato
+onde a tentação de "só fazer uma continha rápida no cliente" seria mais forte.</p>
+
+<table>
+  <tr><th>Decisão</th><th>Onde aparece</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>Toda figura é lida, nunca calculada no cliente</strong> (BR-2121)</td>
+    <td>O hero e o card de valorização usam <em>literalmente o mesmo</em> componente
+    (<code>GrowthFigure</code>) sobre <em>o mesmo</em> campo (<code>summary.growth_centavos</code>/<code>growth_bps</code>) — nunca duas
+    leituras independentes que poderiam divergir visualmente</td>
+    <td>SPEC-103 já garante reconciliação e determinismo no backend (BR-1031/BR-1034). O trabalho do cliente é só
+    exibição fiel — a mesma regra da Carteira (BR-2117: "taxa lida do servidor, nunca calculada"), agora aplicada à
+    tela <em>inteira</em>, não a um campo isolado</td>
+  </tr>
+  <tr>
+    <td><strong>"vs. custo de aquisição", nunca "no mês"</strong> (FR-2121)</td>
+    <td>O rótulo da valorização é explícito sobre o que o backend realmente calcula:
+    <code>current_value − total_invested</code>. O mockup de design tinha um rótulo impreciso ("no mês") que a spec
+    corrigiu deliberadamente antes mesmo de o código ser escrito</td>
+    <td>O backend não guarda histórico/série temporal (SPEC-103 §15) — rotular como "no mês" seria prometer um dado
+    que simplesmente não existe. É uma pequena honestidade de copy que evita uma expectativa errada do usuário</td>
+  </tr>
+  <tr>
+    <td><strong>Degradação é visível, nunca escondida</strong> (BR-2125, FR-2125)</td>
+    <td>Um FII sem cotação recente é avaliado a custo pelo backend e listado em <code>stale_tickers</code> — o Painel
+    mostra um aviso inline explícito ("Avaliado(s) pelo custo — cotação indisponível: HGLG11"), nunca mistura esse
+    valor silenciosamente como se fosse uma cotação fresca</td>
+    <td>Um número "levemente errado sem avisar" é pior que um número conservador com um aviso — o mesmo princípio de
+    honestidade que rege o produto inteiro, aqui aplicado a uma falha de dado de mercado, não de IA</td>
+  </tr>
+  <tr>
+    <td><strong>Vazio é vazio, nunca um painel de zeros confusos</strong> (FR-2126)</td>
+    <td><code>total_invested_centavos === 0 &amp;&amp; current_value_centavos === 0</code> renderiza um <code>EmptyState</code> dedicado
+    com CTA para a Carteira — nunca a barra de alocação, o hero e as métricas todos mostrando "R$ 0,00" lado a lado</td>
+    <td>Uma tela cheia de zeros é ambígua: é um portfólio vazio ou um erro de carregamento? Distinguir os dois
+    estados explicitamente (FR-2126 vs. FR-2127) remove essa dúvida — a mesma disciplina "vazio ≠ erro" que o
+    SPEC-210/211 já ensinavam para o Perfil e a Carteira</td>
+  </tr>
+</table>
+
+<pre><code>// web/app/(app)/dashboard/summary-hero.tsx — UM componente, DOIS lugares, o MESMO campo (D1)
+function GrowthFigure({ centavos, bps }: { centavos: number; bps: number }) {
+  if (centavos === 0) {
+    return &lt;span className="tabular font-mono text-sm text-muted-strong"&gt;
+      {formatCentavos(0)} · {formatBps(0)}
+    &lt;/span&gt;;
+  }
+  const gain = centavos &gt; 0;
+  const sign = gain ? "+" : "";
+  return (
+    &lt;span className={`tabular font-mono text-sm ${gain ? "text-gain" : "text-loss"}`}&gt;
+      {gain ? "▲" : "▼"} {sign}{formatCentavos(centavos)} · {sign}{formatBps(bps)}
+    &lt;/span&gt;
+  );
+}
+// ...usado no hero E na linha de métricas, ambos passando summary.growth_centavos/growth_bps —
+// nunca duas expressões que poderiam derivar valores levemente diferentes.</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que a duplicação visual (hero + card de métrica) não é duplicação de lógica</span>
+  A spec pede o mesmo número de valorização em dois lugares — no cabeçalho e na linha de métricas — porque é assim
+  que o mockup de design apresenta a informação, reforçando-a visualmente. A tentação de implementação seria
+  calcular esse valor duas vezes (ou pior, uma vez arredondado de dois jeitos diferentes). A decisão D1 do PLAN-212
+  fecha essa possibilidade: existe <strong>um</strong> componente, chamado duas vezes, sobre <strong>um</strong> campo do payload — os
+  testes da Fase 4 chegam a afirmar explicitamente que a string formatada aparece duas vezes idêntica, não duas
+  vezes parecida.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="bug">5. LIÇÃO PRINCIPAL — o painel desatualizado: um bug pego em quatro camadas</h2>
+
+<p>Esta é a aula central do SPEC-212, e ela merece ser lida devagar, porque é um caso raro de um bug que
+sobreviveu a <strong>três</strong> formas de verificação diferentes antes de finalmente ser pego pela quarta. Não porque
+nenhuma delas fosse mal feita — cada uma fez exatamente o que se propunha a fazer. O problema é que nenhuma delas
+tinha sido desenhada para olhar para esse cenário específico.</p>
+
+<h3>5.1 — A premissa da tela, e o furo real nela</h3>
+<p>A premissa inteira do Painel (BR-2121) é: <em>toda figura é lida do backend, sempre autoritativa — nunca
+calculada no cliente</em>. Mas "autoritativa" também precisa significar "atual". E aqui havia um furo real: o
+TanStack Query (a biblioteca que guarda em cache as respostas de rede no frontend) é configurado globalmente com um
+<code>staleTime</code> de 30 segundos:</p>
+
+<pre><code>// web/app/providers.tsx
+defaultOptions: {
+  queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+},</code></pre>
+
+<p>Isso significa: por 30 segundos depois de buscar <code>/dashboard</code>, o TanStack Query considera essa resposta
+"fresca" e não a busca de novo automaticamente — mesmo que o usuário volte para a tela. Nenhuma das seis mutações de
+holdings do SPEC-211 (criar/editar/excluir, para FII e renda fixa, em <code>lib/portfolio/holdings.ts</code>) avisava o
+cache do Painel de que ele estava desatualizado. O resultado: abrir o Painel, ir para a Carteira (uma navegação
+comum dentro do app, sem recarregar a página), adicionar ou editar um holding, voltar ao Painel dentro dessa janela
+de 30 segundos — e o patrimônio total, a valorização e as barras de alocação continuavam mostrando os números
+<strong>antigos</strong>, silenciosamente. A garantia exata que a tela existe para dar (BR-2121) estava sendo quebrada por
+uma fiação de uma linha faltando entre duas features.</p>
+
+<h3>5.2 — Camada 1: typecheck e lint — passou, como sempre passaria</h3>
+<p>Um cache desatualizado não é um erro de tipo nem um problema de sintaxe. <code>npm run typecheck</code> e
+<code>npm run lint</code> ficaram verdes o tempo todo — nada nesse bug é visível a essas ferramentas, e não há nada de
+errado nisso: elas simplesmente não foram desenhadas para enxergar esse tipo de problema.</p>
+
+<h3>5.3 — Camada 2: a suíte inteira de 131 testes Vitest — passou, e por um motivo revelador</h3>
+<p>Antes da correção, a suíte inteira do SPEC-211 (incluindo <code>fii-table.test.tsx</code> e equivalentes) passava
+verde. Não porque o bug não existisse no código de produção, mas porque <strong>nenhum desses testes executava esse
+código de produção</strong>: cada teste de componente da Carteira faz mock de <code>lib/portfolio/holdings</code> por inteiro
+— substitui os hooks reais por versões falsas que retornam dados fixos. A lógica real de invalidação de cache
+dentro dos hooks — o exato código com o bug — nunca era chamada por nenhum desses testes; só as versões
+simuladas eram.</p>
+
+<div class="box bug">
+  <span class="lbl">Por que "131 testes verdes" não significava "o comportamento real foi verificado"</span>
+  É uma armadilha sutil e comum: um mock bem-feito torna um componente testável isoladamente, mas também apaga
+  qualquer chance de esse teste flagrar um bug que mora <em>dentro</em> do código mockado. A suíte provava que
+  <code>FiiSection</code> renderiza corretamente <em>dado</em> um retorno de <code>useCreateFIIHolding</code> — nunca provava que
+  <code>useCreateFIIHolding</code> em si fazia a coisa certa depois de uma mutação. Os dois são verificações diferentes,
+  e só uma delas existia.
+</div>
+
+<h3>5.4 — Camada 3: o próprio teste E2E do Painel, contra o backend real — passou, e escondeu o bug por conveniência</h3>
+<p>A primeira versão de <code>e2e/dashboard.spec.ts</code> rodava de verdade: registrava uma conta, adicionava um holding
+via Carteira, e verificava que o Painel refletia o novo patrimônio. Passava. Contra o backend Go real, não um mock.
+E, mesmo assim, <strong>não provava nada sobre o bug</strong> — porque, para voltar ao Painel depois de adicionar o holding,
+o script usava <code>page.goto("/dashboard")</code>: um recarregamento completo da página.</p>
+
+<div class="box bug">
+  <span class="lbl">Por que um "goto" mais simples de escrever criou um ponto cego exato onde importava</span>
+  Um recarregamento completo de página sempre cria um <code>QueryClient</code> novo, com cache vazio — então a busca de
+  <code>/dashboard</code> sempre acontece do zero, <strong>independente</strong> de o bug de invalidação existir ou não. O
+  <code>page.goto()</code> é a forma mais simples de escrever "volte para o Painel" num script Playwright — e foi
+  exatamente essa conveniência que, sem querer, construiu um ponto cego ao redor do cenário exato que um usuário
+  real encontraria clicando na barra lateral. O teste provava que o Painel funciona depois de um <em>reload</em>;
+  nunca provava que funciona depois de uma <em>navegação</em> — e são coisas diferentes quando existe um cache de 30
+  segundos no meio do caminho.
+</div>
+
+<h3>5.5 — Camada 4: o react-correctness-reviewer, lendo o código, não rodando nada</h3>
+<p>O bug foi finalmente pego na revisão da Fase 5 — e não porque o revisor rodou um teste novo. Foi pego <strong>lendo
+código</strong>: o revisor notou o <code>staleTime: 30_000</code> em <code>app/providers.tsx</code>, foi conferir cada chamada de
+<code>invalidateQueries</code> dentro de <code>lib/portfolio/holdings.ts</code>, e percebeu que nenhuma delas mencionava o
+Painel. Depois raciocinou sobre a interação inteira — cache, tempo, navegação sem reload — sem precisar clicar em
+nada. E, como argumento final, apontou de volta para a própria linha <code>page.goto()</code> do E2E como "evidência
+reveladora" de que o caminho realista nunca tinha sido de fato exercitado.</p>
+
+<div class="box why">
+  <span class="lbl">Por que "ler o código" pegou o que "rodar o código" não pegou</span>
+  As três camadas anteriores tinham em comum um traço: todas <em>executavam</em> alguma coisa — testes, um
+  navegador real — mas cada uma, por um motivo diferente, executava um caminho que não incluía o bug. Ler o código
+  com a pergunta certa em mente ("o que acontece se o usuário voltar sem recarregar, dentro de 30 segundos?") não
+  depende de o cenário certo já estar coberto por algum script — o revisor constrói o cenário mentalmente, a partir
+  da configuração real (<code>staleTime</code>) cruzada com o código real (<code>invalidateQueries</code>). É por isso que revisão
+  de código humana (ou de um subagente bem instruído) continua tendo um papel que nenhuma bateria de testes
+  automatizados substitui sozinha: ela pega a lacuna <em>entre</em> os cenários que alguém já pensou em testar.
+</div>
+
+<h3>5.6 — A correção, e as três verificações que fecharam cada ponto cego</h3>
+<p>A correção em si é pequena: um <em>helper</em> compartilhado que invalida a lista de holdings <strong>e</strong> o Painel
+juntos, em toda mutação.</p>
+
+<pre><code>// web/lib/dashboard/dashboard.ts — a chave exportada para outra feature poder invalidá-la
+export const DASHBOARD_KEY = ["dashboard"] as const;
+
+// web/lib/portfolio/holdings.ts — uma função só, chamada pelas seis mutações
+function invalidateHoldingsAndDashboard(qc: QueryClient, key: readonly string[]) {
+  qc.invalidateQueries({ queryKey: key });
+  qc.invalidateQueries({ queryKey: DASHBOARD_KEY });
+}
+// ...
+onSuccess: () =&gt; invalidateHoldingsAndDashboard(qc, FII_KEY),   // criar
+onSettled: () =&gt; invalidateHoldingsAndDashboard(qc, FII_KEY),   // editar e excluir (BR-2111: 404 tambem invalida)</code></pre>
+
+<p>O que importa mais para esta aula não é a correção — é que ela foi verificada de <strong>três</strong> jeitos novos,
+cada um fechando exatamente um dos pontos cegos das camadas 5.3 e 5.4:</p>
+
+<table>
+  <tr><th>Verificação nova</th><th>Qual ponto cego ela fecha</th></tr>
+  <tr>
+    <td><code>lib/portfolio/holdings.test.tsx</code> — um arquivo novo que renderiza os hooks <strong>reais</strong> (sem
+    mock de <code>lib/portfolio/holdings</code>) contra um <code>QueryClient</code> real, e verifica com <code>vi.spyOn</code> que
+    <code>invalidateQueries</code> foi chamado tanto com a chave da lista quanto com <code>DASHBOARD_KEY</code></td>
+    <td>Fecha o ponto cego da seção 5.3 — agora existe um teste que de fato executa a lógica real de invalidação,
+    não uma versão mockada dela</td>
+  </tr>
+  <tr>
+    <td><code>e2e/dashboard.spec.ts</code> reescrito: em vez de <code>page.goto("/dashboard")</code>, o script clica no link
+    real da barra lateral — <code>page.getByRole("link", { name: "Painel" })</code></td>
+    <td>Fecha o ponto cego da seção 5.4 — agora o teste executa a navegação SPA de verdade, a mesma que um usuário
+    faria clicando, não um atalho que sempre começa com um cache vazio</td>
+  </tr>
+  <tr>
+    <td>O E2E reescrito foi <strong>re-executado contra o backend real</strong> depois da correção, do zero</td>
+    <td>Prova que a correção funciona ao vivo — não só dentro de um teste unitário com um <code>QueryClient</code>
+    simulado, mas contra o servidor Go de verdade, rodando</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A generalização que fica desta aula</span>
+  Nenhuma das quatro camadas de verificação (tipos, testes unitários, E2E, revisão de código) é dispensável — cada
+  uma pega uma classe de erro que as outras não pegam. O que este bug ensina é que é preciso perguntar, para
+  <em>cada</em> camada: "que caminho real ela de fato exercita?" — porque "o teste passou" e "o comportamento
+  correto foi provado" só são a mesma coisa quando o teste passa <strong>pelo</strong> cenário que importa, não ao redor
+  dele.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="outros">6. Dois bugs menores, pegos antes de chegarem à revisão</h2>
+
+<h3>6.1 — <code>Button asChild</code> outra vez: a mesma armadilha do SPEC-211, num lugar novo</h3>
+<p>Ao montar o estado vazio (FR-2126), o primeiro rascunho do CTA foi escrito como
+<code>&lt;Button asChild&gt;&lt;a href="/portfolio"&gt;...&lt;/a&gt;&lt;/Button&gt;</code> — exatamente o padrão "componente <code>Button</code> com
+suporte a <code>asChild</code>" que várias bibliotecas de componentes oferecem (via Radix <code>Slot</code>). Só que o <code>Button</code>
+deste projeto <strong>não tem</strong> esse suporte — é, na prática, um <code>&lt;button&gt;</code> simples envolvendo o que vier dentro
+dele, então um <code>&lt;a&gt;</code> aninhado nunca navegaria como esperado.</p>
+
+<p>O bug foi encontrado <strong>durante a Fase 3</strong>, ao ligar o componente à tela de verdade — antes de chegar a
+qualquer revisão — e corrigido trocando por <code>useRouter().push("/portfolio")</code> num <code>onClick</code> simples, o
+mesmo padrão já usado nas páginas de <code>register</code>/<code>login</code>.</p>
+
+<div class="box why">
+  <span class="lbl">Por que vale mencionar de novo, mesmo já tendo aparecido no SPEC-211</span>
+  Não é o mesmo bug se repetindo por descuido — é o mesmo <em>tipo</em> de erro (assumir uma API que um componente
+  simplesmente não implementa) aparecendo numa tela nova, porque nada no projeto até agora tinha um linter ou um
+  teste que capturasse esse caso automaticamente. A lição de processo: um bug corrigido numa spec não vacina
+  automaticamente a próxima spec contra o mesmo erro — só a atenção de quem está escrevendo (ou revisando) o código
+  faz isso, ou uma correção estrutural (dar suporte real a <code>asChild</code>, ou baní-lo de vez do vocabulário do time).
+</div>
+
+<h3>6.2 — Uma sugestão de revisão explicitamente <strong>não</strong> aplicada: <code>aria-live</code> nos estados de carregamento/erro</h3>
+<p>O <code>frontend-reviewer</code> sugeriu adicionar <code>aria-live</code>/<code>role="status"</code> aos estados de carregamento e erro do
+Painel, para que leitores de tela anunciassem essas mudanças automaticamente. É uma sugestão de acessibilidade
+genuinamente boa — e foi <strong>deliberadamente não aplicada</strong> nesta spec.</p>
+
+<div class="box tip">
+  <span class="lbl">Por que recusar uma boa sugestão pode ser a decisão certa</span>
+  Nenhuma tela irmã do Painel — nem a Carteira, nem o Perfil — tem esse tratamento nos próprios estados de
+  carregamento/erro. Adicioná-lo só no Painel deixaria essa tela <em>mais</em> acessível que as outras, o que soa bem
+  isoladamente, mas na prática cria uma experiência inconsistente entre telas do mesmo produto: um leitor de tela
+  passaria a se comportar diferente dependendo de qual rota o usuário está. A decisão registrada foi adiar para uma
+  passada sistemática de acessibilidade cobrindo o app inteiro de uma vez — não porque a sugestão estivesse errada,
+  mas porque aplicá-la a uma única tela seria consertar o sintoma errado, no lugar errado, na hora errada. Nem toda
+  sugestão correta deve virar mudança imediata e isolada.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="recorte">7. O que ficou de fora e por quê (o recorte da spec)</h2>
+
+<table>
+  <tr><th>Ficou de fora</th><th>Por quê</th></tr>
+  <tr><td><strong>Health Score</strong> e <strong>Insights de IA</strong></td><td>O stub antigo do SPEC-200 insinuava que estariam aqui — texto incorreto, corrigido junto com o resto do stub. Pertencem ao <strong>SPEC-213</strong> (<code>GET /health-score</code>, <code>GET /insights</code>), que tem suas próprias travas de explicabilidade/não-consultoria a exercitar.</td></tr>
+  <tr><td>Qualquer <strong>mudança no backend</strong> ou no <code>api/openapi.yaml</code></td><td>SPEC-103 já está Done. O SPEC-212 <strong>consome</strong>, não altera, o contrato — confirmado via <code>git diff main -- api/openapi.yaml</code> vazio.</td></tr>
+  <tr><td>Qualquer <strong>escrita/mutação</strong></td><td>Esta tela é 100% leitura, espelhando o escopo de backend do SPEC-103.</td></tr>
+  <tr><td>Ligar o botão global "+ Adicionar ativo" do cabeçalho (SPEC-200) a um modal de holding</td><td>Decisão registrada (D3): permanece um no-op. Acoplamento entre telas maior que esta spec — nenhuma tela ainda "reivindicou" esse botão.</td></tr>
+  <tr><td>Um gráfico de rosca (donut) para exposição setorial de FII</td><td>Decisão registrada (D4): reusar o <code>AllocationBar</code> (barra espectral) já existente em vez de construir um componente de gráfico novo — o mockup mostra um donut, mas os critérios de aceitação da Epic 3 não exigem um.</td></tr>
+  <tr><td>Qualquer visão histórica/série temporal (evolução do patrimônio ao longo do tempo)</td><td>O backend calcula só o instantâneo atual; nenhum histórico é persistido (SPEC-103 §15).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="contrato">8. Conexão com o backend: o contrato como fronteira</h2>
+
+<p>Esta seção ensina a costura frontend↔backend desta spec — o que substitui, do lado do cliente, a "ponte
+hexagonal" que a aula de backend ensinaria. O SPEC-212 <strong>não abre nenhum endpoint novo</strong>: consome só um.</p>
+
+<table>
+  <tr><th>Endpoint (api/openapi.yaml)</th><th>Usado por</th><th>Resposta que a tela trata</th></tr>
+  <tr><td><code>GET /dashboard</code></td><td><code>useDashboard()</code></td><td><code>200 DashboardResponse</code> → <code>summary</code> (patrimônio, investido, renda passiva, valorização) + <code>allocation[]</code> + <code>fii_sectors[]</code> + <code>stale_tickers[]</code> · <code>401</code> → tratado pelo <code>RequireAuth</code> do shell (SPEC-200)</td></tr>
+</table>
+
+<h3>8.1 — Tipos gerados, nunca DTOs à mão</h3>
+<p>Como em toda tela desde o SPEC-210, nenhum tipo <code>DashboardResponse</code> foi escrito à mão — ele vem de
+<code>web/lib/api/schema.ts</code>, gerado de <code>api/openapi.yaml</code>:</p>
+
+<pre><code>// web/lib/dashboard/dashboard.ts — o tipo vem do contrato GERADO
+export type Dashboard = components["schemas"]["DashboardResponse"];</code></pre>
+
+<h3>8.2 — Um enum que não é fechado, e a defensividade que isso exige (D6)</h3>
+<p>O SPEC-211 mostrou o padrão "enum gerado vira um <code>Record</code> obrigatório" para o indexador de renda fixa
+(<code>indexer_type</code>, que <strong>tem</strong> <code>enum:</code> no OpenAPI). O campo <code>fii_sectors[].sector</code> do SPEC-212 <strong>não tem</strong>
+essa restrição — é declarado como <code>type: string</code> simples no <code>api/openapi.yaml</code>, então o tipo TypeScript gerado
+também é <code>string</code> livre, não uma união fechada:</p>
+
+<pre><code>// web/lib/dashboard/labels.ts — Record&lt;string,string&gt; DELIBERADO, com fallback (D6)
+// api/openapi.yaml declara fii_sectors[].sector como `type: string`, sem `enum:` (ao contrário
+// de indexer_type) — o tipo gerado é string livre, não uma uniao fechada.
+export const SECTOR_LABELS: Record&lt;string, string&gt; = {
+  logistics: "Logística",
+  offices: "Lajes Corporativas",
+  shopping: "Shoppings",
+  hybrid: "Híbrido",
+  paper: "Papel (CRI)",
+  other: "Outros / sem cotação",
+};
+
+export function sectorLabel(sector: string): string {
+  const known = SECTOR_LABELS[sector];
+  if (known) return known;
+  return sector.length === 0 ? sector : sector[0].toUpperCase() + sector.slice(1);
+  // um setor futuro nao mapeado aparece capitalizado, nunca em branco nem quebrando a tela
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que essa defensividade importa — e por que não é "só um detalhe"</span>
+  Se o backend um dia adicionar um sétimo setor de FII e ninguém lembrar de atualizar
+  <code>SECTOR_LABELS</code>, a tela continua funcionando: mostra o valor cru capitalizado em vez de travar ou renderizar
+  em branco. É a mesma disciplina "grau de honestidade sobre o que a tela sabe" que rege o resto do produto,
+  aplicada a um detalhe de contrato quase invisível: a ausência de um <code>enum:</code> no OpenAPI não é um bug do
+  backend — é uma decisão consciente registrada como Post-Implementation Task (uma pequena melhoria de contrato
+  futura, fora do escopo desta spec de frontend) — mas o cliente precisa se comportar bem <em>mesmo assim</em>, hoje.
+</div>
+
+<h3>8.3 — O frontend continua sendo apenas um cliente</h3>
+<div class="diagram">   Navegador (Painel)                       Next.js (mesma origem)              API Go
+   -------------------                       -----------------------            -------------------
+   SummaryHero / AllocationSections           /api/dashboard -- rewrite -->      GET /dashboard
+   useDashboard()                             proxy same-origin (D1 SPEC-200)    identidade = sessao (ctx)
+   tipos: lib/api/schema.ts (GERADO)          cookie HttpOnly Lax, sem CORS      calcula sobre holdings +
+                                                                                    market data (SPEC-103)
+
+   hoje: so o cliente web fala esse contrato -- amanha: app nativo / MCP / agente falam o MESMO contrato</div>
+
+<!-- ============================================================ -->
+<h2 id="construido">9. Como foi construído (visão geral, sem virar tutorial de React)</h2>
+
+<p>Você não precisa dominar React para acompanhar. O suficiente para entender a estrutura:</p>
+
+<ul>
+  <li><strong>A rota.</strong> <code>web/app/(app)/dashboard/page.tsx</code> — dentro do shell autenticado do SPEC-200. Trata
+  carregando/erro/vazio/populado e, no caso populado, só compõe dois componentes.</li>
+  <li><strong>O hero + métricas.</strong> <code>summary-hero.tsx</code> (exporta <code>SummaryHero</code>) — o cartão de patrimônio, a
+  linha de três métricas e o aviso de cotação desatualizada, tudo derivado de <code>summary</code>/<code>stale_tickers</code>.</li>
+  <li><strong>As alocações.</strong> <code>allocation-sections.tsx</code> (exporta <code>AllocationSections</code>) — as duas barras
+  (classe de ativo e setor de FII), ambas reusando o <code>AllocationBar</code> já existente do SPEC-200.</li>
+  <li><strong>Os dados.</strong> <code>lib/dashboard/dashboard.ts</code> (<code>useDashboard()</code>, um hook TanStack Query sobre o
+  cliente tipado do SPEC-200) e <code>lib/dashboard/labels.ts</code> (o mapa de setores da seção 8.2) — o mesmo padrão de
+  <code>lib/profile/profile.ts</code> e <code>lib/portfolio/holdings.ts</code>.</li>
+  <li><strong>A costura entre telas.</strong> <code>lib/portfolio/holdings.ts</code> ganhou uma pequena mudança nesta spec — o
+  <code>invalidateHoldingsAndDashboard</code> da seção 5.6, a correção do bug central desta aula.</li>
+</ul>
+
+<p>Se você quiser se aprofundar, os arquivos reais estão apontados acima. A mensagem da aula continua sendo o
+<strong>porquê</strong> do produto e do processo — não a mecânica de hooks ou de renderização do React.</p>
+
+<!-- ============================================================ -->
+<h2 id="harness">10. Harness Engineering: como a máquina construiu e verificou isto</h2>
+
+<p>O PLAN-212 previu <strong>cinco fases</strong> — menos que as sete do SPEC-211, porque não há formulário nem primitivo de
+UI novo para construir. Cada fase deixou <code>web/</code> compilando, lintando e type-checando verde antes de seguir.</p>
+
+<table>
+  <tr><th>Fase</th><th>O que entregou</th></tr>
+  <tr><td>1 — Hook de dados + rótulos de setor</td><td><code>lib/dashboard/dashboard.ts</code> (<code>useDashboard()</code>) e <code>lib/dashboard/labels.ts</code> (<code>SECTOR_LABELS</code> + <code>sectorLabel</code>, D6) — testáveis isoladamente, antes de qualquer componente de tela.</td></tr>
+  <tr><td>2 — Componentes de apresentação</td><td><code>summary-hero.tsx</code> e <code>allocation-sections.tsx</code>, reusando <code>Card</code>/<code>AllocationBar</code> — nenhum primitivo novo (D2/D4).</td></tr>
+  <tr><td>3 — A tela Painel</td><td><code>app/(app)/dashboard/page.tsx</code> compondo tudo, com os quatro estados (carregando/erro/vazio/populado). Aqui foi pego e corrigido o bug do <code>Button asChild</code> (seção 6.1) — e a tela foi <strong>verificada ao vivo</strong> contra o backend real via Playwright: conta nova → estado vazio → CTA navega → adiciona FII + renda fixa via Carteira → volta ao Painel → R$21.000,00 de patrimônio, +R$250,00/+1,20% de valorização (verde, ▲) conferido aritmeticamente (100 cotas × R$160,00 − R$157,50 de custo = exatamente R$250,00).</td></tr>
+  <tr><td>4 — Testes</td><td>Vitest/RTL (134 testes) cobrindo ganho/perda/zero na valorização, alocação com classe zerada omitida, setor de FII omitido para portfólio só-renda-fixa, e os quatro estados da tela — mais o E2E (<code>e2e/dashboard.spec.ts</code>) rodado contra o backend real.</td></tr>
+  <tr><td>5 — Revisão, correção do bug central e fechamento</td><td>CHANGELOG, revisão pelos dois subagentes — onde o bug de cache (seção 5) foi encontrado, corrigido e reverificado — SPEC-212/PLAN-212 → Done, esta aula.</td></tr>
+</table>
+
+<h3>Os dois subagentes de revisão — um PASS pequeno, um CHANGES REQUESTED grande</h3>
+
+<div class="box tip">
+  <span class="lbl">frontend-reviewer — PASS, com uma nota aplicada e uma deliberadamente recusada</span>
+  Aplicada: os títulos dos dois cartões de <code>AllocationSections</code> usavam <code>&lt;h3&gt;</code> sem nenhum <code>&lt;h2&gt;</code> na página
+  (o <code>&lt;h1&gt;</code> vem do <code>TopBar</code> do shell) — corrigido para <code>&lt;h2&gt;</code>, alinhando com o precedente de
+  <code>fii-table.tsx</code>/<code>fixed-income-table.tsx</code>. Recusada (deliberadamente, seção 6.2): <code>aria-live</code> nos estados
+  de carregamento/erro, adiada para uma passada sistemática de acessibilidade em vez de um patch isolado nesta
+  tela.
+</div>
+
+<div class="box bug">
+  <span class="lbl">react-correctness-reviewer — CHANGES REQUESTED → corrigido → reverificado limpo</span>
+  Este é o caso mais didático de toda a spec: um bug real, sério (marcado como Risco <strong>High</strong> no PLAN-212, não
+  <em>Low</em> como os outros riscos materializados), pego não rodando nada, mas lendo o <code>staleTime</code> de
+  <code>providers.tsx</code> cruzado com cada <code>invalidateQueries</code> de <code>holdings.ts</code> — a história completa da seção 5.
+  Depois da correção, o gate completo (<code>typecheck</code>/<code>lint</code>/<code>test</code>/<code>check:api</code>/<code>build</code>) e o E2E
+  reescrito foram <strong>re-executados do zero</strong> contra o backend real, e vieram limpos.
+</div>
+
+<div class="box why">
+  <span class="lbl">Por que este "CHANGES REQUESTED" é o exemplo mais forte do track até agora</span>
+  O SPEC-211 já tinha ensinado que um <code>CHANGES REQUESTED</code> corrigido é uma vitória do harness, não uma falha
+  dele. O SPEC-212 leva essa lição um passo além: aqui, o bug pego não era um detalhe isolado de estilo ou de
+  precisão numérica — era uma <strong>violação direta</strong> da garantia central que dá nome à spec (BR-2121, "toda
+  figura é autoritativa"). E ele já tinha sobrevivido a três formas diferentes de verificação automatizada antes
+  de chegar à revisão. Isso não diminui o valor de typecheck, testes unitários ou E2E — eles continuam
+  necessários, e continuam pegando outras classes de erro. Mas mostra com clareza por que "todo gate automatizado
+  verde" não é sinônimo de "correto": um gate só prova o que ele foi desenhado para exercitar.
+</div>
+
+<h3>Os gates e a disciplina que baixam erro (concreto, desta spec)</h3>
+<table>
+  <tr><th>Gate / disciplina</th><th>Como apareceu no SPEC-212</th><th>Por que baixa erro</th></tr>
+  <tr><td><code>check:api</code> (drift guard)</td><td>Verde do início ao fim — SPEC-212 não toca o contrato, confirmado via <code>git diff</code> vazio</td><td>Garante que nenhuma mudança acidental de contrato passe despercebida numa spec que deveria ser só-leitura.</td></tr>
+  <tr><td>Gate <code>typecheck</code>/<code>lint</code>/<code>build</code></td><td>Verde ao fim de cada uma das 5 fases</td><td>Elimina bugs sintáticos/de tipo antes de gastar o tempo (caro) dos subagentes de revisão semântica — mas, como a seção 5.2 mostra, não é onde um bug de cache aparece.</td></tr>
+  <tr><td>Verificação ao vivo num navegador real (Playwright, Fase 3)</td><td>Registro de conta → adicionar holdings → conferir o Painel populado, com aritmética cruzada manualmente</td><td>Prova que a tela funciona ponta a ponta contra o backend real, num cenário de "primeira visita" — mas ainda não o cenário de "voltar depois de editar" que escondia o bug.</td></tr>
+  <tr><td>Teste unitário direto sobre hooks reais (<code>lib/portfolio/holdings.test.tsx</code>, novo)</td><td>Renderiza os hooks reais (sem mock do próprio módulo) e afirma que ambas as chaves de cache são invalidadas</td><td>Fecha o ponto cego dos testes de componente que mockam <code>lib/portfolio/holdings</code> por inteiro (seção 5.3) — verifica a lógica de verdade, não a substituta.</td></tr>
+  <tr><td>E2E reescrito com navegação real (clique na barra lateral, não <code>page.goto</code>)</td><td>Fecha o ponto cego da seção 5.4 e prova a correção ao vivo, contra o backend real, depois de corrigida</td><td>Um <code>goto</code> é mais fácil de escrever, mas sempre começa com cache vazio — só uma navegação de verdade exercita o caminho que um usuário real percorre.</td></tr>
+  <tr><td>Revisão de código por um subagente com o CLAUDE.md/PLAN como contexto (<code>react-correctness-reviewer</code>)</td><td>Encontrou o bug central (seção 5.5) sem rodar nada — só lendo <code>providers.tsx</code> e <code>holdings.ts</code> lado a lado</td><td>Cobre exatamente a lacuna que fica <em>entre</em> os cenários que os testes automatizados já cobrem — o revisor pode formular um cenário novo, os testes só verificam os que já foram escritos.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">11. Conexão com AI Engineering &amp; Produto</h2>
+
+<p>O Painel não gera nenhuma linha de saída de IA — nenhum <code>Insighter</code>, nenhum <code>InsightCard</code>, nenhum
+disclaimer. E, mesmo assim, esta é uma das aulas mais relevantes do track para quem estuda governança de sistemas
+de IA — por um ângulo diferente de qualquer aula anterior.</p>
+
+<h3>11.1 — "Fatos são computados, não gerados" — a mesma regra, sem nenhuma LLM por perto</h3>
+<p>A regra binding #3 do CLAUDE.md ("facts are computed, not generated") normalmente aparece nas aulas de IA como
+uma restrição sobre o que um modelo de linguagem pode ou não inventar. O SPEC-212 mostra a mesma disciplina
+aplicada a um contexto sem nenhuma IA envolvida: o Painel é, literalmente, a tela que decide de onde um "fato"
+sobre o patrimônio do usuário tem permissão de vir — <strong>o backend, e só o backend</strong>, nunca o cliente, nem sequer
+por acidente através de um cache desatualizado. O bug da seção 5 não era um bug de UI nem de matemática de ponto
+flutuante — era, na prática, uma violação silenciosa dessa mesma regra, só que pelo canal mais improvável: um
+número certo, calculado certo, no lugar certo do backend, mas exibido depois do seu prazo de validade.</p>
+
+<h3>11.2 — Por que a ausência das travas de IA aqui prepara o SPEC-213 (de novo)</h3>
+<p>O mesmo par didático das aulas anteriores se repete: o Painel <strong>exibe</strong> fatos sem as travas FR-013/FR-014
+(BR-2123) — não porque a governança de IA seja opcional, mas porque não há saída de IA aqui para gatear. Quando o
+SPEC-213 (Health Score/Insights) ler exatamente estes mesmos dados de patrimônio e alocação para gerar uma
+explicação, é <em>lá</em> que o <code>InsightCard</code> com <code>explanation</code> obrigatório e o <code>NonAdviceDisclaimer</code> reaparecem em
+força total — agora somados a uma tela que já provou, nesta spec, que consegue manter seus próprios números
+sincronizados e confiáveis.</p>
+
+<h3>11.3 — A costura para a visão multi-agente / MCP</h3>
+<p>Como nas telas anteriores, o Painel reforça a mesma propriedade: o frontend não recalcula nada sobre o
+patrimônio ou a alocação do investidor — ele só renderiza o que o SPEC-103 já resolveu. Isso significa que um
+futuro CIO multi-agente ou servidor MCP pode ler exatamente o mesmo <code>GET /dashboard</code> que esta tela usa e obter
+a mesma resposta autoritativa, sem nenhuma lógica de agregação duplicada esperando para ser migrada — desde que,
+claro, o cache de quem estiver consumindo também seja invalidado corretamente. É um lembrete concreto de que essa
+disciplina não é responsabilidade só do backend: quem consome o contrato também precisa fazer a sua parte para que
+a garantia "sempre autoritativo" se mantenha de ponta a ponta.</p>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  Engenharia de IA responsável não termina no <code>Insighter</code> gated do backend, e nem termina em "todo número na
+  tela vem de uma resposta de API". Ela também depende de <strong>toda a cadeia de consumo desse número</strong> — cache
+  incluído — respeitar a mesma disciplina. Um sistema pode calcular fatos com perfeição absoluta no backend e ainda
+  assim entregar um fato errado ao usuário, se o caminho entre o cálculo e a tela tiver um elo silenciosamente
+  quebrado. A responsabilidade de "facts are computed, not generated" não acaba na fronteira do servidor — ela
+  precisa sobreviver até o pixel na tela do usuário.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">12. O que vem a seguir</h2>
+
+<p>Com o Painel no ar, o produto tem, pela primeira vez, um retrato honesto e sincronizado do patrimônio do
+investidor — o segundo pilar (depois da Carteira) sobre o qual toda feature de IA futura vai se apoiar.</p>
+
+<table>
+  <tr><th>Spec</th><th>Tela</th><th>Como se apoia no SPEC-212</th></tr>
+  <tr><td><strong>SPEC-213</strong></td><td><strong>Health Score &amp; Insights</strong></td><td>Lê os mesmos dados de patrimônio, alocação e setor que o Painel exibe, e adiciona a camada de explicação de IA (<code>InsightCard</code>/<code>NonAdviceDisclaimer</code>) sobre eles — o texto que o stub original do <code>/dashboard</code> tinha prometido cedo demais.</td></tr>
+  <tr><td>SPEC-214</td><td>Projeções</td><td>Usa o mesmo patrimônio atual como ponto de partida das projeções de longo prazo, com a mesma garantia de dados sempre atuais.</td></tr>
+  <tr><td>SPEC-215</td><td>Copiloto conversacional</td><td>Quando Rafael perguntar "como está minha carteira hoje?", o copiloto vai ler exatamente os mesmos fatos — sincronizados pela correção desta spec — que o Painel mostra.</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  No SPEC-212 o YieldForge ganhou o <strong>Painel</strong> — a tela mais simples de escrever até agora (um único
+  <code>GET</code>, zero formulários, zero primitivos novos) e, ao mesmo tempo, o teste mais rigoroso da promessa "toda
+  figura é autoritativa" — uma promessa que quase falhou por um cache de 30 segundos sem invalidação entre telas, e
+  que só foi salva porque um revisor leu o código com atenção depois que typecheck, 131 testes unitários e um E2E
+  real contra o backend já tinham, cada um por um motivo diferente, deixado passar exatamente esse cenário.
+</div>
+
+<footer>
+  YieldForge · Aula 212 (SPEC-212) · gerada como material de estudo. Veja também a
+  <a href="SPEC-211-aula.html">Aula 211</a> (a Carteira — de onde vêm os fatos que este Painel exibe, e a origem
+  do padrão <code>Button asChild</code> quebrado que reapareceu aqui), a
+  <a href="SPEC-210-aula.html">Aula 210</a> (o Perfil — a primeira tela SPEC-21x), a
+  <a href="SPEC-200-aula.html">Aula 200</a> (a fundação do frontend — o cliente tipado, o shell, o
+  <code>AllocationBar</code> que esta tela reusa), a
+  <a href="SPEC-103-aula.html">Aula 103</a> (o twin de backend — o cálculo do dashboard que este Painel exibe) e
+  a <a href="SPEC-006-aula.html">Aula 006</a> (o twin de backend — o worker de ingestão de mercado por trás dos
+  <code>stale_tickers</code>), o
+  <a href="../02-specs/SPEC-212-dashboard-screen.md">SPEC-212</a>,
+  o <a href="../03-plans/PLAN-212-dashboard-screen.md">PLAN-212</a>
+  e o contrato <a href="../../api/openapi.yaml">api/openapi.yaml</a>.
+</footer>
+
+</div>
+</body>
+</html>

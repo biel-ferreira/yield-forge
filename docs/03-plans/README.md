@@ -58,6 +58,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-200 | SPEC-200 | [Frontend App Foundation](PLAN-200-app-foundation.md) | ✅ Done |
 | PLAN-210 | SPEC-210 | [Investor Profile Screen](PLAN-210-investor-profile-screen.md) | ✅ Done |
 | PLAN-211 | SPEC-211 | [Portfolio Management Screens](PLAN-211-portfolio-management-screens.md) | ✅ Done |
+| PLAN-212 | SPEC-212 | [Dashboard Screen (Painel)](PLAN-212-dashboard-screen.md) | ✅ Done |
 
 ## Standard Phase Order (per the template)
 

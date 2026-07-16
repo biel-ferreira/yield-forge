@@ -1,7 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { ApiError, backendError } from "@/lib/api/error";
 import type { components } from "@/lib/api/schema";
+import { DASHBOARD_KEY } from "@/lib/dashboard/dashboard";
 
 // Portfolio holdings (SPEC-211) — the frontend face of SPEC-102 (FII) + SPEC-109 (fixed income,
 // incl. the resolved indexer_type/effective_annual_rate_bps). Types come from the generated
@@ -13,6 +14,16 @@ export type FixedIncomeInput = components["schemas"]["FixedIncomeRequest"];
 
 const FII_KEY = ["holdings", "fii"] as const;
 const FIXED_INCOME_KEY = ["holdings", "fixed-income"] as const;
+
+// SPEC-212 review finding: the Dashboard (GET /dashboard) is a computed view *over* holdings,
+// but with a 30s global staleTime (app/providers.tsx) a Carteira→Painel SPA navigation could
+// otherwise serve pre-mutation figures indefinitely within that window. Every holdings mutation
+// invalidates both its own list AND the dashboard, so BR-2121's "every figure is authoritative"
+// premise holds after a write, not just on a hard reload.
+function invalidateHoldingsAndDashboard(qc: QueryClient, key: readonly string[]) {
+  qc.invalidateQueries({ queryKey: key });
+  qc.invalidateQueries({ queryKey: DASHBOARD_KEY });
+}
 
 /** The caller's FII holdings (GET /holdings/fii). */
 export function useFIIHoldings() {
@@ -46,7 +57,7 @@ export function useCreateFIIHolding() {
       }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: FII_KEY }),
+    onSuccess: () => invalidateHoldingsAndDashboard(qc, FII_KEY),
   });
 }
 
@@ -69,7 +80,7 @@ export function useUpdateFIIHolding() {
     },
     // Invalidate on any settle, not just success: a 404 (already-gone/not-owned, BR-2111) still
     // means the cached list is stale and must be refreshed, not just a genuine validation error.
-    onSettled: () => qc.invalidateQueries({ queryKey: FII_KEY }),
+    onSettled: () => invalidateHoldingsAndDashboard(qc, FII_KEY),
   });
 }
 
@@ -88,7 +99,7 @@ export function useDeleteFIIHolding() {
         );
       }
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: FII_KEY }),
+    onSettled: () => invalidateHoldingsAndDashboard(qc, FII_KEY),
   });
 }
 
@@ -124,7 +135,7 @@ export function useCreateFixedIncomeHolding() {
       }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: FIXED_INCOME_KEY }),
+    onSuccess: () => invalidateHoldingsAndDashboard(qc, FIXED_INCOME_KEY),
   });
 }
 
@@ -145,7 +156,7 @@ export function useUpdateFixedIncomeHolding() {
       }
       return data;
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: FIXED_INCOME_KEY }),
+    onSettled: () => invalidateHoldingsAndDashboard(qc, FIXED_INCOME_KEY),
   });
 }
 
@@ -164,6 +175,6 @@ export function useDeleteFixedIncomeHolding() {
         );
       }
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: FIXED_INCOME_KEY }),
+    onSettled: () => invalidateHoldingsAndDashboard(qc, FIXED_INCOME_KEY),
   });
 }
