@@ -38,9 +38,15 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-004 | [Observability Baseline (OpenTelemetry)](SPEC-004-observability-baseline.md) | §10 Observability | ✅ Done |
 | SPEC-005 | [`Insighter` Port & Free/Local LLM Adapter](SPEC-005-insighter-port-and-llm-adapter.md) | FR-018, FR-013, FR-014 | ✅ Done |
 | SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](SPEC-006-marketdata-port-and-ingestion-worker.md) | FR-006, FR-007 | ✅ Done |
+| SPEC-007 | [Holdings-Driven FII Ticker Ingestion](SPEC-007-holdings-driven-ticker-ingestion.md) | refines FR-006 (extends SPEC-006, consumes SPEC-102) | 📝 Draft |
 
 > SPEC-005 defines the explainability (FR-013) and non-advice (FR-014) gates as
 > middleware wrapping the port, so every AI feature inherits them (ADR-0002/0003).
+>
+> SPEC-007 refines SPEC-006's ingestion worker (resolving its D3 + the in-code `SPEC-102`
+> TODOs) rather than adding a new FR: it sources the FII tickers to price from users'
+> holdings instead of the static `MARKETDATA_WATCHLIST`. It is the foundational-tier mirror
+> of how SPEC-109 refined the feature-tier SPEC-102 — see its Document Information.
 
 ## Feature Specs (`SPEC-1xx`)
 
@@ -55,10 +61,11 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-107 | [Projections (Income & Net Worth)](SPEC-107-projections.md) | FR-016, FR-017 | ✅ Done |
 | SPEC-108 | [Conversational Copilot (Chat)](SPEC-108-conversational-copilot.md) | FR-023–FR-025 (+ FR-013/014 via SPEC-005) | ✅ Done |
 | SPEC-109 | [Fixed-Income Rate Indexers (% do CDI / IPCA+)](SPEC-109-fixed-income-rate-indexers.md) | refines FR-002 (extends SPEC-102 + SPEC-006) | ✅ Done |
+| SPEC-110 | [Fixed-Income Reconciliation & Portfolio Update Indicator](SPEC-110-fixed-income-reconciliation.md) | refines FR-002/FR-004 (extends SPEC-102 + SPEC-109; consumed by SPEC-103) | 📝 Draft |
 
 Every PRD functional requirement (FR-001…FR-025) maps to exactly one owning spec
-above; SPEC-109 is a refinement of SPEC-102's FR-002 rather than a new FR (see its
-Document Information for the governing specs it extends).
+above; SPEC-109 and SPEC-110 are refinements of SPEC-102's FR-002 rather than new FRs (see
+their Document Information for the governing specs they extend).
 
 ## Frontend Specs (`SPEC-2xx`)
 
@@ -74,7 +81,7 @@ carries no `api/openapi.yaml` change of its own.
 | SPEC-210 | [Investor Profile screen](SPEC-210-investor-profile-screen.md) | SPEC-101                  | ✅ Done     |
 | SPEC-211 | [Portfolio management (FII + FI) screens](SPEC-211-portfolio-management-screens.md) | SPEC-102, SPEC-109 | ✅ Done |
 | SPEC-212 | [Dashboard Screen (Painel)](SPEC-212-dashboard-screen.md) | SPEC-103    | ✅ Done     |
-| SPEC-213 | AI Insights + Rebalancing + Health Score    | SPEC-104 / 105 / 106      | 🔲 Backlog  |
+| SPEC-213 | [AI Insights + Rebalancing + Health Score](SPEC-213-insights-rebalancing-health-screens.md) | SPEC-104 / 105 / 106      | 📝 Draft    |
 | SPEC-214 | Projections (income & net worth)            | SPEC-107                  | 🔲 Backlog  |
 | SPEC-215 | Conversational Copilot (chat, streaming)    | SPEC-108                  | 🔲 Backlog  |
 
