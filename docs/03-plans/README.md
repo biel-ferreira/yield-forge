@@ -50,6 +50,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-107 | SPEC-107 | [Projections (Income & Net Worth)](PLAN-107-projections.md) | ✅ Done |
 | PLAN-108 | SPEC-108 | [Conversational Copilot (Chat)](PLAN-108-conversational-copilot.md) | ✅ Done |
 | PLAN-109 | SPEC-109 | [Fixed-Income Rate Indexers](PLAN-109-fixed-income-rate-indexers.md) | ✅ Done |
+| PLAN-110 | SPEC-110 | [Fixed-Income Reconciliation & Portfolio Update Indicator](PLAN-110-fixed-income-reconciliation.md) | 📝 Draft |
 
 ### Frontend (`PLAN-2xx`)
 

@@ -7,7 +7,7 @@
 | Feature Name | Fixed-Income Monthly Reconciliation & Portfolio Staleness Indicator |
 | Feature ID   | SPEC-110                                                  |
 | Version      | 0.1.0                                                     |
-| Status       | Draft                                                     |
+| Status       | Approved                                                  |
 | Author       | Gabigol                                                  |
 | Last Updated | 2026-07-15                                                |
 | Related PRD  | [Epic 1 / FR-002](../01-product/PRD.md), [§11 A4](../01-product/PRD.md) (FI current value is an accrual approximation, not mark-to-market) |
@@ -238,7 +238,7 @@ The reconcile action gets its own named span (mirrors every other mutating endpo
 1. The user opens a fixed-income holding's edit surface (the existing SPEC-211 Carteira dialog,
    evolved per §15). It shows the system's `estimated_interest_centavos` since
    `last_reconciled_at`, pre-filled into a confirmation field, plus a contribution field
-   defaulting to zero.
+   defaulting to zero, and an explanation of what reconciliation is and why (§ Forward Note).
 2. The user confirms or adjusts the interest figure, optionally enters a new contribution, and
    submits.
 3. `POST /holdings/fixed-income/{id}/reconcile` updates the holding: balance grows by interest +
@@ -567,6 +567,19 @@ it ships (mirrors how SPEC-109 flagged SPEC-211 impact without blocking on it):
   ticker's or holding's own R$ value, since none exists on the Painel today.
 - **SPEC-211 (Carteira/Portfolio)** — the fixed-income edit dialog gains the reconciliation flow
   (§4 Main Flow): a pre-filled interest-confirmation field and a contribution field, wired to the
-  new `POST .../reconcile` endpoint, alongside (not replacing) the existing plain-edit form.
+  new `POST .../reconcile` endpoint, alongside (not replacing) the existing plain-edit form. It
+  must also surface a plain-language explanation of reconciliation — a modal, tooltip, or inline
+  helper text (exact UI form is the SPEC-211 follow-up's call, not decided here), covering at
+  least: (1) the pre-filled interest is a **system estimate** (the same simple-interest formula
+  the Dashboard already uses), not verified bank data — the user should check it against their
+  real statement before confirming; (2) why **aporte** (contribution) and **juros** (interest) are
+  two separate fields — tagging each at the moment it happens is what makes "how much did I
+  actually earn" answerable at all (BR-1101), instead of a guess from a balance delta; (3)
+  skipping reconciliation isn't an error — the estimate just keeps accruing, unconfirmed, until
+  the user catches up (no penalty, no data loss). This isn't gated by FR-013/FR-014 (no AI output
+  here), but it's the same underlying principle: a number the user can't interpret correctly isn't
+  actually useful, no matter how correctly it was computed. The explanation should be reachable
+  every time reconciliation is used (a persistent affordance), not a one-shot onboarding tip a
+  user who skips a few months would no longer see.
 
 Both are small, additive frontend PLANs once SPEC-110 lands — not blocking this spec's approval.

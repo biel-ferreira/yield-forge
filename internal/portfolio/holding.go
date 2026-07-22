@@ -48,19 +48,58 @@ type FIIHolding struct {
 // a computed, NEVER-PERSISTED field: it starts zero-value and is populated by the Service (via
 // ResolveEffectiveRate) on every read/write path before the holding reaches its caller — the
 // repository never selects or writes it (FR-1092/BR-1092).
+//
+// SPEC-110 reinterprets InvestedAmountCentavos: it is the current principal/balance basis used
+// for accrual, growing via both contributions AND confirmed interest — no longer the cost basis
+// by itself. TotalContributedCentavos is the new cost basis (lifetime money the user put in,
+// untouched by interest, BR-1101). LastReconciledAt is the accrual clock, replacing CreatedAt for
+// interest-accrual purposes. EstimatedInterestCentavos/ReconciliationDue are computed, never
+// persisted — same treatment as EffectiveAnnualRateBps, populated by the Service.
 type FixedIncomeHolding struct {
-	ID                     string
-	UserID                 string
-	Name                   string
-	Institution            string
-	InvestedAmountCentavos int64
-	AnnualRateBps          int
-	IndexerType            Indexer
-	EffectiveAnnualRateBps int // computed, never persisted — see doc comment above
-	MaturityDate           *time.Time
-	LiquidityType          LiquidityType
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
+	ID                        string
+	UserID                    string
+	Name                      string
+	Institution               string
+	InvestedAmountCentavos    int64
+	TotalContributedCentavos  int64 // new (SPEC-110): lifetime contributions, the cost basis for growth
+	AnnualRateBps             int
+	IndexerType               Indexer
+	EffectiveAnnualRateBps    int   // computed, never persisted — see doc comment above
+	EstimatedInterestCentavos int64 // computed, never persisted (SPEC-110 FR-1103) — see EstimateInterest
+	ReconciliationDue         bool  // computed, never persisted (SPEC-110 FR-1105) — see IsReconciliationDue
+	MaturityDate              *time.Time
+	LiquidityType             LiquidityType
+	LastReconciledAt          time.Time // new (SPEC-110): the accrual clock, replaces CreatedAt for accrual
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+}
+
+// EstimateInterest returns the simple-interest estimate accrued since LastReconciledAt, as of
+// now (SPEC-110 FR-1103) — the pre-fill hint for reconciliation. Pure — no I/O; reuses the same
+// money.AccrueSimpleInterest formula the Dashboard uses, keyed off LastReconciledAt instead of
+// CreatedAt.
+func (h FixedIncomeHolding) EstimateInterest(now time.Time) int64 {
+	return money.AccrueSimpleInterest(h.InvestedAmountCentavos, h.EffectiveAnnualRateBps, wholeDaysBetween(h.LastReconciledAt, now))
+}
+
+// IsReconciliationDue reports whether LastReconciledAt's calendar month (UTC) is strictly before
+// now's calendar month (SPEC-110 FR-1105) — re-triggers automatically at the start of every new
+// month with no stored/cron state. Pure — no I/O.
+func (h FixedIncomeHolding) IsReconciliationDue(now time.Time) bool {
+	ly, lm, _ := h.LastReconciledAt.UTC().Date()
+	ny, nm, _ := now.UTC().Date()
+	return ly < ny || (ly == ny && lm < nm)
+}
+
+// wholeDaysBetween returns the whole days elapsed from `from` to `to`, floored at 0 — mirrors
+// internal/dashboard's daysBetween exactly; duplicated rather than exported/imported to keep
+// portfolio from depending on dashboard (the dependency runs the other way, SPEC-103 D1).
+func wholeDaysBetween(from, to time.Time) int {
+	d := to.Sub(from)
+	if d < 0 {
+		return 0
+	}
+	return int(d / (24 * time.Hour))
 }
 
 // ResolveEffectiveRate resolves the holding's current effective annual rate from its stored

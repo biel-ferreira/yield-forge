@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"testing"
+	"time"
 
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 	"github.com/stretchr/testify/require"
@@ -44,5 +45,46 @@ func TestFixedIncomeHolding_ResolveEffectiveRate(t *testing.T) {
 	t.Run("zero-value Indexer (unset) behaves like Prefixado", func(t *testing.T) {
 		h := FixedIncomeHolding{AnnualRateBps: 900}
 		require.Equal(t, 900, h.ResolveEffectiveRate(macroWithCDIAndIPCA))
+	})
+}
+
+func TestFixedIncomeHolding_EstimateInterest(t *testing.T) {
+	t.Run("zero elapsed days accrues nothing", func(t *testing.T) {
+		now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+		h := FixedIncomeHolding{InvestedAmountCentavos: 1_000_000, EffectiveAnnualRateBps: 1200, LastReconciledAt: now}
+		require.Equal(t, int64(0), h.EstimateInterest(now))
+	})
+
+	t.Run("positive elapsed days accrues via the shared AccrueSimpleInterest formula", func(t *testing.T) {
+		last := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+		now := last.AddDate(0, 0, 365) // exactly one year
+		h := FixedIncomeHolding{InvestedAmountCentavos: 1_000_000, EffectiveAnnualRateBps: 1200, LastReconciledAt: last}
+		require.Equal(t, int64(120_000), h.EstimateInterest(now)) // 12%/yr on R$10,000 = R$1,200
+	})
+}
+
+func TestFixedIncomeHolding_IsReconciliationDue(t *testing.T) {
+	t.Run("reconciled this calendar month is not due", func(t *testing.T) {
+		h := FixedIncomeHolding{LastReconciledAt: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)}
+		now := time.Date(2026, 7, 31, 23, 0, 0, 0, time.UTC)
+		require.False(t, h.IsReconciliationDue(now))
+	})
+
+	t.Run("reconciled today is not due", func(t *testing.T) {
+		now := time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC)
+		h := FixedIncomeHolding{LastReconciledAt: now}
+		require.False(t, h.IsReconciliationDue(now))
+	})
+
+	t.Run("last reconciled in the prior month, even one day into the new month, is due", func(t *testing.T) {
+		h := FixedIncomeHolding{LastReconciledAt: time.Date(2026, 6, 30, 23, 59, 0, 0, time.UTC)}
+		now := time.Date(2026, 7, 1, 0, 1, 0, 0, time.UTC)
+		require.True(t, h.IsReconciliationDue(now))
+	})
+
+	t.Run("last reconciled in a prior year is due", func(t *testing.T) {
+		h := FixedIncomeHolding{LastReconciledAt: time.Date(2025, 12, 15, 0, 0, 0, 0, time.UTC)}
+		now := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+		require.True(t, h.IsReconciliationDue(now))
 	})
 }
