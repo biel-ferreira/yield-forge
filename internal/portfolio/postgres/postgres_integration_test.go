@@ -195,8 +195,8 @@ func TestRepository_FixedIncomeIndexer_Integration(t *testing.T) {
 		var id string
 		err := db.QueryRowContext(ctx, `
 			INSERT INTO fixed_income_holdings
-				(user_id, name, institution, invested_amount_centavos, annual_rate_bps, liquidity_type, created_at, updated_at)
-			VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)
+				(user_id, name, institution, invested_amount_centavos, annual_rate_bps, liquidity_type, last_reconciled_at, created_at, updated_at)
+			VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $7, $8)
 			RETURNING id::text`,
 			uid, "Legacy CDB", "Banco Y", 250_000, 900, string(portfolio.LiquidityDaily), now, now,
 		).Scan(&id)
@@ -214,6 +214,86 @@ func TestRepository_FixedIncomeIndexer_Integration(t *testing.T) {
 		}
 		require.True(t, found, "legacy row present in the list")
 	})
+}
+
+// TestRepository_FixedIncomeAccrualClock_Integration proves SPEC-110's FR-1101/FR-1102: a new
+// holding's accrual clock starts at created_at with total_contributed_centavos equal to the
+// opening balance; a metadata-only edit leaves the clock untouched; an edit that changes
+// invested_amount_centavos resets it — the regression guard for the original bug (editing a
+// holding's balance used to retroactively back-date interest to the holding's creation date).
+func TestRepository_FixedIncomeAccrualClock_Integration(t *testing.T) {
+	repo, db := portfolioDB(t)
+	ctx := context.Background()
+	uid := createUser(t, db, "clock@example.com")
+	created := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+
+	h := portfolio.FixedIncomeHolding{
+		UserID: uid, Name: "CDB Turbo", Institution: "Banco X",
+		InvestedAmountCentavos: 1_000_000, AnnualRateBps: 1_200,
+		LiquidityType: portfolio.LiquidityDaily, CreatedAt: created, UpdatedAt: created,
+	}
+	c, err := repo.CreateFixedIncomeHolding(ctx, h)
+	require.NoError(t, err)
+	require.True(t, created.Equal(c.LastReconciledAt), "accrual clock starts at created_at")
+	require.Equal(t, int64(1_000_000), c.TotalContributedCentavos, "opening balance is the first contribution")
+
+	// Metadata-only edit (rate change): the clock must NOT move.
+	metaEdit := c
+	metaEdit.AnnualRateBps = 1_300
+	metaEditAt := created.Add(30 * 24 * time.Hour)
+	metaEdit.UpdatedAt = metaEditAt
+	got, err := repo.UpdateFixedIncomeHolding(ctx, metaEdit)
+	require.NoError(t, err)
+	require.True(t, created.Equal(got.LastReconciledAt), "metadata-only edit leaves the accrual clock untouched")
+	require.Equal(t, int64(1_000_000), got.TotalContributedCentavos, "unaffected by a plain edit")
+
+	// Balance edit: the clock MUST reset to now — this is the bug fix under test.
+	balanceEdit := got
+	balanceEdit.InvestedAmountCentavos = 1_500_000
+	balanceEditAt := metaEditAt.Add(10 * 24 * time.Hour)
+	balanceEdit.UpdatedAt = balanceEditAt
+	got2, err := repo.UpdateFixedIncomeHolding(ctx, balanceEdit)
+	require.NoError(t, err)
+	require.True(t, balanceEditAt.Equal(got2.LastReconciledAt), "invested_amount_centavos change resets the accrual clock")
+	require.Equal(t, int64(1_000_000), got2.TotalContributedCentavos, "a correction is not a contribution (BR-1101)")
+}
+
+// TestRepository_ReconcileFixedIncomeHolding_Integration covers SPEC-110 FR-1103: reconciling
+// interest-only, then interest+contribution, additively updates the balance and lifetime
+// contribution, and always resets the accrual clock.
+func TestRepository_ReconcileFixedIncomeHolding_Integration(t *testing.T) {
+	repo, db := portfolioDB(t)
+	ctx := context.Background()
+	uid := createUser(t, db, "reconcile@example.com")
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	h := portfolio.FixedIncomeHolding{
+		UserID: uid, Name: "CDB Nubank", Institution: "Nubank",
+		InvestedAmountCentavos: 10_000_00, AnnualRateBps: 1_200,
+		LiquidityType: portfolio.LiquidityDaily, CreatedAt: created, UpdatedAt: created,
+	}
+	c, err := repo.CreateFixedIncomeHolding(ctx, h)
+	require.NoError(t, err)
+
+	// Reconcile #1: interest only (contribution = 0).
+	t1 := created.Add(31 * 24 * time.Hour)
+	got, err := repo.ReconcileFixedIncomeHolding(ctx, uid, c.ID, 963, 0, t1)
+	require.NoError(t, err)
+	require.Equal(t, int64(10_000_00+963), got.InvestedAmountCentavos)
+	require.Equal(t, int64(10_000_00), got.TotalContributedCentavos, "interest never touches lifetime contributed")
+	require.True(t, t1.Equal(got.LastReconciledAt))
+
+	// Reconcile #2: interest + a new contribution.
+	t2 := t1.Add(31 * 24 * time.Hour)
+	got2, err := repo.ReconcileFixedIncomeHolding(ctx, uid, c.ID, 1_050, 5_000_00, t2)
+	require.NoError(t, err)
+	require.Equal(t, int64(10_000_00+963+1_050+5_000_00), got2.InvestedAmountCentavos)
+	require.Equal(t, int64(10_000_00+5_000_00), got2.TotalContributedCentavos, "contribution grows lifetime contributed")
+	require.True(t, t2.Equal(got2.LastReconciledAt))
+
+	// Unowned/missing id -> ErrHoldingNotFound.
+	_, err = repo.ReconcileFixedIncomeHolding(ctx, uid, "00000000-0000-0000-0000-000000000000", 100, 0, t2)
+	require.ErrorIs(t, err, portfolio.ErrHoldingNotFound)
 }
 
 func TestRepository_IsolationAndOwnership_Integration(t *testing.T) {

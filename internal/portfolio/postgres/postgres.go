@@ -145,17 +145,20 @@ func (r Repository) DeleteFIIHolding(ctx context.Context, userID, id string) err
 // --- Fixed income holdings ---
 
 // CreateFixedIncomeHolding inserts a new fixed-income holding and returns it with the
-// DB-assigned id and timestamps.
+// DB-assigned id and timestamps. The opening balance is the holding's first contribution
+// (SPEC-110 FR-1101 AC2): total_contributed_centavos starts equal to invested_amount_centavos,
+// and the accrual clock (last_reconciled_at) starts at created_at.
 func (r Repository) CreateFixedIncomeHolding(ctx context.Context, h portfolio.FixedIncomeHolding) (portfolio.FixedIncomeHolding, error) {
 	const q = `
 		INSERT INTO fixed_income_holdings
-			(user_id, name, institution, invested_amount_centavos, annual_rate_bps, indexer_type, maturity_date, liquidity_type, created_at, updated_at)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id::text, created_at, updated_at`
+			(user_id, name, institution, invested_amount_centavos, total_contributed_centavos,
+				annual_rate_bps, indexer_type, maturity_date, liquidity_type, last_reconciled_at, created_at, updated_at)
+		VALUES ($1::uuid, $2, $3, $4, $4, $5, $6, $7, $8, $9, $9, $10)
+		RETURNING id::text, total_contributed_centavos, last_reconciled_at, created_at, updated_at`
 	if err := r.db.QueryRowContext(ctx, q,
 		h.UserID, h.Name, h.Institution, h.InvestedAmountCentavos, h.AnnualRateBps, indexerOrDefault(h.IndexerType),
 		nullableDate(h.MaturityDate), string(h.LiquidityType), h.CreatedAt, h.UpdatedAt).
-		Scan(&h.ID, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		Scan(&h.ID, &h.TotalContributedCentavos, &h.LastReconciledAt, &h.CreatedAt, &h.UpdatedAt); err != nil {
 		return portfolio.FixedIncomeHolding{}, fmt.Errorf("create fixed income holding: %w", err)
 	}
 	return h, nil
@@ -165,7 +168,8 @@ func (r Repository) CreateFixedIncomeHolding(ctx context.Context, h portfolio.Fi
 func (r Repository) ListFixedIncomeHoldingsByUserID(ctx context.Context, userID string) ([]portfolio.FixedIncomeHolding, error) {
 	const q = `
 		SELECT id::text, user_id::text, name, institution, invested_amount_centavos,
-			annual_rate_bps, indexer_type, maturity_date, liquidity_type, created_at, updated_at
+			total_contributed_centavos, annual_rate_bps, indexer_type, maturity_date, liquidity_type,
+			last_reconciled_at, created_at, updated_at
 		FROM fixed_income_holdings WHERE user_id = $1::uuid ORDER BY created_at`
 	rows, err := r.db.QueryContext(ctx, q, userID)
 	if err != nil {
@@ -177,15 +181,17 @@ func (r Repository) ListFixedIncomeHoldingsByUserID(ctx context.Context, userID 
 	for rows.Next() {
 		var (
 			id, uid, name, institution, indexer, liquidity string
-			amount                                         int64
+			amount, contributed                            int64
 			rate                                           int
 			maturity                                       sql.NullTime
-			created, updated                               time.Time
+			lastReconciled, created, updated               time.Time
 		)
-		if err := rows.Scan(&id, &uid, &name, &institution, &amount, &rate, &indexer, &maturity, &liquidity, &created, &updated); err != nil {
+		if err := rows.Scan(&id, &uid, &name, &institution, &amount, &contributed, &rate, &indexer,
+			&maturity, &liquidity, &lastReconciled, &created, &updated); err != nil {
 			return nil, fmt.Errorf("list fixed income holdings: %w", err)
 		}
-		h, err := rebuildFixedIncome(id, uid, name, institution, amount, rate, indexer, maturity, liquidity, created, updated)
+		h, err := rebuildFixedIncome(id, uid, name, institution, amount, contributed, rate, indexer,
+			maturity, liquidity, lastReconciled, created, updated)
 		if err != nil {
 			return nil, fmt.Errorf("list fixed income holdings: %w", err)
 		}
@@ -197,24 +203,80 @@ func (r Repository) ListFixedIncomeHoldingsByUserID(ctx context.Context, userID 
 	return out, nil
 }
 
-// UpdateFixedIncomeHolding replaces the mutable fields of a holding the caller owns. A
-// missing or unowned row → ErrHoldingNotFound.
+// UpdateFixedIncomeHolding replaces the mutable fields of a holding the caller owns. A missing
+// or unowned row → ErrHoldingNotFound. total_contributed_centavos is deliberately NOT in the SET
+// list — a plain edit is a correction, never a contribution (SPEC-110 FR-1102/BR-1101).
+//
+// The accrual clock (last_reconciled_at) resets to now whenever invested_amount_centavos
+// changes — fixing the bug where editing a holding's balance retroactively back-dated interest
+// to the original creation date. The comparison happens in the SAME statement, against the
+// column's pre-update value (`invested_amount_centavos != $5` is evaluated before this SET
+// clause overwrites it) — a single atomic UPDATE, never a read-then-write, so two concurrent
+// edits can't race each other into an inconsistent clock (SPEC-110 PLAN P4).
 func (r Repository) UpdateFixedIncomeHolding(ctx context.Context, h portfolio.FixedIncomeHolding) (portfolio.FixedIncomeHolding, error) {
 	const q = `
 		UPDATE fixed_income_holdings
 		SET name = $3, institution = $4, invested_amount_centavos = $5, annual_rate_bps = $6,
-			indexer_type = $7, maturity_date = $8, liquidity_type = $9, updated_at = $10
+			indexer_type = $7, maturity_date = $8, liquidity_type = $9, updated_at = $10,
+			last_reconciled_at = CASE WHEN invested_amount_centavos != $5 THEN $10
+			                          ELSE last_reconciled_at END
 		WHERE id = $1::uuid AND user_id = $2::uuid
-		RETURNING created_at, updated_at`
+		RETURNING total_contributed_centavos, last_reconciled_at, created_at, updated_at`
 	err := r.db.QueryRowContext(ctx, q,
 		h.ID, h.UserID, h.Name, h.Institution, h.InvestedAmountCentavos, h.AnnualRateBps, indexerOrDefault(h.IndexerType),
 		nullableDate(h.MaturityDate), string(h.LiquidityType), h.UpdatedAt).
-		Scan(&h.CreatedAt, &h.UpdatedAt)
+		Scan(&h.TotalContributedCentavos, &h.LastReconciledAt, &h.CreatedAt, &h.UpdatedAt)
 	if notFound(err) {
 		return portfolio.FixedIncomeHolding{}, portfolio.ErrHoldingNotFound
 	}
 	if err != nil {
 		return portfolio.FixedIncomeHolding{}, fmt.Errorf("update fixed income holding: %w", err)
+	}
+	return h, nil
+}
+
+// ReconcileFixedIncomeHolding additively confirms interest and/or reports a new contribution for
+// a holding the caller owns (SPEC-110 FR-1103). Both amounts are added, never replaced — a single
+// atomic UPDATE (SET x = x + $n), so Postgres's row-level locking makes concurrent reconciliations
+// correct with no read-then-write gap. total_contributed_centavos only grows by
+// contributionCentavos — interest, confirmed or estimated, never touches it (BR-1101). A missing
+// or unowned row → ErrHoldingNotFound.
+func (r Repository) ReconcileFixedIncomeHolding(ctx context.Context, userID, id string, confirmedInterestCentavos, contributionCentavos int64, now time.Time) (portfolio.FixedIncomeHolding, error) {
+	const q = `
+		UPDATE fixed_income_holdings
+		SET invested_amount_centavos = invested_amount_centavos + $3 + $4,
+			total_contributed_centavos = total_contributed_centavos + $4,
+			last_reconciled_at = $5, updated_at = $5
+		WHERE id = $1::uuid AND user_id = $2::uuid
+		RETURNING name, institution, invested_amount_centavos, total_contributed_centavos,
+			annual_rate_bps, indexer_type, maturity_date, liquidity_type, last_reconciled_at, created_at, updated_at`
+	h := portfolio.FixedIncomeHolding{ID: id, UserID: userID}
+	var (
+		indexer, liquidity string
+		maturity           sql.NullTime
+	)
+	err := r.db.QueryRowContext(ctx, q, id, userID, confirmedInterestCentavos, contributionCentavos, now).
+		Scan(&h.Name, &h.Institution, &h.InvestedAmountCentavos, &h.TotalContributedCentavos,
+			&h.AnnualRateBps, &indexer, &maturity, &liquidity, &h.LastReconciledAt, &h.CreatedAt, &h.UpdatedAt)
+	if notFound(err) {
+		return portfolio.FixedIncomeHolding{}, portfolio.ErrHoldingNotFound
+	}
+	if err != nil {
+		return portfolio.FixedIncomeHolding{}, fmt.Errorf("reconcile fixed income holding: %w", err)
+	}
+	lt, err := portfolio.ParseLiquidityType(liquidity)
+	if err != nil {
+		return portfolio.FixedIncomeHolding{}, fmt.Errorf("reconcile fixed income holding: %w", err)
+	}
+	h.LiquidityType = lt
+	idx, err := portfolio.ParseIndexer(indexer)
+	if err != nil {
+		return portfolio.FixedIncomeHolding{}, fmt.Errorf("reconcile fixed income holding: %w", err)
+	}
+	h.IndexerType = idx
+	if maturity.Valid {
+		d := maturity.Time
+		h.MaturityDate = &d
 	}
 	return h, nil
 }
@@ -274,7 +336,7 @@ func rebuildFII(id, userID, ticker string, quantity int, avgPrice int64, created
 	}, nil
 }
 
-func rebuildFixedIncome(id, userID, name, institution string, amount int64, rate int, indexer string, maturity sql.NullTime, liquidity string, created, updated time.Time) (portfolio.FixedIncomeHolding, error) {
+func rebuildFixedIncome(id, userID, name, institution string, amount, contributed int64, rate int, indexer string, maturity sql.NullTime, liquidity string, lastReconciled, created, updated time.Time) (portfolio.FixedIncomeHolding, error) {
 	lt, err := portfolio.ParseLiquidityType(liquidity)
 	if err != nil {
 		return portfolio.FixedIncomeHolding{}, err
@@ -285,8 +347,9 @@ func rebuildFixedIncome(id, userID, name, institution string, amount int64, rate
 	}
 	h := portfolio.FixedIncomeHolding{
 		ID: id, UserID: userID, Name: name, Institution: institution,
-		InvestedAmountCentavos: amount, AnnualRateBps: rate, IndexerType: idx, LiquidityType: lt,
-		CreatedAt: created, UpdatedAt: updated,
+		InvestedAmountCentavos: amount, TotalContributedCentavos: contributed,
+		AnnualRateBps: rate, IndexerType: idx, LiquidityType: lt,
+		LastReconciledAt: lastReconciled, CreatedAt: created, UpdatedAt: updated,
 	}
 	if maturity.Valid {
 		d := maturity.Time
