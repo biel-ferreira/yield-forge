@@ -93,6 +93,34 @@ func TestRepository_FIICRUDRoundTrip_Integration(t *testing.T) {
 	require.Empty(t, list)
 }
 
+func TestRepository_DistinctFIITickers_Integration(t *testing.T) {
+	repo, db := portfolioDB(t)
+	ctx := context.Background()
+	t1 := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+
+	// No holdings anywhere yet: a valid empty slice, not an error (SPEC-007 FR-071).
+	tickers, err := repo.DistinctFIITickers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, tickers)
+
+	uidA := createUser(t, db, "distinct-a@example.com")
+	uidB := createUser(t, db, "distinct-b@example.com")
+
+	_, err = repo.CreateFIIHolding(ctx, fiiHolding(t, uidA, "HGLG11", 27, 15_532, t1))
+	require.NoError(t, err)
+	_, err = repo.CreateFIIHolding(ctx, fiiHolding(t, uidA, "MXRF11", 70, 961, t1))
+	require.NoError(t, err)
+	// uidB also holds HGLG11 — the overlapping ticker must collapse to one entry.
+	_, err = repo.CreateFIIHolding(ctx, fiiHolding(t, uidB, "HGLG11", 10, 16_000, t1))
+	require.NoError(t, err)
+	_, err = repo.CreateFIIHolding(ctx, fiiHolding(t, uidB, "XPLG11", 36, 9_843, t1))
+	require.NoError(t, err)
+
+	tickers, err = repo.DistinctFIITickers(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"HGLG11", "MXRF11", "XPLG11"}, tickers, "deduped across users, alphabetically ordered")
+}
+
 func TestRepository_FixedIncomeRoundTrip_Integration(t *testing.T) {
 	repo, db := portfolioDB(t)
 	ctx := context.Background()

@@ -27,8 +27,9 @@ type MacroRepository interface {
 	GetLatestMacroIndicator(ctx context.Context, ind Indicator) (MacroIndicator, error) // ErrMacroNotFound when absent
 }
 
-// TickerSource supplies the FII tickers to refresh each run. The MVP implementation reads a
-// configured watchlist; a holdings-backed source arrives with SPEC-102.
+// TickerSource supplies the FII tickers to refresh each run. Since SPEC-007 the ingestion edge
+// composes a holdings-backed source (the primary source — every ticker any user holds) unioned
+// with the optional Watchlist seed; either implementation alone also satisfies this port.
 type TickerSource interface {
 	Tickers(ctx context.Context) ([]Ticker, error)
 }

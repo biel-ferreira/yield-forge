@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula 07 — SPEC-007: Ingestão de Tickers Guiada pela Carteira | YieldForge</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#1b2030; --muted:#5b6472; --primary:#4f46e5;
+    --accent:#0ea5e9; --code-bg:#f6f8fa; --border:#e6e8ee;
+    --why-bg:#eef2ff; --why-bd:#c7d2fe; --tip-bg:#ecfdf5; --tip-bd:#a7f3d0;
+    --warn-bg:#fff7ed; --warn-bd:#fed7aa; --bug-bg:#fef2f2; --bug-bd:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7;font-size:17px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 80px}
+  header.hero{background:linear-gradient(135deg,#0ea5e9,#4f46e5);color:#fff;
+    padding:48px 22px;margin-bottom:30px}
+  header.hero .inner{max-width:940px;margin:0 auto}
+  header.hero h1{margin:0 0 6px;font-size:2rem}
+  header.hero p{margin:0;opacity:.92}
+  .pill{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+    padding:3px 12px;border-radius:999px;font-size:.8rem;margin-bottom:14px}
+  h2{margin-top:48px;padding-bottom:8px;border-bottom:2px solid var(--border);font-size:1.5rem}
+  h3{margin-top:32px;font-size:1.18rem;color:#2a2f45}
+  h4{margin:22px 0 6px;font-size:1rem;color:var(--primary)}
+  a{color:var(--primary)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--code-bg);padding:2px 6px;border-radius:5px;font-size:.88em;border:1px solid var(--border)}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:.85rem;line-height:1.55}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f3f4f8}
+  .box{border-radius:10px;padding:14px 16px;margin:18px 0;border:1px solid}
+  .why{background:var(--why-bg);border-color:var(--why-bd)}
+  .tip{background:var(--tip-bg);border-color:var(--tip-bd)}
+  .warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+  .bug{background:var(--bug-bg);border-color:var(--bug-bd)}
+  .box .lbl{font-weight:700;display:block;margin-bottom:4px}
+  .toc{background:#fafbff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:10px}
+  .toc ol{margin:8px 0 0;padding-left:20px}
+  .toc a{text-decoration:none}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .diagram{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.5;overflow:auto;white-space:pre}
+  .tag{display:inline-block;font-size:.72rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;
+    border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+  .kv{font-size:.92rem}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <span class="pill">Aula 07 · Refinamento de Fundação · SPEC-006 → SPEC-007</span>
+    <h1>SPEC-007 — Ingestão de Tickers Guiada pela Carteira (<em>Holdings-Driven Ticker Ingestion</em>)</h1>
+    <p>Uma spec pequena, cirúrgica, e nascida de um <strong>bug real</strong>: um usuário com 10 FIIs na
+    carteira só via cotação para 1. O dashboard não tinha bug nenhum — ele calculava <em>corretamente</em>
+    sobre dados <em>incompletos</em>. A causa raiz era um passo atrás: o worker de ingestão (SPEC-006)
+    só sabia buscar cotação dos tickers de uma lista estática, configurada à mão, e essa lista estava
+    vazia. O SPEC-007 ensina o worker a perguntar "o que os usuários realmente têm?" — direto na
+    tabela de <em>holdings</em> — em vez de depender de alguém lembrar de manter uma lista em dia.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>O que você vai aprender nesta aula</strong>
+  <ol>
+    <li><a href="#incidente">O incidente real: 10 FIIs na carteira, 1 cotação no banco</a></li>
+    <li><a href="#causa">A causa raiz: a <code>TickerSource</code> era uma lista estática, não a carteira</a></li>
+    <li><a href="#mentira">Como o dashboard "mentiu" sem mentir — dado incompleto, cálculo correto</a></li>
+    <li><a href="#correcao">A correção: <code>SystemReader</code> + <code>holdingsSource</code> — um novo tipo de leitura</a></li>
+    <li><a href="#uniao">A união graciosa: <code>unionSource</code>, retrocompat e degradação por fonte</a></li>
+    <li><a href="#decisoes">As 5 decisões (D1–D5) e por quê</a></li>
+    <li><a href="#testes">Como testar/rodar esta spec</a></li>
+    <li><a href="#ponte">Ponte: arquitetura em camadas → hexagonal</a></li>
+    <li><a href="#harness">Harness Engineering: como a máquina construiu e verificou isto</a></li>
+    <li><a href="#ai">Conexão com AI Engineering</a></li>
+    <li><a href="#next">O que vem a seguir</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="incidente">1. O incidente real: 10 FIIs na carteira, 1 cotação no banco</h2>
+
+<p>O SPEC-006 (aula anterior) entregou o port <code>MarketDataProvider</code> e um <strong>worker de
+ingestão</strong> que busca preço, dividend yield, P/VP e setor de cada FII e guarda como referência
+"último-dado-bom" em <code>fii_quotes</code>. Funcionou lindamente nos testes. Mas uma investigação real
+neste ambiente — não hipotética — revelou um problema: um usuário com <strong>10 FIIs</strong> cadastrados
+na carteira (SPEC-102) tinha uma linha em <code>fii_quotes</code> para <strong>apenas 1</strong> deles. Os
+outros 9 nunca tinham sido buscados, nenhuma vez, desde que o worker existia.</p>
+
+<p>A pergunta certa não é "por que o worker falhou?" — ele não falhou. É "o worker sabia, sequer,
+que esses 9 tickers existiam?" A resposta era não. E a razão é a decisão <strong>D3</strong> que o
+próprio SPEC-006 já tinha documentado como provisória:</p>
+
+<div class="box why">
+  <span class="lbl">A dívida técnica que o SPEC-006 já sabia que tinha (sua própria decisão D3)</span>
+  Quando o SPEC-006 foi escrito, o SPEC-102 (holdings) ainda não existia — não havia carteira nenhuma
+  para consultar. A solução do MVP foi um port <code>TickerSource</code> com um único adaptador:
+  <code>Watchlist</code>, construído a partir da variável de ambiente <code>MARKETDATA_WATCHLIST</code>. O
+  próprio comentário de domínio já avisava: <em>"Configured MARKETDATA_WATCHLIST now via
+  TickerSource; swap to a holdings-backed source when SPEC-102 lands."</em> Isto não era um bug —
+  era uma decisão <strong>consciente e documentada</strong> de adiar o problema. O SPEC-007 é o dia em
+  que essa dívida vence.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="causa">2. A causa raiz: a <code>TickerSource</code> era uma lista estática</h2>
+
+<p>Neste ambiente de desenvolvimento, <code>MARKETDATA_WATCHLIST</code> estava simplesmente <strong>vazia</strong>
+— ninguém tinha configurado nada. Mas mesmo se estivesse preenchida, o problema de fundo seria o
+mesmo: uma lista mantida à mão nunca vai acompanhar o que os usuários realmente compram. É um
+"detalhe de operação" que se tornou um "buraco silencioso de dados" — o pior tipo de bug, porque
+nenhum log grita erro; o worker simplesmente nunca soube que precisava buscar aqueles tickers.</p>
+
+<div class="diagram">ANTES (SPEC-006, D3 provisória)                  DEPOIS (SPEC-007)
+  TickerSource = Watchlist (MARKETDATA_WATCHLIST)   TickerSource = union(holdings, watchlist)
+  Fonte de verdade: uma env var mantida à mão        Fonte de verdade: a carteira REAL dos usuários
+  Vazia? Worker não sabe de nenhum ticker            Vazia? Ainda funciona — holdings bastam
+  Usuário compra HGLG11 → worker nunca fica sabendo  Usuário compra HGLG11 → aparece no próximo run
+  1 de 10 FIIs cotados (o incidente real)             10 de 10 FIIs cotados</div>
+
+<p>Repare que o problema não estava em nenhuma linha de <code>worker.go</code> — o worker sempre foi
+correto: ele chama <code>tickers.Tickers(ctx)</code> e busca cotação para o que vier. O problema estava
+inteiramente em <strong>o que alimentava</strong> essa chamada. É uma lição de diagnóstico importante:
+antes de suspeitar do código que processa os dados, vale perguntar de onde os dados vieram.</p>
+
+<!-- ============================================================ -->
+<h2 id="mentira">3. Como o dashboard "mentiu" sem mentir</h2>
+
+<p>O efeito mais interessante do incidente é que ele <strong>não apareceu como um erro</strong>. O
+dashboard (SPEC-103) nunca lançou uma exceção, nunca mostrou um "N/A" óbvio. Ele mostrou números
+plausíveis, coerentes internamente, e completamente enganosos — porque ele calcula de forma fiel
+sobre os dados que recebe, e os dados que recebia estavam incompletos. Três sintomas, todos
+rastreáveis à mesma linha em <code>internal/dashboard/compute.go</code>:</p>
+
+<pre><code>// internal/dashboard/compute.go
+for _, h := range holdings.FII {
+    qty := int64(h.Quantity.Value())
+    invested := h.AveragePriceCentavos * qty
+    totalInvested += invested
+
+    var current int64
+    var sector marketdata.Sector
+    if q, ok := quotes[h.Ticker]; ok {
+        current = q.PriceCentavos * qty
+        sector = q.Sector
+        monthlyIncome += q.LastDividendCentavos * qty
+    } else {
+        current = invested            // fallback: valor atual = valor investido
+        sector = marketdata.SectorOther
+        stale = append(stale, h.Ticker.String())
+    }
+    fiiCurrent += current
+    sectorValue[sector] += current
+}</code></pre>
+
+<table>
+  <tr><th>Sintoma no dashboard</th><th>Causa exata nesta linha</th></tr>
+  <tr><td><strong>Renda passiva mensal subestimada</strong></td><td>Um FII sem cotação (<code>quotes[h.Ticker]</code> ausente) nunca soma nada em <code>monthlyIncome</code> — contribui exatamente <strong>zero</strong>, mesmo que o usuário receba dividendo dele todo mês.</td></tr>
+  <tr><td><strong>"Valorização" concentrada em 1 ticker</strong></td><td>Sem cotação, <code>current = invested</code> — o fallback de <strong>custo-base</strong>. Ganho/perda só aparece para o único FII precificado; os outros 9 mostram valorização zero por construção.</td></tr>
+  <tr><td><strong>90%+ da exposição em "Outros/sem cotação"</strong></td><td>Toda linha sem cotação cai em <code>marketdata.SectorOther</code> — os setores reais (Logística, Shoppings, Papel...) desaparecem do gráfico de alocação.</td></tr>
+</table>
+
+<div class="box warn">
+  <span class="lbl">Por que isto NÃO é um bug do dashboard — e por que essa distinção importa</span>
+  É tentador "consertar" o sintoma direto no <code>compute.go</code>. Mas o dashboard está fazendo
+  exatamente o que deveria: quando falta um dado, ele aplica um fallback explícito e sinalizado
+  (a lista <code>stale</code>, que vira o aviso de degradação visível no SPEC-212) em vez de inventar um
+  número. O bug não está em <em>como o dashboard reage</em> à ausência de cotação — está em <em>por que a
+  cotação está ausente em primeiro lugar</em>. Corrigir o sintoma teria escondido a causa; o SPEC-007
+  ataca a causa, uma camada acima, na ingestão.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="correcao">4. A correção: <code>SystemReader</code> + <code>holdingsSource</code></h2>
+
+<p>A ideia central é simples de enunciar: em vez de perguntar "o que está configurado?", o worker
+passa a perguntar "o que as pessoas realmente têm?" — uma consulta direta à tabela
+<code>fii_holdings</code> (já existente desde o SPEC-102, sem nenhuma migration nova). Mas essa
+pergunta cruza uma fronteira delicada: hoje toda leitura de holdings no projeto é <strong>por
+usuário</strong> (<code>WHERE user_id = $1</code>, SPEC-003). Esta leitura precisa ser o oposto — <strong>todos
+os usuários, de uma vez</strong> — porque o worker não age em nome de ninguém específico.</p>
+
+<p>Por isso o SPEC-007 não reaproveita <code>portfolio.Repository</code> nem <code>portfolio.Reader</code>
+(os ports por-usuário existentes). Ele cria um port <strong>novo e deliberadamente separado</strong>:</p>
+
+<pre><code>// internal/portfolio/ports.go
+// SystemReader is a system-scoped read, deliberately separate from Repository/Reader (SPEC-007
+// FR-071, BR-071): it is made on behalf of an internal worker, not an authenticated user, so the
+// identity-from-context / WHERE user_id = $1 rule does not apply — there is no request user to
+// scope to. It returns only public B3 tickers, never user-identifying data, and is reachable only
+// from the market-data ingestion edge, never from an HTTP handler.
+type SystemReader interface {
+    // DistinctFIITickers returns the distinct FII tickers held across ALL users, as raw strings —
+    // parsing into marketdata.Ticker happens at the ingestion edge (SPEC-007 FR-071 AC3), keeping
+    // this package free of marketdata's ticker semantics.
+    DistinctFIITickers(ctx context.Context) ([]string, error)
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que não é só "adicionar um método no Repository que já existe"?</span>
+  Porque nomear as coisas importa. Se <code>DistinctFIITickers(ctx)</code> vivesse dentro de
+  <code>Repository</code>, ao lado de métodos como <code>ListFIIHoldingsByUserID(ctx, userID)</code>, o
+  contrato ficaria ambíguo: um dev futuro poderia assumir — razoavelmente — que <strong>todo</strong> método
+  daquela interface é escopado por usuário, e vazar dado entre contas por engano em algum outro
+  ponto de chamada. Um port separado, com um nome que já diz "isto é diferente" (<code>SystemReader</code>)
+  e um comentário que explica o porquê, torna o contrato <strong>honesto por construção</strong>. É a mesma
+  filosofia de "parse, don't validate" aplicada a arquitetura: a forma do tipo impede o uso errado,
+  em vez de depender de disciplina.
+</div>
+
+<p>A implementação do lado Postgres é uma única query, sem parâmetro nenhum — o próprio ausência de
+um <code>$1</code> é a prova visual de que isto não é escopado:</p>
+
+<pre><code>// internal/portfolio/postgres/postgres.go
+// DistinctFIITickers returns the distinct FII tickers held across ALL users (SPEC-007 FR-071,
+// BR-071) — a system read, deliberately parameterless and unscoped, never WHERE user_id = $1.
+// An empty result is a valid empty slice, not a "not found" error.
+func (r Repository) DistinctFIITickers(ctx context.Context) ([]string, error) {
+    const q = `SELECT DISTINCT ticker FROM fii_holdings ORDER BY ticker`
+    rows, err := r.db.QueryContext(ctx, q)
+    if err != nil {
+        return nil, fmt.Errorf("list distinct fii tickers: %w", err)
+    }
+    defer rows.Close()
+    var out []string
+    for rows.Next() {
+        var ticker string
+        if err := rows.Scan(&ticker); err != nil {
+            return nil, fmt.Errorf("list distinct fii tickers: %w", err)
+        }
+        out = append(out, ticker)
+    }
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("list distinct fii tickers: %w", err)
+    }
+    return out, nil
+}</code></pre>
+
+<p>Do lado da ingestão, um adaptador novo consome esse port e o transforma exatamente na forma que
+o worker já sabia esperar — <code>marketdata.TickerSource</code>. Repare como cada string crua vira um
+<code>marketdata.Ticker</code> validado, e como um valor malformado <strong>nunca aborta a rodada</strong>:</p>
+
+<pre><code>// internal/marketdata/ingest/holdings_source.go
+// holdingsSource is a marketdata.TickerSource backed by users' actual FII holdings (SPEC-007
+// FR-072) — the primary ticker source, replacing the static MARKETDATA_WATCHLIST.
+type holdingsSource struct {
+    reader tickerReader
+    logger *slog.Logger
+}
+
+func (h holdingsSource) Tickers(ctx context.Context) ([]marketdata.Ticker, error) {
+    raw, err := h.reader.DistinctFIITickers(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("holdings ticker source: %w", err)
+    }
+    tickers := make([]marketdata.Ticker, 0, len(raw))
+    for _, s := range raw {
+        t, err := marketdata.ParseTicker(s)
+        if err != nil {
+            h.logger.Warn("market data: skipping malformed stored ticker",
+                slog.String("ticker", s), slog.String("error", err.Error()))
+            continue    // defensivo: holdings já validam o ticker na escrita (SPEC-102)
+        }
+        tickers = append(tickers, t)
+    }
+    return tickers, nil
+}</code></pre>
+
+<div class="box tip">
+  <span class="lbl">O detalhe pequeno que revela disciplina hexagonal: <code>tickerReader</code></span>
+  <code>holdingsSource</code> não depende de <code>portfolio.SystemReader</code> — a interface concreta do
+  outro pacote. Ele declara sua <strong>própria</strong> interface mínima, <code>tickerReader</code>, com apenas o
+  método que precisa. Como Go faz <em>structural typing</em>, qualquer tipo que tenha
+  <code>DistinctFIITickers(ctx) ([]string, error)</code> — inclusive <code>portfolio.postgres.Repository</code> —
+  satisfaz essa interface automaticamente, sem import explícito de <code>portfolio</code> pelo <em>core</em>
+  de <code>marketdata</code>. É "accept interfaces, return structs" levado ao limite: até a fronteira entre
+  duas features vira uma interface pequena, definida por quem consome, não por quem produz.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="uniao">5. A união graciosa: <code>unionSource</code></h2>
+
+<p>Sozinho, o <code>holdingsSource</code> já resolveria o incidente. Mas duas realidades continuam
+valendo: (1) ambientes locais/CI podem não ter <em>nenhuma</em> holding cadastrada ainda, e precisam
+de um jeito de "semear" tickers para testar a ingestão; e (2) qualquer <code>.env</code> que já configura
+<code>MARKETDATA_WATCHLIST</code> hoje não pode simplesmente parar de funcionar. A solução (decisão D3
+do spec) é <strong>união, não substituição</strong>: o conjunto efetivo de tickers é
+<code>distinct(holdings ∪ watchlist)</code>, calculado por um terceiro tipo pequeno:</p>
+
+<pre><code>// internal/marketdata/ingest/composite_source.go
+// unionSource composes N marketdata.TickerSources into the deduplicated union of their output
+// (SPEC-007 FR-073). Each underlying source degrades independently: a failing source is logged
+// and skipped, never aborting the others, so a holdings-read failure still yields the watchlist
+// seed and vice-versa (BR-074). Only a total failure (every source errors) surfaces as an error.
+func (u unionSource) Tickers(ctx context.Context) ([]marketdata.Ticker, error) {
+    seen := make(map[string]marketdata.Ticker)
+    var errs []error
+    okCount := 0
+    for _, s := range u.sources {
+        tickers, err := s.Tickers(ctx)
+        if err != nil {
+            u.logger.Warn("market data: a ticker source failed; continuing with the others",
+                slog.String("error", err.Error()))
+            errs = append(errs, err)
+            continue                       // uma fonte ruim não derruba as outras
+        }
+        okCount++
+        for _, t := range tickers {
+            seen[t.String()] = t           // dedupe por chave textual do ticker
+        }
+    }
+    if okCount == 0 && len(u.sources) > 0 {
+        return nil, fmt.Errorf("union ticker source: all sources failed: %w", errors.Join(errs...))
+    }
+    out := make([]marketdata.Ticker, 0, len(seen))
+    for _, t := range seen {
+        out = append(out, t)
+    }
+    sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
+    return out, nil
+}</code></pre>
+
+<p>E a fiação em <code>factory.go</code> é onde as duas fontes viram uma só, exatamente do jeito que o
+worker já esperava — sem mudar <code>worker.go</code> uma linha sequer:</p>
+
+<pre><code>// internal/marketdata/ingest/factory.go
+func New(cfg config.Config, db *sql.DB, logger *slog.Logger, clk clock.Clock) (*Worker, error) {
+    watchlist, err := marketdata.NewWatchlist(cfg.MarketDataWatchlist)
+    if err != nil {
+        return nil, fmt.Errorf("market data watchlist: %w", err)   // erro de config falha rápido
+    }
+    holdings := newHoldingsSource(portfoliopostgres.New(db), logger)
+    tickers := newUnionSource(logger, holdings, watchlist)          // union: holdings ∪ watchlist
+
+    return newWorker(
+        buildProvider(cfg, clk), cfg.MarketDataProvider,
+        mdpostgres.NewFIIQuoteRepository(db), mdpostgres.NewMacroRepository(db),
+        tickers, clk, logger,
+    ), nil
+}</code></pre>
+
+<div class="box why">
+  <span class="lbl">Por que degradação "por fonte" e não "tudo ou nada"?</span>
+  Pense nos dois jeitos de falhar: um blip momentâneo no banco derruba a leitura de holdings; ou o
+  operador digitou um ticker inválido na watchlist (esse último já falha <strong>no startup</strong>, antes
+  de qualquer rodada — comportamento herdado do SPEC-006 FR-604, inalterado). Se a união fosse
+  tudo-ou-nada, um blip de banco apagaria também os tickers da watchlist, mesmo que ela estivesse
+  perfeitamente saudável. Fazendo cada fonte degradar <strong>independentemente</strong> — logando o erro,
+  mas seguindo com o que sobrou — a rodada continua entregando o máximo de valor possível, na
+  mesma filosofia de "último-dado-bom, isolamento por item" que já rege todo o resto do worker
+  desde o SPEC-006 (BR-602).
+</div>
+
+<p>O único ponto onde <code>worker.go</code> ganhou <strong>uma linha</strong> (não uma mudança de comportamento,
+só observabilidade) foi um log do tamanho do conjunto resolvido, para um operador ver, sem consultar
+o banco, quantos tickers a ingestão aprendeu:</p>
+
+<pre><code>// internal/marketdata/ingest/worker.go
+tickers, err := w.tickers.Tickers(ctx)
+if err != nil {
+    w.logger.Error("market data: ticker source failed", slog.String("error", err.Error()))
+    w.recordItem(ctx, "fii", "source_error")   // mesmo caminho de degradação do SPEC-006
+    sum.FIIFailed++
+    return
+}
+if len(tickers) == 0 {
+    return // macro-only run
+}
+// Resolved ticker count (SPEC-007 FR-077/observability): no user_id, no PII — just a count.
+w.logger.Info("market data: resolved ticker set", slog.Int("count", len(tickers)))</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="decisoes">6. As 5 decisões (D1–D5) e por quê</h2>
+
+<table>
+  <tr><th>#</th><th>Decisão</th><th>Escolha</th><th>Por quê</th></tr>
+  <tr>
+    <td><strong>D1</strong></td><td>Onde vive o adaptador holdings→ticker?</td>
+    <td><strong><code>internal/marketdata/ingest</code></strong> — a borda de composição que já importa
+    tanto <code>marketdata</code> quanto o adaptador Postgres de <code>portfolio</code></td>
+    <td>Mantém os dois <em>cores</em> livres de import um do outro (BR-072) — é o único lugar do
+    projeto onde as duas features legitimamente se encontram.</td>
+  </tr>
+  <tr>
+    <td><strong>D2</strong></td><td>Método novo no <code>Repository</code> ou um port separado?</td>
+    <td><strong><code>portfolio.SystemReader</code> separado</strong></td>
+    <td>O <code>Repository</code>/<code>Reader</code> existentes são todos por-usuário; misturar uma leitura
+    sem escopo ali borraria o contrato de identidade (BR-071).</td>
+  </tr>
+  <tr>
+    <td><strong>D3</strong></td><td>Substituir, complementar ou semear a watchlist?</td>
+    <td><strong>Semear/complementar</strong> — <code>distinct(holdings ∪ watchlist)</code></td>
+    <td>Preserva retrocompatibilidade de <code>.env</code> e dá ao dev/CI um jeito de testar ingestão
+    antes de existir qualquer holding, a custo zero (FR-073).</td>
+  </tr>
+  <tr>
+    <td><strong>D4</strong></td><td>Cachear o conjunto distinto entre rodadas?</td>
+    <td><strong>Não</strong></td>
+    <td>Um <code>DISTINCT</code> por rodada é trivial no volume do MVP; cache seria otimização
+    prematura (FR-075). Registrado como pergunta em aberto, não construído agora.</td>
+  </tr>
+  <tr>
+    <td><strong>D5</strong></td><td>Adicionar índice em <code>fii_holdings.ticker</code>?</td>
+    <td><strong>Não agora</strong></td>
+    <td>Mantém a mudança <strong>livre de migration</strong>; a tabela é pequena no MVP. Revisitar se o
+    <code>DISTINCT</code> aparecer em estatísticas de query no futuro.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="testes">7. Como testar/rodar esta spec</h2>
+
+<p>Assim como o resto do projeto, os testes são <strong>table-driven</strong>, com <code>testify/require</code> e
+<strong>fakes escritos à mão</strong> (nunca <code>gomock</code>/<code>mockery</code>) para os ports — sem rede, sem banco,
+por padrão:</p>
+
+<table>
+  <tr><th>Arquivo</th><th>O que prova</th></tr>
+  <tr><td><code>holdings_source_test.go</code></td><td>Passthrough distinto → <code>Ticker</code>s parseados; ticker malformado é pulado (com log) sem derrubar os demais; resultado vazio → slice vazia; erro do leitor é propagado.</td></tr>
+  <tr><td><code>composite_source_test.go</code></td><td><code>distinct(holdings ∪ watchlist)</code>; degradação por fonte — holdings falha e watchlist ainda volta, e vice-versa.</td></tr>
+  <tr><td><code>worker_test.go</code> (reaproveitado do SPEC-006)</td><td>Um <code>source_error</code> vindo da fonte de holdings mantém o último-dado-bom em <code>fii_quotes</code> e a rodada continua.</td></tr>
+  <tr><td>Integração gated (<code>TEST_DATABASE_URL</code> + <code>testing.Short()</code>)</td><td>Postgres real: dois usuários, um ticker sobreposto → <code>DistinctFIITickers</code> devolve o conjunto deduplicado e ordenado. Pula limpo sem banco.</td></tr>
+</table>
+
+<p>Rodar localmente segue os comandos padrão do projeto:</p>
+<pre><code>task vet              # go vet ./...
+task test:short       # unit tests, sem rede, sem banco
+task test:integration # integration tests, precisa de TEST_DATABASE_URL
+task run              # sobe a API; com MARKETDATA_WATCHLIST vazio, a ingestão já é holdings-driven</code></pre>
+
+<div class="box tip">
+  <span class="lbl">Como verificar que o incidente está mesmo resolvido</span>
+  Rode <code>task run</code> com <code>MARKETDATA_WATCHLIST</code> vazio, cadastre alguns FIIs pela API de
+  holdings (SPEC-102), e observe a próxima rodada de ingestão no log:
+  <code>market data: resolved ticker set count=N</code>. <code>N</code> deve bater com o número de tickers
+  distintos que você cadastrou — não zero, mesmo sem watchlist nenhuma configurada. É a prova de
+  ponta a ponta de que o caso "10 de 10", não "1 de 10", agora é o comportamento padrão.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="ponte">8. Ponte: arquitetura em camadas → hexagonal</h2>
+
+<p>Você já conhece a pilha clássica em camadas: <strong>controller → DTO → service → repository</strong>. A
+melhor forma de internalizar ports &amp; adapters neste projeto é por <strong>tradução</strong>. (Para a teoria
+completa, veja a <a href="arquitetura-hexagonal-aula.html">aula conceitual de arquitetura hexagonal</a>;
+aqui aplicamos ela ao SPEC-007.) Esta spec não tem <em>service</em> novo nem entidade nova — é quase
+puramente "port + adapter", o que a torna um exemplo bem limpo do padrão em isolamento.</p>
+
+<h3>A tabela de-para (com os tipos reais desta spec)</h3>
+<table>
+  <tr><th>Termo em camadas</th><th>Peça hexagonal no SPEC-007</th><th>Onde vive</th></tr>
+  <tr><td>Repository concreto (leitura cross-tabela)</td><td>Quebra em <strong>port</strong> (<code>portfolio.SystemReader</code>, no core de <code>portfolio</code>) + <strong>adapter</strong> (o método <code>DistinctFIITickers</code> em <code>portfolio.postgres.Repository</code>, na borda)</td><td>Interface no core; SQL na borda</td></tr>
+  <tr><td>"Cliente" de outra feature (o consumo do dado)</td><td>Quebra em <strong>port de consumo mínimo</strong> (<code>tickerReader</code>, definido pelo consumidor em <code>internal/marketdata/ingest</code>) + o <strong>adapter</strong> que o satisfaz por <em>structural typing</em> (<code>holdingsSource</code>)</td><td>Interface pequena na borda de composição</td></tr>
+  <tr><td>Service que orquestra múltiplas fontes</td><td><code>unionSource</code> — não é bem um "serviço" (não tem regra de negócio própria), mas cumpre o mesmo papel de orquestração que um caso de uso cumpriria: compõe dois <code>marketdata.TickerSource</code> num terceiro</td><td>Borda de composição (<code>ingest/</code>)</td></tr>
+  <tr><td>DTO</td><td>Não há um novo — a "forma de dado" que atravessa a fronteira é uma <code>[]string</code> crua, deliberadamente <strong>não</strong> tipada em <code>marketdata.Ticker</code> até chegar à borda (FR-071 AC3)</td><td>Fronteira entre pacotes, não HTTP</td></tr>
+  <tr><td>Entidade de domínio</td><td><code>marketdata.Ticker</code> — reaproveitado do SPEC-006, validado via <code>ParseTicker</code></td><td>Core (domínio puro)</td></tr>
+</table>
+
+<h3>A "grande virada": a inversão de dependência</h3>
+<p>Em camadas, um service importaria diretamente o repositório concreto da outra feature — a seta
+aponta <strong>para fora</strong>. No hexagonal, o core define a interface e o adapter a implementa — a seta
+aponta <strong>para dentro</strong>. Aqui isso acontece <strong>duas vezes em sequência</strong>, uma coisa rara
+o bastante para valer a pena visualizar:</p>
+
+<pre><code>// 1ª virada: o CORE de portfolio define o port (internal/portfolio/ports.go)
+type SystemReader interface {
+    DistinctFIITickers(ctx context.Context) ([]string, error)
+}
+// ... e a BORDA de portfolio o implementa, provado em tempo de compilação:
+var _ portfolio.SystemReader = Repository{}    // internal/portfolio/postgres/postgres.go
+
+// 2ª virada: a BORDA de marketdata (ingest) declara seu PRÓPRIO port de consumo mínimo
+type tickerReader interface {
+    DistinctFIITickers(ctx context.Context) ([]string, error)
+}
+// ... satisfeito estruturalmente pelo MESMO Repository acima — sem import nomeado de portfolio
+// pelo core de marketdata; só o pacote ingest (a borda de composição) conhece os dois lados.</code></pre>
+
+<p>Note a assimetria interessante: a primeira interface (<code>SystemReader</code>) é <strong>definida por
+quem produz o dado</strong> (o core de <code>portfolio</code>, seguindo o padrão usual de repositório). A
+segunda (<code>tickerReader</code>) é <strong>definida por quem consome</strong> (o pacote <code>ingest</code>), a
+aplicação mais estrita do princípio "accept interfaces, return structs" da casa. Nem <code>marketdata</code>
+nem <code>portfolio</code> jamais importam um ao outro diretamente — só a borda de composição
+(<code>internal/marketdata/ingest</code>) tem os dois imports, exatamente como já acontecia no SPEC-006
+para <code>MarketDataProvider</code>.</p>
+
+<h3>Driving vs. driven nesta spec</h3>
+<ul>
+  <li><strong>Driving port</strong> (quem aciona): inalterado desde o SPEC-006 — <code>cmd/ingest</code> e o
+  <code>Scheduler</code> continuam chamando <code>Worker.RunOnce</code>. O SPEC-007 não toca essa borda.</li>
+  <li><strong>Driven port novo</strong>: <code>marketdata.TickerSource</code> — que já existia — ganha uma
+  <strong>implementação</strong> nova e melhor (<code>unionSource</code> sobre <code>holdingsSource</code> + <code>Watchlist</code>),
+  sem que a interface em si mude uma linha.</li>
+  <li><strong>Domínio puro</strong>: <code>marketdata.Ticker</code>, <code>portfolio.SystemReader</code> (a interface).
+  <strong>Borda</strong>: <code>holdings_source.go</code>, <code>composite_source.go</code>, o método Postgres — todos
+  em pacotes de infraestrutura, nunca no core.</li>
+</ul>
+
+<div class="diagram">          ┌── HEXÁGONO de marketdata (core puro) ──┐   ┌── HEXÁGONO de portfolio (core puro) ──┐
+cmd/ingest ▶ │ Worker.RunOnce                          │   │ SystemReader (interface, port)         │
+Scheduler  ▶ │   depende de TickerSource (interface)   │   │   DistinctFIITickers(ctx)               │
+  (driving)  └──────────────────────────────────────────┘   └─────────────────────────────────────────┘
+                            ▲                                              ▲
+                            │ implementa                                   │ implementa
+             ┌──────────────┴──────────────────────────────────────────────┴───────────────┐
+             │        internal/marketdata/ingest  (a ÚNICA borda que conhece os dois)       │
+             │  unionSource{ holdingsSource{ tickerReader ◀── portfolio.postgres.Repository },│
+             │               marketdata.Watchlist }                                          │
+             └───────────────────────────────────────────────────────────────────────────────┘
+  A seta de dependência sempre aponta PARA DENTRO de cada hexágono; só a borda de composição cruza os dois.</div>
+
+<!-- ============================================================ -->
+<h2 id="harness">9. Harness Engineering: como a máquina construiu e verificou isto</h2>
+
+<p>O projeto tem propósito duplo: além de Go/backend, aprender <strong>engenharia de harness</strong> — dar à
+IA trilhos que <strong>baixam a taxa de erro</strong>. O SPEC-007 é um bom estudo de caso justamente por ser
+pequeno: dá para ver os trilhos agindo sem o ruído de uma feature grande.</p>
+
+<h3>O fluxo <code>/spec-implement</code>, fase a fase</h3>
+<p>O PLAN-007 fatiou o trabalho em 7 fases — domínio (o port) → persistência (o método Postgres) →
+aplicação (os dois adaptadores de ingestão + a fiação) → API (N/A, explicitamente marcada assim) →
+observabilidade → testes → documentação — a mesma cadência bottom-up de todas as specs anteriores.
+Repare que a Fase 4 (API) não foi pulada silenciosamente: o próprio plano registra <strong>"N/A. SPEC-007
+adds no HTTP endpoint..."</strong>, deixando explícito que a ausência foi uma decisão, não um esquecimento.</p>
+
+<h3>O subagente <code>hexagonal-reviewer</code></h3>
+<p>Esta spec existe inteira por causa de uma regra que o <code>hexagonal-reviewer</code> protege em toda
+spec: <strong>nenhum core importa outro core</strong>. A tentação óbvia, ao precisar de dados de
+<code>portfolio</code> dentro de <code>marketdata</code>, seria simplesmente importar
+<code>internal/portfolio</code> de dentro de <code>internal/marketdata/ports.go</code>. O revisor barra isso —
+e é exatamente por causa dessa restrição que o design ficou com <strong>dois</strong> ports pequenos
+(<code>SystemReader</code> do lado de <code>portfolio</code>, <code>tickerReader</code> do lado de
+<code>marketdata/ingest</code>) em vez de um import direto. A prova mecânica de que a fronteira ficou
+intacta: nenhum arquivo em <code>internal/marketdata</code> (fora do subpacote <code>ingest</code>) tem um
+import de <code>internal/portfolio</code>, e vice-versa.</p>
+
+<div class="box tip">
+  <span class="lbl">A prova de que "no core-to-core import" realmente segurou</span>
+  A asserção <code>var _ portfolio.SystemReader = Repository{}</code> em
+  <code>internal/portfolio/postgres/postgres.go</code> faz o <strong>compilador</strong> provar que o adapter
+  satisfaz o port — não é uma promessa em comentário, é uma linha que quebra o <code>go build</code> se o
+  contrato mudar. Combinada com a interface <code>tickerReader</code> definida <em>dentro</em> de
+  <code>internal/marketdata/ingest</code> (satisfeita estruturalmente, sem import nomeado), qualquer
+  tentativa de "atalho" — importar <code>portfolio</code> direto do core de <code>marketdata</code> — teria
+  saltado aos olhos de um revisor especializado em arquitetura antes mesmo de chegar a testes.
+</div>
+
+<h3>Os hooks que agiram</h3>
+<ul>
+  <li><strong>gofmt</strong>: todo arquivo Go sai formatado — os três arquivos novos
+  (<code>holdings_source.go</code>, <code>composite_source.go</code> e o método em <code>postgres.go</code>) não
+  geram ruído de estilo no diff.</li>
+  <li><strong>Bloqueio de imutabilidade</strong>: o SPEC-007 referencia ADR-0002/ADR-0003 mas não os edita
+  — resolve uma decisão provisória (D3) do SPEC-006 <strong>sem reabrir</strong> o SPEC-006 em si, que
+  permanece <code>Done</code> e imutável em seu conteúdo original.</li>
+  <li><strong>O backstop do <code>Stop</code></strong>: ao fechar, o gate exige build/vet/test/gofmt limpos —
+  e os testes precisam passar <strong>sem rede e sem banco</strong> por padrão. Foi esse backstop que
+  provou que o novo caminho holdings-driven não introduziu nenhuma dependência acidental de I/O
+  fora dos testes de integração <em>gated</em>.</li>
+  <li><strong>O hook <code>block-dev-db-test.ps1</code></strong>: nasceu de um <em>near-miss</em> real durante
+  este mesmo trabalho, e merece a seção própria abaixo.</li>
+</ul>
+
+<div class="box bug">
+  <span class="lbl">O quase-incidente: quando o próprio teste quase repetiu o problema que estava consertando</span>
+  Durante a implementação, o teste de integração da Fase 6 precisa de dados limpos para semear os
+  dois usuários com ticker sobreposto (o cenário da tabela de testes acima) — e a forma padrão de
+  garantir isso é um <code>TRUNCATE</code> no setup. Em algum momento, <code>TEST_DATABASE_URL</code> acabou
+  apontando para o <strong>Postgres de desenvolvimento</strong> (porta 5433) em vez de uma instância
+  descartável — e o <code>TRUNCATE</code> apagou dados reais, semeados à mão, deste mesmo ambiente. Isso já
+  tinha acontecido uma vez antes no projeto, e a resposta institucional foi endurecer a regra: o
+  <code>CLAUDE.md</code> agora exige explicitamente uma instância <strong>descartável</strong> (porta 5434, via
+  <code>docker run --rm</code>) para <code>TEST_DATABASE_URL</code>, e um hook <code>PreToolUse</code> —
+  <code>.claude/hooks/block-dev-db-test.ps1</code> — passou a <strong>bloquear mecanicamente</strong> qualquer
+  execução de teste apontada para a porta/DB de desenvolvimento. A lição não é "a IA errou uma vez";
+  é que engenharia cuidadosa também tem quase-acidentes, e a resposta madura não é confiar mais em
+  disciplina — é transformar a lição em um trilho que <strong>não depende</strong> de ninguém (humano ou IA)
+  lembrar da regra da próxima vez.
+</div>
+
+<h3>As convenções que viraram código (e por que baixam erro)</h3>
+<table>
+  <tr><th>Convenção (CLAUDE.md)</th><th>Como apareceu no SPEC-007</th><th>Por que baixa erro</th></tr>
+  <tr><td>Identidade vem do contexto, nunca do payload</td><td><code>SystemReader</code> documenta explicitamente <strong>por que não se aplica aqui</strong> — não há usuário de requisição a escopar</td><td>Torna a exceção à regra auditável em vez de silenciosa</td></tr>
+  <tr><td>Parse-don't-validate</td><td><code>marketdata.ParseTicker</code> reaproveitado sem mudança; string crua vira <code>Ticker</code> só na borda de ingestão</td><td>Um ticker malformado nunca chega a uma URL de provedor</td></tr>
+  <tr><td>Erros são <code>%w</code>-wrapped com prefixo em minúsculo</td><td><code>"list distinct fii tickers: %w"</code>, <code>"holdings ticker source: %w"</code></td><td>Rastreamento consistente do erro até a origem via <code>errors.Is</code>/<code>errors.As</code></td></tr>
+  <tr><td>Interfaces pequenas, definidas por quem consome</td><td><code>tickerReader</code> — um único método, declarado onde é usado</td><td>Fakes de teste ficam triviais (<code>composite_source_test.go</code>/<code>holdings_source_test.go</code> não precisam de um mock pesado)</td></tr>
+  <tr><td>Doc-comments citam a BR/FR governante</td><td><code>(SPEC-007 FR-071, BR-071)</code> em todo tipo novo</td><td>Traço direto do documento ao código — a SDD fecha o ciclo</td></tr>
+  <tr><td>Testes table-driven + fakes escritos à mão</td><td><code>holdings_source_test.go</code>/<code>composite_source_test.go</code> sem <code>gomock</code>/<code>mockery</code></td><td>Testes legíveis, sem geração de código, fáceis de estender caso a fonte suba de 2 para N</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="ai">10. Conexão com AI Engineering</h2>
+
+<p>O SPEC-007 <strong>não</strong> é uma feature de IA — não há prompt, LLM, ou <code>Insighter</code> em lugar
+nenhum deste trabalho. Mas ele fortalece exatamente a fundação sobre a qual a IA do produto se apoia,
+e vale conectar os pontos.</p>
+
+<table>
+  <tr><th>Conceito de AI Engineering</th><th>Como o SPEC-007 o reforça</th></tr>
+  <tr>
+    <td><strong>Grounding / completude do fato</strong></td>
+    <td>O Fact Builder (SPEC-104) monta os <code>Facts</code> que o <code>Insighter</code> recebe a partir de
+    <code>fii_quotes</code> + a carteira do usuário. Um fato "grounded" mas <strong>incompleto</strong> (9 de 10
+    FIIs sem cotação) ainda produziria um insight tecnicamente correto sobre dados errados — o
+    equivalente de IA a "garbage in, garbage out". O SPEC-007 fecha esse buraco na origem, antes de
+    qualquer LLM entrar na conversa.</td>
+  </tr>
+  <tr>
+    <td><strong>O mesmo bug, em qualquer camada que consuma dado incompleto</strong></td>
+    <td>O incidente apareceu no dashboard, mas teria aparecido <strong>idêntico</strong> no Health Score
+    (SPEC-106), nas Projeções (SPEC-107) e em qualquer resposta do copiloto conversacional
+    (SPEC-108) sobre a carteira — todos leem os mesmos <code>fii_quotes</code>. Consertar na ingestão
+    corrige todos os consumidores de uma vez, em vez de remendar cada consumidor individualmente.</td>
+  </tr>
+  <tr>
+    <td><strong>O seam de "system read" como precedente</strong></td>
+    <td>O <code>portfolio.SystemReader</code> é o primeiro port do projeto deliberadamente <strong>sem</strong>
+    escopo por usuário fora do próprio <code>marketdata</code> (que já era global). É um precedente útil
+    para a futura arquitetura multi-agente CIO: alguns agentes (um agendador de tarefas, um worker
+    de manutenção) vão legitimamente precisar de leituras cross-usuário — este spec mostra o padrão
+    correto de como nomear e isolar esse tipo de acesso sem comprometer o isolamento por usuário do
+    resto do sistema.</td>
+  </tr>
+</table>
+
+<div class="box tip">
+  <span class="lbl">A ideia que conecta tudo</span>
+  A regra binding nº 3 do PRD — "fatos são computados, não gerados" — pressupõe que os fatos
+  <strong>existem</strong> antes de serem computados. O SPEC-007 não muda como um fato é computado; garante
+  que o fato <strong>chegue a existir</strong> para todo ticker que importa, sem depender de configuração
+  manual. É infraestrutura invisível, mas é o tipo de infraestrutura sem a qual toda promessa de
+  explicabilidade (FR-013) do produto ficaria construída sobre dados parciais sem que ninguém
+  percebesse.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="next">11. O que vem a seguir</h2>
+
+<table>
+  <tr><th>Spec</th><th>Tema</th><th>Status</th></tr>
+  <tr><td>SPEC-001…006</td><td>Esqueleto, persistência, auth, observabilidade, Insighter, MarketDataProvider</td><td>✅ Feito</td></tr>
+  <tr><td>SPEC-007</td><td>Ingestão de tickers guiada pela carteira</td><td>✅ Feito (esta aula)</td></tr>
+  <tr><td>SPEC-101…108</td><td>Perfil, holdings, dashboard, insights, rebalanceamento, health score, projeções, copiloto</td><td>✅ Feito — todos agora leem <code>fii_quotes</code> completo por construção</td></tr>
+  <tr><td>SPEC-2xx</td><td>Trilha de frontend</td><td>⬜ Em andamento</td></tr>
+</table>
+
+<div class="box why">
+  <span class="lbl">Dívida técnica ainda em aberto, honestamente registrada</span>
+  O SPEC-007 não fecha tudo. Fica documentado como pergunta em aberto: cache/detecção de mudança
+  no conjunto de tickers (se o volume crescer), um índice em <code>fii_holdings.ticker</code> (se o
+  <code>DISTINCT</code> aparecer em estatísticas de query), possível retirada futura da
+  <code>MARKETDATA_WATCHLIST</code> (mantida hoje por retrocompat + conveniência de dev), e
+  "pré-aquecer" a cotação de um FII recém-adicionado de forma síncrona, para que o primeiro render
+  do dashboard depois de um cadastro não seja custo-base puro. Nenhum desses é bloqueante — são
+  candidatos a specs futuras, não trabalho escondido nesta.
+</div>
+
+<div class="box tip">
+  <span class="lbl">Resumo de uma frase</span>
+  O SPEC-007 trocou a pergunta que a ingestão faz de "o que está numa lista configurada à mão?"
+  para "o que os usuários realmente têm?" — um novo port <code>portfolio.SystemReader</code> (leitura
+  de sistema, sem <code>user_id</code>, deliberadamente separado dos ports por-usuário), um adaptador
+  <code>holdingsSource</code> na borda de ingestão, e um <code>unionSource</code> que combina isso com a
+  antiga watchlist (agora opcional) sem quebrar nada que já funcionava — corrigindo, na origem, o
+  incidente real de "1 cotação para 10 FIIs" sem tocar uma linha do worker em si.
+</div>
+
+<footer>
+  YieldForge · Aula 07 (SPEC-007) · gerada como material de estudo. Veja também a
+  <a href="SPEC-006-aula.html">Aula 06 (SPEC-006 — MarketDataProvider &amp; Worker de Ingestão)</a>, a
+  <a href="SPEC-101-aula.html">Aula sobre o Perfil do Investidor</a>, a
+  <a href="SPEC-102-aula.html">Aula sobre Gestão de Carteira</a>, a
+  <a href="arquitetura-hexagonal-aula.html">aula de arquitetura hexagonal</a>, o
+  <a href="../02-specs/SPEC-007-holdings-driven-ticker-ingestion.md">SPEC-007</a>
+  e o <a href="../03-plans/PLAN-007-holdings-driven-ticker-ingestion.md">PLAN-007</a>.
+</footer>
+
+</div>
+</body>
+</html>

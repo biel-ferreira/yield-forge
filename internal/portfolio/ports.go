@@ -36,3 +36,15 @@ type Reader interface {
 type MacroReader interface {
 	GetLatestMacroIndicator(ctx context.Context, ind marketdata.Indicator) (marketdata.MacroIndicator, error)
 }
+
+// SystemReader is a system-scoped read, deliberately separate from Repository/Reader (SPEC-007
+// FR-071, BR-071): it is made on behalf of an internal worker, not an authenticated user, so the
+// identity-from-context / WHERE user_id = $1 rule does not apply — there is no request user to
+// scope to. It returns only public B3 tickers, never user-identifying data, and is reachable only
+// from the market-data ingestion edge, never from an HTTP handler.
+type SystemReader interface {
+	// DistinctFIITickers returns the distinct FII tickers held across ALL users, as raw strings —
+	// parsing into marketdata.Ticker happens at the ingestion edge (SPEC-007 FR-071 AC3), keeping
+	// this package free of marketdata's ticker semantics.
+	DistinctFIITickers(ctx context.Context) ([]string, error)
+}

@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -188,6 +189,31 @@ func TestRunOnce_StoreFailureIsIsolated(t *testing.T) {
 
 	require.Equal(t, 1, sum.FIIFailed)
 	require.Equal(t, len(marketdata.AllIndicators), sum.MacroOK, "a FII store error doesn't stop macro ingestion")
+}
+
+// TestRunOnce_TickerSourceFailureKeepsLastKnownGood proves the SPEC-007 composition (a
+// unionSource over holdings + watchlist) degrades through the worker's existing source_error
+// path (worker.go:141-147) exactly like the old plain-Watchlist source did — a total ticker
+// source failure never erases last-known-good fii_quotes and macro ingestion still runs.
+func TestRunOnce_TickerSourceFailureKeepsLastKnownGood(t *testing.T) {
+	fiiRepo, macroRepo := newMemFIIRepo(), newMemMacroRepo()
+	prior := marketdata.FIIQuote{Ticker: marketdata.MustParseTicker("HGLG11"), PriceCentavos: 9_999}
+	fiiRepo.data["HGLG11"] = prior
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	boom := fakeSource{err: errors.New("holdings read failed")}
+	tickers := newUnionSource(logger, boom) // every source fails -> union itself errors
+
+	w := newWorker(marketdata.Fake{}, "fake", fiiRepo, macroRepo, tickers,
+		fakeClock{t: time.Unix(1_700_000_000, 0).UTC()}, logger)
+	sum := w.RunOnce(context.Background())
+
+	require.Equal(t, 0, sum.FIIOK)
+	require.Equal(t, 1, sum.FIIFailed)
+	require.Equal(t, len(marketdata.AllIndicators), sum.MacroOK, "macro still ingests despite the ticker source failure")
+	got, err := fiiRepo.GetFIIQuoteByTicker(context.Background(), marketdata.MustParseTicker("HGLG11"))
+	require.NoError(t, err)
+	require.Equal(t, int64(9_999), got.PriceCentavos, "last-known-good is preserved (BR-602/BR-074)")
 }
 
 func TestRunOnce_EmptyWatchlistIngestsMacroOnly(t *testing.T) {

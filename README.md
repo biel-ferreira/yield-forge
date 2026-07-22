@@ -142,6 +142,11 @@ All money is `int64` **centavos** and all rates integer **basis points** — nev
 (via `internal/platform/money`, half-up). A failed/malformed fetch **never overwrites** good
 data; upserts are idempotent.
 
+**Ticker discovery is holdings-driven** (SPEC-007): each run fetches a quote for every distinct
+FII ticker any user actually holds — no manual list to maintain. `MARKETDATA_WATCHLIST` is an
+optional seed unioned with the holdings-derived set, handy for seeding a local/dev/CI
+environment before any holdings exist; an empty watchlist (the normal case) is fully expected.
+
 The provider is selected by `MARKETDATA_PROVIDER`:
 
 | Value | Use | Sources |

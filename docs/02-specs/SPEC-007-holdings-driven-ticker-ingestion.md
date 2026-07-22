@@ -7,7 +7,7 @@
 | Feature Name | Holdings-Driven FII Ticker Ingestion                     |
 | Feature ID   | SPEC-007 (foundational)                                  |
 | Version      | 0.1.0                                                    |
-| Status       | Draft                                                    |
+| Status       | Done                                                     |
 | Author       | Gabigol                                                  |
 | Last Updated | 2026-07-14                                               |
 | Related PRD  | [PRD.md](../01-product/PRD.md) — FR-006 (per-FII market data), §10 NFR (Reliability), §14 Risks — refines *how* the ingestion worker learns which FII tickers to fetch |
