@@ -24,10 +24,9 @@ func testLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard,
 
 func TestHoldingsSource_Tickers(t *testing.T) {
 	tests := []struct {
-		name    string
-		raw     []string
-		want    []string // ticker strings, order-sensitive (passthrough order)
-		wantErr bool
+		name string
+		raw  []string
+		want []string // ticker strings, order-sensitive (passthrough order)
 	}{
 		{
 			name: "distinct passthrough parses into Tickers",
