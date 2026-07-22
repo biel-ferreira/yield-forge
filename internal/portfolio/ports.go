@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"context"
+	"time"
 
 	"github.com/biel-ferreira/yield-forge/internal/marketdata"
 )
@@ -21,6 +22,11 @@ type Repository interface {
 	ListFixedIncomeHoldingsByUserID(ctx context.Context, userID string) ([]FixedIncomeHolding, error)
 	UpdateFixedIncomeHolding(ctx context.Context, h FixedIncomeHolding) (FixedIncomeHolding, error) // scoped; ErrHoldingNotFound
 	DeleteFixedIncomeHolding(ctx context.Context, userID, id string) error                          // scoped; ErrHoldingNotFound
+
+	// ReconcileFixedIncomeHolding additively confirms interest and/or a new contribution (SPEC-110
+	// FR-1103): invested_amount += confirmedInterest+contribution; total_contributed +=
+	// contribution only; the accrual clock resets to now. Scoped; ErrHoldingNotFound.
+	ReconcileFixedIncomeHolding(ctx context.Context, userID, id string, confirmedInterestCentavos, contributionCentavos int64, now time.Time) (FixedIncomeHolding, error)
 }
 
 // Reader is the consumer-facing read port (SPEC-102 FR-1025): the seam the dashboard

@@ -12,11 +12,12 @@ import (
 
 // fakeRepo captures created holdings and lets a test force the scoped-mutation not-found path.
 type fakeRepo struct {
-	createdFII []FIIHolding
-	createdFI  []FixedIncomeHolding
-	fiiList    []FIIHolding
-	fiList     []FixedIncomeHolding
-	mutateErr  error // returned by Update*/Delete* (e.g. ErrHoldingNotFound)
+	createdFII    []FIIHolding
+	createdFI     []FixedIncomeHolding
+	fiiList       []FIIHolding
+	fiList        []FixedIncomeHolding
+	mutateErr     error              // returned by Update*/Delete*/Reconcile* (e.g. ErrHoldingNotFound)
+	reconcileBase FixedIncomeHolding // the "current DB row" ReconcileFixedIncomeHolding adds onto
 }
 
 func (f *fakeRepo) CreateFIIHolding(_ context.Context, h FIIHolding) (FIIHolding, error) {
@@ -51,6 +52,17 @@ func (f *fakeRepo) UpdateFixedIncomeHolding(_ context.Context, h FixedIncomeHold
 }
 func (f *fakeRepo) DeleteFixedIncomeHolding(context.Context, string, string) error {
 	return f.mutateErr
+}
+func (f *fakeRepo) ReconcileFixedIncomeHolding(_ context.Context, userID, id string, confirmedInterestCentavos, contributionCentavos int64, now time.Time) (FixedIncomeHolding, error) {
+	if f.mutateErr != nil {
+		return FixedIncomeHolding{}, f.mutateErr
+	}
+	h := f.reconcileBase
+	h.ID, h.UserID = id, userID
+	h.InvestedAmountCentavos += confirmedInterestCentavos + contributionCentavos
+	h.TotalContributedCentavos += contributionCentavos
+	h.LastReconciledAt = now
+	return h, nil
 }
 
 type fakeClock struct{ t time.Time }
@@ -169,6 +181,48 @@ func TestService_UpdatePropagatesNotFound(t *testing.T) {
 	repo := &fakeRepo{mutateErr: ErrHoldingNotFound}
 	_, err := newService(repo).UpdateFIIHolding(context.Background(), "u1", "some-id", FIIInput{Ticker: "HGLG11", Quantity: 1, AveragePriceCentavos: 100})
 	require.ErrorIs(t, err, ErrHoldingNotFound)
+}
+
+// TestService_ReconcileFixedIncomeHolding covers SPEC-110 FR-1103: both amounts additively update
+// the holding, interest never touches TotalContributedCentavos, and the clock resets to now.
+func TestService_ReconcileFixedIncomeHolding(t *testing.T) {
+	base := FixedIncomeHolding{
+		InvestedAmountCentavos: 10_000_00, TotalContributedCentavos: 10_000_00,
+		LastReconciledAt: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	t.Run("interest only (contribution = 0)", func(t *testing.T) {
+		repo := &fakeRepo{reconcileBase: base}
+		got, err := newService(repo).ReconcileFixedIncomeHolding(context.Background(), "u1", "fi-1", 963, 0)
+		require.NoError(t, err)
+		require.Equal(t, int64(10_000_00+963), got.InvestedAmountCentavos)
+		require.Equal(t, int64(10_000_00), got.TotalContributedCentavos, "interest never touches lifetime contributed")
+		require.True(t, time.Date(2026, 6, 26, 10, 0, 0, 0, time.UTC).Equal(got.LastReconciledAt), "clock resets to the fake Clock's now")
+	})
+
+	t.Run("interest + contribution", func(t *testing.T) {
+		repo := &fakeRepo{reconcileBase: base}
+		got, err := newService(repo).ReconcileFixedIncomeHolding(context.Background(), "u1", "fi-1", 1_050, 5_000_00)
+		require.NoError(t, err)
+		require.Equal(t, int64(10_000_00+1_050+5_000_00), got.InvestedAmountCentavos)
+		require.Equal(t, int64(10_000_00+5_000_00), got.TotalContributedCentavos, "contribution grows lifetime contributed")
+	})
+
+	t.Run("negative confirmed interest is rejected", func(t *testing.T) {
+		_, err := newService(&fakeRepo{}).ReconcileFixedIncomeHolding(context.Background(), "u1", "fi-1", -1, 0)
+		require.ErrorIs(t, err, ErrNegativeAmount)
+	})
+
+	t.Run("negative contribution is rejected", func(t *testing.T) {
+		_, err := newService(&fakeRepo{}).ReconcileFixedIncomeHolding(context.Background(), "u1", "fi-1", 0, -1)
+		require.ErrorIs(t, err, ErrNegativeAmount)
+	})
+
+	t.Run("propagates not-found for a missing/unowned holding", func(t *testing.T) {
+		repo := &fakeRepo{mutateErr: ErrHoldingNotFound}
+		_, err := newService(repo).ReconcileFixedIncomeHolding(context.Background(), "u1", "some-id", 100, 0)
+		require.ErrorIs(t, err, ErrHoldingNotFound)
+	})
 }
 
 func TestService_ListHoldings_Aggregates(t *testing.T) {

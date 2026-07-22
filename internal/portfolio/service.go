@@ -146,18 +146,42 @@ func (s *Service) DeleteFixedIncomeHolding(ctx context.Context, userID, id strin
 	return s.repo.DeleteFixedIncomeHolding(ctx, userID, id)
 }
 
-// withEffectiveRate resolves and attaches h's effective annual rate (SPEC-109 FR-1092).
+// ReconcileFixedIncomeHolding confirms interest and/or reports a new contribution for the
+// caller's holding (SPEC-110 FR-1103). Both amounts must be >= 0 (ErrNegativeAmount otherwise);
+// contributionCentavos may be zero (pure interest confirmation). ErrHoldingNotFound for a
+// missing or unowned id.
+func (s *Service) ReconcileFixedIncomeHolding(ctx context.Context, userID, id string, confirmedInterestCentavos, contributionCentavos int64) (FixedIncomeHolding, error) {
+	if confirmedInterestCentavos < 0 || contributionCentavos < 0 {
+		return FixedIncomeHolding{}, fmt.Errorf("reconcile fixed income holding: %w", ErrNegativeAmount)
+	}
+	updated, err := s.repo.ReconcileFixedIncomeHolding(ctx, userID, id, confirmedInterestCentavos, contributionCentavos, s.clock.Now())
+	if err != nil {
+		return FixedIncomeHolding{}, err
+	}
+	return s.withEffectiveRate(ctx, updated), nil
+}
+
+// withEffectiveRate resolves and attaches h's computed, never-persisted fields: the effective
+// annual rate (SPEC-109 FR-1092) and the SPEC-110 reconciliation fields (EstimatedInterestCentavos,
+// ReconciliationDue) — one shared `now` for all three, consistent with a single request/response.
 func (s *Service) withEffectiveRate(ctx context.Context, h FixedIncomeHolding) FixedIncomeHolding {
 	h.EffectiveAnnualRateBps = h.ResolveEffectiveRate(s.latestMacro(ctx))
+	now := s.clock.Now()
+	h.EstimatedInterestCentavos = h.EstimateInterest(now)
+	h.ReconciliationDue = h.IsReconciliationDue(now)
 	return h
 }
 
-// withEffectiveRates resolves and attaches the effective annual rate for every holding, sharing
-// one macro snapshot across the whole list (a consistent reference point per request/response).
+// withEffectiveRates resolves and attaches the computed fields for every holding, sharing one
+// macro snapshot + one `now` across the whole list (a consistent reference point per
+// request/response).
 func (s *Service) withEffectiveRates(ctx context.Context, holdings []FixedIncomeHolding) []FixedIncomeHolding {
 	macro := s.latestMacro(ctx)
+	now := s.clock.Now()
 	for i := range holdings {
 		holdings[i].EffectiveAnnualRateBps = holdings[i].ResolveEffectiveRate(macro)
+		holdings[i].EstimatedInterestCentavos = holdings[i].EstimateInterest(now)
+		holdings[i].ReconciliationDue = holdings[i].IsReconciliationDue(now)
 	}
 	return holdings
 }
