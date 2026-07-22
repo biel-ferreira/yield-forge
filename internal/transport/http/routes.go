@@ -38,6 +38,7 @@ func routeTable(api apiHandler, authH authHandler, profileH profileHandler, hold
 		{http.MethodGet, "/holdings/fixed-income", holdingsH.listFixedIncomeHoldings},
 		{http.MethodPut, "/holdings/fixed-income/{id}", holdingsH.updateFixedIncomeHolding},
 		{http.MethodDelete, "/holdings/fixed-income/{id}", holdingsH.deleteFixedIncomeHolding},
+		{http.MethodPost, "/holdings/fixed-income/{id}/reconcile", holdingsH.reconcileFixedIncomeHolding},
 		{http.MethodGet, "/dashboard", dashboardH.getDashboard},
 		{http.MethodGet, "/insights", insightsH.getInsights},
 		{http.MethodPost, "/rebalancing", rebalancingH.postRebalancing},

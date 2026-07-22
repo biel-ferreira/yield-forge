@@ -75,6 +75,10 @@ func (f *fakePortfolioService) DeleteFixedIncomeHolding(_ context.Context, userI
 	f.gotUserID, f.gotID = userID, id
 	return f.err
 }
+func (f *fakePortfolioService) ReconcileFixedIncomeHolding(_ context.Context, userID, id string, _, _ int64) (portfolio.FixedIncomeHolding, error) {
+	f.gotUserID, f.gotID = userID, id
+	return f.fiResult, f.err
+}
 
 func newHoldingsHandler(svc PortfolioService) holdingsHandler {
 	return holdingsHandler{service: svc, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
@@ -212,6 +216,61 @@ func TestCreateFixedIncome_InvalidIndexer_ValidationError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.createFixedIncomeHolding(rec, authed(http.MethodPost, "/holdings/fixed-income", body, "u1"))
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// TestReconcileFixedIncomeHolding_OK proves SPEC-110 FR-1103: the endpoint calls the service
+// with the caller's context identity + path id (never trusting a client-supplied id), and the
+// new fields (total_contributed_centavos, estimated_interest_centavos, reconciliation_due,
+// last_reconciled_at) cross the wire.
+func TestReconcileFixedIncomeHolding_OK(t *testing.T) {
+	reconciled := sampleFixedIncome("u1")
+	reconciled.InvestedAmountCentavos = 1_000_963
+	reconciled.TotalContributedCentavos = 1_000_000
+	reconciled.LastReconciledAt = reconciled.CreatedAt.Add(31 * 24 * time.Hour)
+	svc := &fakePortfolioService{fiResult: reconciled}
+	h := newHoldingsHandler(svc)
+
+	body := `{"confirmed_interest_centavos":963,"contribution_centavos":0}`
+	rec := httptest.NewRecorder()
+	req := authed(http.MethodPost, "/holdings/fixed-income/fi-1/reconcile", body, "u1")
+	req.SetPathValue("id", "fi-1")
+	h.reconcileFixedIncomeHolding(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "u1", svc.gotUserID, "identity comes from context, never the body")
+	require.Equal(t, "fi-1", svc.gotID, "id comes from the path")
+
+	var resp fixedIncomeResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, int64(1_000_963), resp.InvestedAmountCentavos)
+	require.Equal(t, int64(1_000_000), resp.TotalContributedCentavos, "money crosses the wire as integer centavos")
+}
+
+// TestReconcileFixedIncomeHolding_NegativeAmount_ValidationError proves a negative amount is
+// rejected with a field-agnostic message (ErrNegativeAmount is shared with FII's
+// average_price_centavos, so the mapped message must not assume that field).
+func TestReconcileFixedIncomeHolding_NegativeAmount_ValidationError(t *testing.T) {
+	svc := &fakePortfolioService{err: portfolio.ErrNegativeAmount}
+	h := newHoldingsHandler(svc)
+	body := `{"confirmed_interest_centavos":-1,"contribution_centavos":0}`
+	rec := httptest.NewRecorder()
+	req := authed(http.MethodPost, "/holdings/fixed-income/fi-1/reconcile", body, "u1")
+	req.SetPathValue("id", "fi-1")
+	h.reconcileFixedIncomeHolding(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NotContains(t, rec.Body.String(), "average_price_centavos", "the message must not assume FII context")
+}
+
+// TestReconcileFixedIncomeHolding_NotFound proves an unowned/missing id maps to 404.
+func TestReconcileFixedIncomeHolding_NotFound(t *testing.T) {
+	svc := &fakePortfolioService{err: portfolio.ErrHoldingNotFound}
+	h := newHoldingsHandler(svc)
+	body := `{"confirmed_interest_centavos":100,"contribution_centavos":0}`
+	rec := httptest.NewRecorder()
+	req := authed(http.MethodPost, "/holdings/fixed-income/ghost/reconcile", body, "u1")
+	req.SetPathValue("id", "ghost")
+	h.reconcileFixedIncomeHolding(rec, req)
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 // TestHTTP_FixedIncomeSpanRouteNamed is TestHTTP_HoldingsSpanRouteNamed's fixed-income analogue:

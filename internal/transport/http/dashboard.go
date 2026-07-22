@@ -27,6 +27,12 @@ type dashboardResponse struct {
 	Allocation   []classSliceResponse  `json:"allocation"`
 	FIISectors   []sectorSliceResponse `json:"fii_sectors"`
 	StaleTickers []string              `json:"stale_tickers"`
+	// FixedIncomeReconciliationDue/NeedsAttention/FIIHoldings/FixedIncomeHoldings are new in
+	// SPEC-110 (FR-1105/FR-1109).
+	FixedIncomeReconciliationDue []string                          `json:"fixed_income_reconciliation_due"`
+	NeedsAttention               bool                              `json:"needs_attention"`
+	FIIHoldings                  []fiiHoldingSliceResponse         `json:"fii_holdings"`
+	FixedIncomeHoldings          []fixedIncomeHoldingSliceResponse `json:"fixed_income_holdings"`
 }
 
 type summaryResponse struct {
@@ -37,16 +43,37 @@ type summaryResponse struct {
 	GrowthBps             int   `json:"growth_bps"`
 }
 
+// classSliceResponse's InvestedCentavos/GrowthCentavos/GrowthBps are new in SPEC-110 FR-1104 —
+// 0 for Stocks/ETFs (always-zero classes in the MVP).
 type classSliceResponse struct {
-	AssetClass    string `json:"asset_class"`
-	ValueCentavos int64  `json:"value_centavos"`
-	ShareBps      int    `json:"share_bps"`
+	AssetClass       string `json:"asset_class"`
+	ValueCentavos    int64  `json:"value_centavos"`
+	ShareBps         int    `json:"share_bps"`
+	InvestedCentavos int64  `json:"invested_centavos"`
+	GrowthCentavos   int64  `json:"growth_centavos"`
+	GrowthBps        int    `json:"growth_bps"`
 }
 
 type sectorSliceResponse struct {
 	Sector        string `json:"sector"`
 	ValueCentavos int64  `json:"value_centavos"`
 	ShareBps      int    `json:"share_bps"`
+}
+
+// fiiHoldingSliceResponse / fixedIncomeHoldingSliceResponse are the new per-holding breakdown
+// (SPEC-110 FR-1109), mirroring sectorSliceResponse's value+share shape at holding granularity.
+type fiiHoldingSliceResponse struct {
+	Ticker        string `json:"ticker"`
+	ValueCentavos int64  `json:"value_centavos"`
+	ShareBps      int    `json:"share_bps"`
+}
+
+type fixedIncomeHoldingSliceResponse struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	ValueCentavos  int64  `json:"value_centavos"`
+	GrowthCentavos int64  `json:"growth_centavos"`
+	ShareBps       int    `json:"share_bps"`
 }
 
 // getDashboard returns the authenticated caller's computed dashboard (SPEC-103 FR-1037).
@@ -68,7 +95,10 @@ func (h dashboardHandler) getDashboard(w http.ResponseWriter, r *http.Request) {
 func toDashboardResponse(d dashboard.Dashboard) dashboardResponse {
 	allocation := make([]classSliceResponse, len(d.Allocation))
 	for i, s := range d.Allocation {
-		allocation[i] = classSliceResponse{AssetClass: string(s.Class), ValueCentavos: s.ValueCentavos, ShareBps: s.ShareBps}
+		allocation[i] = classSliceResponse{
+			AssetClass: string(s.Class), ValueCentavos: s.ValueCentavos, ShareBps: s.ShareBps,
+			InvestedCentavos: s.InvestedCentavos, GrowthCentavos: s.GrowthCentavos, GrowthBps: s.GrowthBps,
+		}
 	}
 	sectors := make([]sectorSliceResponse, len(d.FIISectors))
 	for i, s := range d.FIISectors {
@@ -78,6 +108,20 @@ func toDashboardResponse(d dashboard.Dashboard) dashboardResponse {
 	if stale == nil {
 		stale = []string{} // emit [] rather than null
 	}
+	dueList := d.FixedIncomeReconciliationDue
+	if dueList == nil {
+		dueList = []string{}
+	}
+	fiiHoldings := make([]fiiHoldingSliceResponse, len(d.FIIHoldings))
+	for i, s := range d.FIIHoldings {
+		fiiHoldings[i] = fiiHoldingSliceResponse{Ticker: s.Ticker.String(), ValueCentavos: s.ValueCentavos, ShareBps: s.ShareBps}
+	}
+	fiHoldings := make([]fixedIncomeHoldingSliceResponse, len(d.FixedIncomeHoldings))
+	for i, s := range d.FixedIncomeHoldings {
+		fiHoldings[i] = fixedIncomeHoldingSliceResponse{
+			ID: s.ID, Name: s.Name, ValueCentavos: s.ValueCentavos, GrowthCentavos: s.GrowthCentavos, ShareBps: s.ShareBps,
+		}
+	}
 	return dashboardResponse{
 		Summary: summaryResponse{
 			TotalInvestedCentavos: d.Summary.TotalInvestedCentavos,
@@ -86,8 +130,12 @@ func toDashboardResponse(d dashboard.Dashboard) dashboardResponse {
 			GrowthCentavos:        d.Summary.GrowthCentavos,
 			GrowthBps:             d.Summary.GrowthBps,
 		},
-		Allocation:   allocation,
-		FIISectors:   sectors,
-		StaleTickers: stale,
+		Allocation:                   allocation,
+		FIISectors:                   sectors,
+		StaleTickers:                 stale,
+		FixedIncomeReconciliationDue: dueList,
+		NeedsAttention:               d.NeedsAttention,
+		FIIHoldings:                  fiiHoldings,
+		FixedIncomeHoldings:          fiHoldings,
 	}
 }

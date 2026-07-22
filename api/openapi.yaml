@@ -387,6 +387,38 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/HoldingNotFound"
+  /holdings/fixed-income/{id}/reconcile:
+    post:
+      tags: [holdings]
+      summary: Confirm interest and/or report a contribution for an owned fixed-income holding
+      description: |-
+        SPEC-110 FR-1103. Both amounts are additive (never a replacement): invested_amount_centavos
+        += confirmed_interest_centavos + contribution_centavos; total_contributed_centavos +=
+        contribution_centavos only (interest never touches it); last_reconciled_at resets to now.
+        contribution_centavos may be 0 (pure interest confirmation). Distinct from PUT, which is a
+        plain metadata/correction edit and never touches total_contributed_centavos.
+      operationId: reconcileFixedIncomeHolding
+      parameters:
+        - $ref: "#/components/parameters/HoldingID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedIncomeReconcileRequest"
+      responses:
+        "200":
+          description: The reconciled holding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixedIncomeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/HoldingNotFound"
   /dashboard:
     get:
       tags: [dashboard]
@@ -1104,7 +1136,21 @@ components:
                 format: int64
               share_bps:
                 type: integer
-            required: [asset_class, value_centavos, share_bps]
+              invested_centavos:
+                type: integer
+                format: int64
+                description: |-
+                  New in SPEC-110 (FR-1104): this class's own cost basis — for fixed_income,
+                  the sum of TotalContributedCentavos (not invested_amount_centavos). 0 for
+                  stocks/etfs.
+              growth_centavos:
+                type: integer
+                format: int64
+                description: New in SPEC-110 — value_centavos - invested_centavos, per class.
+              growth_bps:
+                type: integer
+                description: New in SPEC-110 — growth relative to invested_centavos.
+            required: [asset_class, value_centavos, share_bps, invested_centavos, growth_centavos, growth_bps]
         fii_sectors:
           type: array
           description: Current-value share per FII sector, as a fraction of the FII total.
@@ -1124,7 +1170,55 @@ components:
           description: Held FIIs with no current quote, valued at cost basis.
           items:
             type: string
-      required: [summary, allocation, fii_sectors, stale_tickers]
+        needs_attention:
+          type: boolean
+          description: |-
+            New in SPEC-110 (FR-1105): true when stale_tickers or
+            fixed_income_reconciliation_due is non-empty.
+        fixed_income_reconciliation_due:
+          type: array
+          description: |-
+            New in SPEC-110: names of fixed-income holdings whose last_reconciled_at falls
+            in a calendar month strictly before the current one.
+          items:
+            type: string
+        fii_holdings:
+          type: array
+          description: New in SPEC-110 (FR-1109) — per-ticker current value, a share of the FII total.
+          items:
+            type: object
+            properties:
+              ticker:
+                type: string
+              value_centavos:
+                type: integer
+                format: int64
+              share_bps:
+                type: integer
+            required: [ticker, value_centavos, share_bps]
+        fixed_income_holdings:
+          type: array
+          description: |-
+            New in SPEC-110 (FR-1109) — per-holding current value, growth, and a share of
+            the fixed-income total.
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              value_centavos:
+                type: integer
+                format: int64
+              growth_centavos:
+                type: integer
+                format: int64
+              share_bps:
+                type: integer
+            required: [id, name, value_centavos, growth_centavos, share_bps]
+      required: [summary, allocation, fii_sectors, stale_tickers, needs_attention, fixed_income_reconciliation_due, fii_holdings, fixed_income_holdings]
     FixedIncomeRequest:
       type: object
       properties:
@@ -1170,6 +1264,17 @@ components:
         invested_amount_centavos:
           type: integer
           format: int64
+          description: |-
+            The current principal/balance basis for accrual (SPEC-110): grows via both
+            contributions and confirmed interest. No longer the cost basis by itself —
+            see total_contributed_centavos.
+        total_contributed_centavos:
+          type: integer
+          format: int64
+          description: |-
+            New in SPEC-110 (FR-1101): the lifetime sum of money the user has contributed —
+            the true cost basis for growth. Changes only via an explicit contribution
+            (creation or POST .../reconcile), never via interest.
         annual_rate_bps:
           type: integer
           description: The raw stored value — see FixedIncomeRequest.annual_rate_bps.
@@ -1182,19 +1287,51 @@ components:
             Computed, never persisted (SPEC-109): the resolved current annual rate —
             equal to annual_rate_bps for prefixado; resolved against the latest
             SELIC/CDI/IPCA (GET /market/indicators) for cdi_percentual/ipca_spread.
+        estimated_interest_centavos:
+          type: integer
+          format: int64
+          description: |-
+            Computed, never persisted (SPEC-110 FR-1103): the simple-interest estimate
+            accrued since last_reconciled_at — the pre-fill hint for POST .../reconcile.
+        reconciliation_due:
+          type: boolean
+          description: |-
+            Computed, never persisted (SPEC-110 FR-1105): true when last_reconciled_at's
+            calendar month is strictly before the current one.
         maturity_date:
           type: [string, "null"]
           format: date
         liquidity_type:
           type: string
           enum: [daily, at_maturity]
+        last_reconciled_at:
+          type: string
+          format: date-time
+          description: |-
+            New in SPEC-110: the accrual clock. Starts at created_at; resets on every
+            reconciliation, and on any edit that changes invested_amount_centavos (FR-1102).
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-      required: [id, name, institution, invested_amount_centavos, annual_rate_bps, liquidity_type, created_at, updated_at]
+      required: [id, name, institution, invested_amount_centavos, total_contributed_centavos, annual_rate_bps, liquidity_type, last_reconciled_at, created_at, updated_at]
+    FixedIncomeReconcileRequest:
+      type: object
+      description: SPEC-110 FR-1103. Both amounts are additive; contribution_centavos may be 0.
+      properties:
+        confirmed_interest_centavos:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The confirmed (or adjusted) interest since last_reconciled_at.
+        contribution_centavos:
+          type: integer
+          format: int64
+          minimum: 0
+          description: A new contribution — 0 for a pure interest confirmation.
+      required: [confirmed_interest_centavos, contribution_centavos]
     MarketIndicatorResponse:
       type: object
       description: One latest observation of a SPEC-006 macro indicator (SPEC-109 FR-1095).
