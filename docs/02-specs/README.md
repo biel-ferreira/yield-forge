@@ -38,7 +38,7 @@ e.g. `SPEC-005-insighter-port.md`, `SPEC-102-portfolio-management.md`.
 | SPEC-004 | [Observability Baseline (OpenTelemetry)](SPEC-004-observability-baseline.md) | §10 Observability | ✅ Done |
 | SPEC-005 | [`Insighter` Port & Free/Local LLM Adapter](SPEC-005-insighter-port-and-llm-adapter.md) | FR-018, FR-013, FR-014 | ✅ Done |
 | SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](SPEC-006-marketdata-port-and-ingestion-worker.md) | FR-006, FR-007 | ✅ Done |
-| SPEC-007 | [Holdings-Driven FII Ticker Ingestion](SPEC-007-holdings-driven-ticker-ingestion.md) | refines FR-006 (extends SPEC-006, consumes SPEC-102) | 📝 Draft |
+| SPEC-007 | [Holdings-Driven FII Ticker Ingestion](SPEC-007-holdings-driven-ticker-ingestion.md) | refines FR-006 (extends SPEC-006, consumes SPEC-102) | ✅ Done |
 
 > SPEC-005 defines the explainability (FR-013) and non-advice (FR-014) gates as
 > middleware wrapping the port, so every AI feature inherits them (ADR-0002/0003).

@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPEC-007 — Holdings-Driven FII Ticker Ingestion**: the SPEC-006 ingestion worker now
+  discovers the FII tickers to price **from what users actually hold**, instead of relying solely
+  on the static `MARKETDATA_WATCHLIST` env var. Closes a real, diagnosed gap: a user with 10 FIIs
+  had a quote for only 1 because the watchlist was empty — the other 9 silently fell back to cost
+  basis and "Outros/sem cotação" sector bucketing (correct dashboard behavior over incomplete
+  data, not a dashboard bug). A new system-scoped `portfolio.SystemReader` port
+  (`DistinctFIITickers`, no `user_id` — a system read, not a per-user one) backs a new
+  holdings-derived `marketdata.TickerSource`, unioned with the (now optional) watchlist seed via
+  a small composite source — both degrade independently, so a holdings-read failure still yields
+  the watchlist and vice versa. No migration, no new endpoint, no `api/openapi.yaml` change; the
+  worker itself (`worker.go`) is unchanged, only its ticker source composition. Reviewed by
+  `hexagonal-reviewer` + `go-correctness-reviewer`. PT-BR lesson `docs/lessons/SPEC-007-aula.html`.
+
 - **SPEC-212 — Dashboard Screen (Painel)**: turns the `/dashboard` stub into the frontend face
   of SPEC-103 — a single read-only view of the hero patrimony (current value + growth **vs. cost
   basis**, never mislabelled as a monthly figure the backend doesn't track), a three-metric row

@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -31,14 +32,14 @@ func newUnionSource(logger *slog.Logger, sources ...marketdata.TickerSource) uni
 // in a deterministic (alphabetical) order.
 func (u unionSource) Tickers(ctx context.Context) ([]marketdata.Ticker, error) {
 	seen := make(map[string]marketdata.Ticker)
-	var lastErr error
+	var errs []error
 	okCount := 0
 	for _, s := range u.sources {
 		tickers, err := s.Tickers(ctx)
 		if err != nil {
 			u.logger.Warn("market data: a ticker source failed; continuing with the others",
 				slog.String("error", err.Error()))
-			lastErr = err
+			errs = append(errs, err)
 			continue
 		}
 		okCount++
@@ -47,7 +48,7 @@ func (u unionSource) Tickers(ctx context.Context) ([]marketdata.Ticker, error) {
 		}
 	}
 	if okCount == 0 && len(u.sources) > 0 {
-		return nil, fmt.Errorf("union ticker source: all sources failed: %w", lastErr)
+		return nil, fmt.Errorf("union ticker source: all sources failed: %w", errors.Join(errs...))
 	}
 
 	out := make([]marketdata.Ticker, 0, len(seen))

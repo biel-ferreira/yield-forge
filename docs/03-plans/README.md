@@ -30,7 +30,7 @@ Mirrors the specs in [`../02-specs/`](../02-specs/):
 | PLAN-004 | SPEC-004 | [Observability Baseline (OpenTelemetry)](PLAN-004-observability-baseline.md) | ✅ Done |
 | PLAN-005 | SPEC-005 | [`Insighter` Port & Free/Local LLM Adapter](PLAN-005-insighter-port-and-llm-adapter.md) | ✅ Done |
 | PLAN-006 | SPEC-006 | [`MarketDataProvider` Port & Ingestion Worker](PLAN-006-marketdata-port-and-ingestion-worker.md) | ✅ Done |
-| PLAN-007 | SPEC-007 | [Holdings-Driven FII Ticker Ingestion](PLAN-007-holdings-driven-ticker-ingestion.md) | 📝 Draft |
+| PLAN-007 | SPEC-007 | [Holdings-Driven FII Ticker Ingestion](PLAN-007-holdings-driven-ticker-ingestion.md) | ✅ Done |
 | PLAN-101 | SPEC-101 | [Investor Profile](PLAN-101-investor-profile.md) | ✅ Done |
 | PLAN-102 | SPEC-102 | [Portfolio Management (FII + FI)](PLAN-102-portfolio-management.md) | ✅ Done |
 | PLAN-103 | SPEC-103 | [Dashboard](PLAN-103-dashboard.md) | ✅ Done |

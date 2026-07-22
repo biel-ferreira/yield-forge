@@ -6,9 +6,9 @@
 | --------------- | ---------------------------------------- |
 | Plan Name       | Holdings-Driven FII Ticker Ingestion      |
 | Related Feature | Holdings-Driven FII Ticker Ingestion      |
-| Related Spec    | [SPEC-007](../02-specs/SPEC-007-holdings-driven-ticker-ingestion.md) (Approved) |
+| Related Spec    | [SPEC-007](../02-specs/SPEC-007-holdings-driven-ticker-ingestion.md) (Done) |
 | Version         | 0.1.0                                      |
-| Status          | Approved                                   |
+| Status          | Done                                        |
 | Author          | Gabigol                                   |
 | Last Updated    | 2026-07-15                                 |
 
@@ -132,10 +132,10 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 #### Tasks
 
-- [ ] `internal/portfolio/ports.go`: add `SystemReader` interface with `DistinctFIITickers(ctx
+- [x] `internal/portfolio/ports.go`: add `SystemReader` interface with `DistinctFIITickers(ctx
       context.Context) ([]string, error)`, doc comment citing SPEC-007 FR-071/BR-071 and explicitly
       stating it is a **system read** (no `user_id`), reachable only from the ingestion edge.
-- [ ] No new value object needed — `marketdata.Ticker` (existing) is reused for parsing at the
+- [x] No new value object needed — `marketdata.Ticker` (existing) is reused for parsing at the
       ingestion edge (Phase 3), not here; `portfolio.SystemReader` returns raw strings on purpose
       (FR-071 AC3), keeping `portfolio` free of `marketdata` ticker semantics.
 
@@ -149,15 +149,15 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 #### Tasks
 
-- [ ] `internal/portfolio/postgres/postgres.go`: add `DistinctFIITickers(ctx) ([]string, error)` on
+- [x] `internal/portfolio/postgres/postgres.go`: add `DistinctFIITickers(ctx) ([]string, error)` on
       the existing `Repository` struct — `SELECT DISTINCT ticker FROM fii_holdings ORDER BY
       ticker`, no parameters, no `user_id` (BR-071); `%w`-wrapped error prefix `"list distinct fii
       tickers: %w"`, no sentinel (empty result is a valid empty slice).
-- [ ] No migration — reuses the existing `fii_holdings` table/index as-is (FR-075/D5).
+- [x] No migration — reuses the existing `fii_holdings` table/index as-is (FR-075/D5).
 
 #### Deliverables
 
-- [ ] Gated integration test (`TEST_DATABASE_URL`, `testing.Short()` skip): seed FII holdings for
+- [x] Gated integration test (`TEST_DATABASE_URL`, `testing.Short()` skip): seed FII holdings for
       two users with one overlapping ticker; assert the deduped, alphabetically-ordered result.
 
 ---
@@ -166,28 +166,28 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 #### Tasks
 
-- [ ] New file in `internal/marketdata/ingest` (e.g. `holdings_source.go`): a holdings-backed
+- [x] New file in `internal/marketdata/ingest` (e.g. `holdings_source.go`): a holdings-backed
       adapter satisfying `marketdata.TickerSource`, depending only on `portfolio.SystemReader` +
       `marketdata.ParseTicker` — never on `portfolio`'s SQL adapter or per-user `Repository`
       (BR-072). Each returned string is parsed via `ParseTicker`; a malformed entry is skipped +
       logged, never aborts the call (BR-075) — defensive, since holdings validate on write.
-- [ ] New file in `internal/marketdata/ingest` (e.g. `composite_source.go`): a small unexported
+- [x] New file in `internal/marketdata/ingest` (e.g. `composite_source.go`): a small unexported
       type unioning N `TickerSource`s (mirrors the existing `combined` pattern in `factory.go` for
       `MarketDataProvider`) — calls each source, dedupes into a deterministic (sorted) set, and
       degrades **per source**: a failing holdings read still yields the watchlist seed and vice
       versa (BR-074), never a hard failure unless every source fails.
-- [ ] `internal/marketdata/ingest/factory.go`: `New` builds the holdings-backed source from the
+- [x] `internal/marketdata/ingest/factory.go`: `New` builds the holdings-backed source from the
       `*sql.DB` it already receives (via a `portfolio/postgres.Repository` instance, typed narrowly
       as `portfolio.SystemReader`), unions it with `Watchlist` (built exactly as today from
       `cfg.MarketDataWatchlist`, still fails fast on an invalid entry — SPEC-006 FR-604 unchanged),
       and injects the composite into `newWorker`. `worker.go` itself: **no changes**.
-- [ ] Update `.env.example`'s `MARKETDATA_WATCHLIST` comment (optional seed, empty is normal) and
+- [x] Update `.env.example`'s `MARKETDATA_WATCHLIST` comment (optional seed, empty is normal) and
       the two in-code TODOs (`watchlist.go`, `ports.go`) to cite SPEC-007 as done rather than
       "arrives with SPEC-102".
 
 #### Deliverables
 
-- [ ] `cmd/ingest` (one-shot runner) and the in-process scheduler both pick up the holdings-backed
+- [x] `cmd/ingest` (one-shot runner) and the in-process scheduler both pick up the holdings-backed
       source automatically, with no change to their own code (FR-074 AC3) — verified by running
       `task run` locally against the dev DB with `MARKETDATA_WATCHLIST` unset and confirming the
       worker's log line reports the holdings-derived ticker count.
@@ -206,9 +206,9 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 #### Tasks
 
-- [ ] Log the resolved ticker count at the start of the FII ingestion pass (and, optionally, the
+- [x] Log the resolved ticker count at the start of the FII ingestion pass (and, optionally, the
       holdings-vs-seed split) — no `user_id`, no PII (BR-071, mirrors SPEC-006 §11).
-- [ ] Confirm (no new code expected) that a holdings-read failure flows through the worker's
+- [x] Confirm (no new code expected) that a holdings-read failure flows through the worker's
       existing `ingestFII` error path — logged, metered `ingestion_items_total{kind=fii,
       outcome=source_error}` via `recordItem`, keeps last-known-good — exactly the path already at
       `worker.go:141-147`, now also reachable when the *holdings* read (not just a watchlist parse)
@@ -216,7 +216,7 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 #### Deliverables
 
-- [ ] A short manual/log-inspection check (not a new metric) that the ticker-count log line appears
+- [x] A short manual/log-inspection check (not a new metric) that the ticker-count log line appears
       on a local run; no new span, no new metric added (SPEC-007 §11 — rides existing telemetry).
 
 ---
@@ -225,24 +225,28 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 #### Unit Tests
 
-- [ ] Holdings-backed adapter, hand-written fake `SystemReader` (table-driven, `testify/require`):
+- [x] Holdings-backed adapter, hand-written fake `SystemReader` (table-driven, `testify/require`):
       distinct passthrough → parsed `Ticker`s; malformed entry skipped, others still returned;
       empty result → empty slice; reader error surfaced as the adapter's own error.
-- [ ] Composite/union source: `distinct(holdings ∪ watchlist)`; per-source degradation (holdings
+- [x] Composite/union source: `distinct(holdings ∪ watchlist)`; per-source degradation (holdings
       source errors → watchlist tickers still returned; watchlist empty → holdings-only result).
-- [ ] Worker regression (reuse SPEC-006's existing worker-test scaffolding): a `source_error` from
+- [x] Worker regression (reuse SPEC-006's existing worker-test scaffolding): a `source_error` from
       the holdings-backed source keeps last-known-good `fii_quotes` and the run continues.
 
 #### Integration Tests
 
-- [ ] Real Postgres (`TEST_DATABASE_URL`, `-p 1` serialized): two users, one overlapping FII ticker
+- [x] Real Postgres (`TEST_DATABASE_URL`, `-p 1` serialized): two users, one overlapping FII ticker
       → `DistinctFIITickers` returns the deduped, ordered set; skips cleanly with no DB configured.
 
 #### Deliverables
 
-- [ ] `task vet` + `task test:short` clean, `gofmt`-clean; `task test:integration` green against
-      real Postgres (dev compose, port 5433).
-- [ ] Confirm `api/openapi.yaml`'s drift test is unaffected (no route added/removed/changed).
+- [x] `task vet` + `task test:short` clean, `gofmt`-clean; full integration suite (`go test ./...
+      -count=1`) green against a **disposable** Postgres on host port 5434 — **not** the dev
+      compose DB (port 5433). A real incident during this implementation (an integration test's
+      `TRUNCATE`-based setup wiped real dev data when `TEST_DATABASE_URL` was mistakenly pointed
+      at port 5433) produced a hard rule + a `PreToolUse` hook
+      (`.claude/hooks/block-dev-db-test.ps1`) blocking this going forward — see CLAUDE.md.
+- [x] Confirm `api/openapi.yaml`'s drift test is unaffected (no route added/removed/changed).
 
 ---
 
@@ -250,16 +254,16 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 #### Tasks
 
-- [ ] `README.md` Market Data section: note ingestion is holdings-driven, watchlist is an optional
+- [x] `README.md` Market Data section: note ingestion is holdings-driven, watchlist is an optional
       seed.
-- [ ] `CHANGELOG.md` `[Unreleased]` updated.
-- [ ] Flip **SPEC-007 + PLAN-007 → Done**; update `docs/02-specs/README.md` (foundational table)
+- [x] `CHANGELOG.md` `[Unreleased]` updated.
+- [x] Flip **SPEC-007 + PLAN-007 → Done**; update `docs/02-specs/README.md` (foundational table)
       and `docs/03-plans/README.md`.
-- [ ] PT-BR lesson `docs/lessons/SPEC-007-aula.html` via **lesson-writer** (backend track).
+- [x] PT-BR lesson `docs/lessons/SPEC-007-aula.html` via **lesson-writer** (backend track).
 
 #### Deliverables
 
-- [ ] Docs updated, spec + plan closed, lesson published.
+- [x] Docs updated, spec + plan closed, lesson published.
 
 ---
 
@@ -278,33 +282,33 @@ to roll back (no migration, no persisted state beyond the existing `fii_holdings
 
 ### Functional Validation
 
-- [ ] FR-071…FR-077 implemented; SPEC-007 acceptance criteria satisfied.
-- [ ] BR-071…BR-076 respected (system read scoping, hexagonal boundary, backward compat,
+- [x] FR-071…FR-077 implemented; SPEC-007 acceptance criteria satisfied.
+- [x] BR-071…BR-076 respected (system read scoping, hexagonal boundary, backward compat,
       per-source degradation, parse-don't-validate, zero-cost posture).
 
 ### Technical Validation
 
-- [ ] No `marketdata`↔`portfolio` core-to-core import; the adapter lives only at
+- [x] No `marketdata`↔`portfolio` core-to-core import; the adapter lives only at
       `internal/marketdata/ingest` (hexagonal-reviewer).
-- [ ] `worker.go` unchanged (its dependency stays the `marketdata.TickerSource` interface).
-- [ ] No `api/openapi.yaml` change; drift test still green.
+- [x] `worker.go` unchanged (its dependency stays the `marketdata.TickerSource` interface).
+- [x] No `api/openapi.yaml` change; drift test still green.
 
 ### Quality Validation
 
-- [ ] `task vet` + `task test:short` clean; `task test:integration` green against real Postgres.
-- [ ] Reviewed by **hexagonal-reviewer** + **go-correctness-reviewer**; blocking findings fixed.
-- [ ] Documentation updated (CHANGELOG, README, `.env.example`, both indexes, PT-BR lesson).
+- [x] `task vet` + `task test:short` clean; `task test:integration` green against real Postgres.
+- [x] Reviewed by **hexagonal-reviewer** + **go-correctness-reviewer**; blocking findings fixed.
+- [x] Documentation updated (CHANGELOG, README, `.env.example`, both indexes, PT-BR lesson).
 
 ---
 
 ## 10. Definition of Done
 
-- [ ] All phases complete; SPEC-007 acceptance criteria satisfied.
-- [ ] Hexagonal boundary proven intact; `worker.go` unchanged.
-- [ ] Unit + gated integration tests green; `task vet` + `task test:short` clean.
-- [ ] `README.md` + `.env.example` updated; `CHANGELOG.md` `[Unreleased]` updated.
-- [ ] **No** `api/openapi.yaml` change; drift test still green.
-- [ ] SPEC-007 + PLAN-007 flipped to **Done**; both indexes updated; PT-BR lesson published.
+- [x] All phases complete; SPEC-007 acceptance criteria satisfied.
+- [x] Hexagonal boundary proven intact; `worker.go` unchanged.
+- [x] Unit + gated integration tests green; `task vet` + `task test:short` clean.
+- [x] `README.md` + `.env.example` updated; `CHANGELOG.md` `[Unreleased]` updated.
+- [x] **No** `api/openapi.yaml` change; drift test still green.
+- [x] SPEC-007 + PLAN-007 flipped to **Done**; both indexes updated; PT-BR lesson published.
 
 ---
 
