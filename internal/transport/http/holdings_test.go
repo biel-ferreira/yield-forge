@@ -296,6 +296,30 @@ func TestHTTP_FixedIncomeSpanRouteNamed(t *testing.T) {
 	}
 }
 
+// TestHTTP_ReconcileFixedIncomeSpanRouteNamed proves the new SPEC-110 endpoint's span is named
+// by the route pattern (not the raw id, SPEC-004 BR-406/FR-1028) and leaks no money/holding
+// values — Phase 5's deliverable for the new route (mirrors TestHTTP_FixedIncomeSpanRouteNamed).
+func TestHTTP_ReconcileFixedIncomeSpanRouteNamed(t *testing.T) {
+	exp := spanRecorder(t)
+	router := holdingsRouter(&fakePortfolioService{fiResult: sampleFixedIncome("u1")})
+
+	const id = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+	body := `{"confirmed_interest_centavos":963,"contribution_centavos":500000}`
+	rr := doReq(router, http.MethodPost, "/holdings/fixed-income/"+id+"/reconcile", body, &http.Cookie{Name: "yf_session", Value: "tok"})
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	spans := exp.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "POST /holdings/fixed-income/{id}/reconcile", spans[0].Name, "named by the route pattern, not the raw id")
+	require.NotContains(t, spans[0].Name, id)
+	for _, kv := range spans[0].Attributes {
+		v := kv.Value.Emit()
+		require.NotContains(t, v, "963", "money must not leak onto the span")
+		require.NotContains(t, v, "500000", "money must not leak onto the span")
+		require.NotContains(t, v, "CDB Banco X", "holding values must not leak onto the span")
+	}
+}
+
 func TestListFIIHoldings_OK(t *testing.T) {
 	svc := &fakePortfolioService{fiiList: []portfolio.FIIHolding{sampleFII("u1")}}
 	h := newHoldingsHandler(svc)
